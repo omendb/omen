@@ -1,22 +1,27 @@
-# OmenDB
+# OmenDB Engine
 
-**High-Performance Embedded Vector Database**
+**Mojo-based Vector Database with DiskANN Algorithm**
 
-[![PyPI](https://img.shields.io/badge/PyPI-v0.1.2-blue?style=flat-square)](https://pypi.org/project/omendb/)
-[![License](https://img.shields.io/badge/License-Elastic%202.0-black?style=flat-square)](LICENSE)
-[![Performance](https://img.shields.io/badge/Performance-1.4K%20vec%2Fs-green?style=flat-square)](tests/benchmarks/)
+[![Status](https://img.shields.io/badge/Status-Development-yellow?style=flat-square)]()
+[![Language](https://img.shields.io/badge/Language-Mojo-orange?style=flat-square)]()
+[![Algorithm](https://img.shields.io/badge/Algorithm-DiskANN-blue?style=flat-square)]()
 
 ---
 
-## Why OmenDB
+## Overview
 
-**🔧 Simple.** Embedded database with zero configuration. Just `pip install` and go.
+OmenDB is a high-performance vector database built with Mojo, designed for billion-scale similarity search using the DiskANN (Vamana) algorithm.
 
-**⚡ Fast.** Sub-millisecond startup. 1,400 vectors/sec ingestion. <1ms queries.
+### Current Status ⚠️
+- **Working**: PQ compression (288 bytes/vector), DiskANN algorithm, Python bindings
+- **Issue**: Performance bottleneck at 25K+ vectors (under investigation)
+- **Known Limitations**: Global singleton VectorStore, FFI overhead with individual operations
 
-**🎯 Production ready.** DiskANN algorithm (no rebuilds), automatic index management, persistent storage.
-
-**📦 Portable.** Single-file database. Runs on Linux and macOS. No dependencies.
+### Key Features
+- **Algorithm**: DiskANN/Vamana for billion-scale search without rebuilds
+- **Memory**: 288 bytes/vector with Product Quantization
+- **Language**: Mojo with Python FFI bindings
+- **Architecture**: Buffer + main index for fast inserts
 
 ```python
 import numpy as np
@@ -35,19 +40,25 @@ query = np.random.rand(384).astype(np.float32)
 results = db.search(query, limit=10)
 ```
 
-## Install
+## Development Setup
 
 ```bash
-pip install omendb
+# Requires Pixi package manager
+cd omendb/engine
+pixi install
+
+# Build the Mojo library
+pixi run mojo build omendb/native.mojo -o python/omendb/native.so --emit shared-lib
+
+# Run benchmarks
+pixi run benchmark-quick    # 1K-10K vectors
+pixi run benchmark-standard # 1K-100K vectors
 ```
 
-### Platform Support
-
-- ✅ **macOS**: Full support
-- ✅ **Linux**: Full support
-- ❌ **Windows**: Not supported (Mojo/MAX platform limitation)
-
-Windows support will be added when the Mojo language adds Windows compatibility.
+### Requirements
+- Pixi package manager
+- Python 3.11+
+- macOS or Linux (Windows not supported by Mojo)
 
 ## Features
 
@@ -71,13 +82,11 @@ Windows support will be added when the Mojo language adds Windows compatibility.
 - ✅ Zero-copy NumPy integration
 - ✅ Memory efficient (16.7KB per vector)
 
-**Performance by Dimension** (1K vectors):
-| Dimension | Ingestion (vec/s) | Search (ms) |
-|-----------|-------------------|-------------|
-| 64D       | 2,700             | 0.35        |
-| 128D      | 1,400             | 0.50        |
-| 256D      | 750               | 0.80        |
-| 512D      | 375               | 1.40        |
+### Performance Characteristics
+- **Scale Limit**: Currently bottlenecked at 25K+ vectors
+- **Memory Usage**: 288 bytes/vector (PQ enabled)
+- **FFI Overhead**: Batch operations 5x faster than individual adds
+- **Target Scale**: 1M+ vectors (once bottleneck fixed)
 
 **Developer Experience**
 - ✅ Clean, modern API

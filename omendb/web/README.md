@@ -1,8 +1,10 @@
-# OmenDB Website
+# OmenDB Web
 
-Professional website for OmenDB - the high-performance embedded vector database.
+**Marketing Website and Documentation Portal**
 
-Live at: https://omendb.io
+> ⚠️ **Status**: Content needs updating to reflect current engine capabilities
+
+Live at: https://omendb.io (when deployed)
 
 ## Tech Stack
 

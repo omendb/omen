@@ -1,10 +1,12 @@
 # OmenDB Server
 
-**High-Performance Rust Vector Database Server with Mojo FFI**
+**Rust HTTP/gRPC Server with Mojo FFI Integration**
 
-[![Rust](https://img.shields.io/badge/Rust-Production-orange?style=flat-square)](https://github.com/nijaru/omendb-server)
-[![FFI](https://img.shields.io/badge/FFI-Mojo%20Engine-blue?style=flat-square)](https://github.com/nijaru/omendb-server)
-[![Compile](https://img.shields.io/badge/Build-Passing-green?style=flat-square)](https://github.com/nijaru/omendb-server)
+[![Status](https://img.shields.io/badge/Status-Review%20Needed-yellow?style=flat-square)]()
+[![Language](https://img.shields.io/badge/Language-Rust-orange?style=flat-square)]()
+[![Integration](https://img.shields.io/badge/FFI-Mojo%20Engine-blue?style=flat-square)]()
+
+> ⚠️ **Note**: This server implementation may need updates to align with recent OmenDB engine changes
 
 ---
 

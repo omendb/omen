@@ -1,79 +1,99 @@
-# OmenDB Core Development Monorepo
+# OmenDB Core Monorepo
 
-**Private development repository for OmenDB database engines**
+**Private monorepo for dual database engine development**
 
-This monorepo contains the core development for multiple database engines designed for AI-native applications.
+This repository contains two complementary database engines designed for AI-native and cloud-native applications.
 
-## Structure
+## Repository Structure
 
 ```
-├── omendb/           # OmenDB product suite
-│   ├── engine/       # Vector database (Mojo + DiskANN)
-│   ├── server/       # HTTP/gRPC service (Rust)
-│   └── web/          # Marketing site & docs portal (SolidJS)
-├── zendb/            # Hybrid database (Rust + SQL + Vectors)
-├── internal/         # Internal documentation & research
-│   ├── research/     # Performance & architecture research
-│   ├── strategy/     # Business & product strategy
-│   └── archive/      # Historical investigations
-├── shared/           # Cross-product components
-│   └── benchmarks/   # Cross-engine performance testing
-└── agent-contexts/   # AI agent configuration patterns (submodule)
+omendb/               # OmenDB product suite
+├── engine/           # Mojo vector database (DiskANN algorithm)
+├── server/           # Rust HTTP/gRPC service (potentially outdated)
+└── web/              # SolidJS frontend (needs content updates)
+
+zendb/                # Rust hybrid database
+├── src/              # Core database implementation
+├── tests/            # 61/70 tests passing
+└── docs/             # Architecture & development docs
+
+internal/             # Internal documentation
+├── research/         # Performance & architecture research
+├── strategy/         # Business planning (private)
+├── decisions/        # Architecture decisions
+└── archive/          # Historical investigations
+
+agent-contexts/       # AI assistant patterns (git submodule)
 ```
 
 ## Database Engines
 
-### OmenDB (Vector Database)
-- **Language**: Mojo
-- **Algorithm**: DiskANN/Vamana  
-- **Focus**: High-performance vector search
-- **Status**: PQ compression working, 288 bytes/vector achieved
+### OmenDB Engine (Vector Database)
+- **Language**: Mojo with Python bindings
+- **Algorithm**: DiskANN/Vamana for billion-scale vectors
+- **Memory**: 288 bytes/vector (PQ compression fixed)
+- **Status**: ⚠️ Performance bottleneck at 25K+ vectors
+- **Known Issues**: Global singleton VectorStore, FFI overhead
 
-### ZenDB (Hybrid Database) 
+### ZenDB (Hybrid SQL Database)
 - **Language**: Rust
-- **Features**: SQL + Vectors + Time-travel + Multi-writer ACID
-- **Focus**: PostgreSQL-compatible hybrid database
-- **Status**: Storage engine complete, adding vector support
+- **Features**: ACID transactions, MVCC, WAL, compression, multi-writer
+- **Architecture**: B+Tree with page-level locking
+- **Status**: ✅ 87% tests passing (61/70)
+- **Next Steps**: Fix cache eviction, add SQL layer
 
-## Development Workflow
-
-This monorepo enables AI agent coordination between both database projects:
-- Shared benchmarking and performance validation
-- Cross-pollination of algorithms and optimizations  
-- Unified documentation and agent contexts
-- Parallel development with shared components
-
-## Getting Started
-
-Each engine has its own build system and requirements:
+## Quick Start
 
 ```bash
-# OmenDB Engine (Mojo)
+# Clone with submodules
+git clone --recursive git@github.com:omendb/core.git
+cd core
+
+# OmenDB Engine (requires Pixi)
 cd omendb/engine
-pixi run mojo build omendb/native.mojo -o python/omendb/native.so --emit shared-lib
+pixi install
+pixi run benchmark-quick         # Test with 1K-10K vectors
 
-# OmenDB Server (Rust)
+# ZenDB (requires Rust)
+cd zendb
+cargo test                        # 61/70 tests passing
+cargo run --example basic_usage
+
+# OmenDB Server (optional, may be outdated)
 cd omendb/server
-cargo build
-cargo run -- --config config.toml
+cargo build --release
 
-# OmenDB Web (SolidJS)
+# Web Interface (optional)
 cd omendb/web
 npm install && npm run dev
-
-# ZenDB (Rust)
-cd zendb
-cargo test
-cargo run --example basic_usage
 ```
+
+## Development Priorities
+
+### Immediate Focus
+1. **OmenDB**: Debug 25K+ vector bottleneck in buffer flush
+2. **ZenDB**: Fix remaining 9 test failures
+3. **Shared**: Build unified vector benchmarks
+
+### Strategic Goals
+- **OmenDB**: Scale to 1M+ vectors with memory-mapped storage
+- **ZenDB**: Add SQL layer for PostgreSQL compatibility
+- **Integration**: Cross-engine vector format standardization
 
 ## Documentation
 
-- `internal/` - Internal strategy, research, and architecture decisions
-- `omendb/*/README.md` - OmenDB component documentation
-- `zendb/README.md` - ZenDB documentation
-- `agent-contexts/` - AI agent configuration patterns
+- **[CLAUDE.md](CLAUDE.md)** - AI assistant context and patterns
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Development workflows
+- **[internal/](internal/)** - Architecture decisions and research
+- **[agent-contexts/](agent-contexts/)** - Shared AI patterns (submodule)
+
+## Contributing
+
+This is a private repository. Development is coordinated through:
+- AI agent workflows (see agent-contexts/)
+- Cross-engine benchmarking
+- Shared optimization patterns
 
 ---
 
-*This is a private development repository. Public releases will be extracted to separate repositories when ready.*
+*Private development repository - January 2025*
