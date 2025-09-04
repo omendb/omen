@@ -1,0 +1,97 @@
+[package]
+name = "zendb"
+version = "0.1.0"
+edition = "2021"
+authors = ["Nick <nick@example.com>"]
+description = "The database that grows with you: zen balance from embedded to distributed"
+license = "Elastic-2.0"
+repository = "https://github.com/nijaru/zendb"
+keywords = ["database", "embedded", "distributed", "zen", "rust"]
+categories = ["database-implementations", "embedded"]
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+
+# Networking
+bytes = "1.0"
+tonic = "0.10"  # gRPC for internal communication
+prost = "0.12"  # Protocol buffers
+
+# Storage & I/O
+memmap2 = "0.9"  # Memory-mapped files
+crc32c = "0.6"   # Checksums
+lz4_flex = "0.11"  # Compression
+
+# Concurrency
+crossbeam = "0.8"
+parking_lot = "0.12"  # Fast mutexes
+arc-swap = "1.6"      # Lock-free atomics
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging & metrics
+tracing = "0.1"
+tracing-subscriber = "0.3"
+metrics = "0.22"
+
+# SQL parsing
+sqlparser = "0.41"
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# Cryptography (for enterprise features)
+aes-gcm = { version = "0.10", optional = true }
+argon2 = { version = "0.5", optional = true }
+
+# Python bindings
+pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
+
+[dev-dependencies]
+# Testing
+proptest = "1.4"  # Property-based testing
+criterion = "0.5" # Benchmarking
+tempfile = "3.8"  # Temporary directories for tests
+rusqlite = { version = "0.30", features = ["bundled"] } # SQLite for benchmarking
+rand = "0.8" # Random number generation for benchmarks
+
+[features]
+default = []
+encryption = ["aes-gcm", "argon2"]
+python-bindings = ["pyo3"]
+enterprise = ["encryption"]
+
+[[bin]]
+name = "zendb"
+path = "src/main.rs"
+
+[lib]
+name = "zendb"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]  # Support both library and Python extension
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+debug = true
+opt-level = 0
+
+[profile.bench]
+debug = true
+lto = true
+
+[[bench]]
+name = "zendb_vs_sqlite"
+harness = false

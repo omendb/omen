@@ -1,0 +1,3 @@
+[submodule "agent-contexts"]
+	path = agent-contexts
+	url = https://github.com/nijaru/agent-contexts.git

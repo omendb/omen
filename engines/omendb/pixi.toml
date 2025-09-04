@@ -1,0 +1,50 @@
+[workspace]
+authors = ["Nick Russo <nijaru7@gmail.com>"]
+channels = ["https://conda.modular.com/max", "conda-forge"]
+name = "omenDB"
+platforms = ["osx-arm64", "linux-64"]
+version = "0.0.1"
+
+[dependencies]
+modular = "==25.4.0"
+python = ">=3.11,<3.14"
+numpy = ">=1.26.4,<2"
+scipy = ">=1.16.0,<2"
+chromadb = ">=1.0.15,<2"
+faiss-cpu = ">=1.9.0,<2"
+qdrant-client = ">=1.14.2,<2"
+python-build = ">=1.2.1,<2"
+twine = ">=6.0.1,<7"
+psutil = ">=7.0.0,<8"
+line_profiler = ">=4.2.0,<5"
+lancedb = ">=0.21.1,<0.22"
+
+[tasks]
+clean = { cmd = "rm -rf test_data/*.omen build/ dist/ *.mojopkg *.profdata *.svg || true", description = "Clean build artifacts and test databases" }
+test = { cmd = "pixi run mojo -I omendb test/", description = "Run test suite" }
+format = { cmd = "mojo format omendb/ test/ examples/", description = "Format Mojo code" }
+build-wheel = { cmd = "python -m build --wheel", description = "Build Python wheel for PyPI" }
+check-package = { cmd = "python -m twine check dist/*", description = "Check package for PyPI compliance" }
+publish-test = { cmd = "python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*", description = "Publish to test PyPI" }
+publish = { cmd = "python -m twine upload dist/*", description = "Publish to PyPI" }
+
+# Comprehensive Benchmarking System
+benchmark-quick = { cmd = "python benchmarks/comprehensive_benchmark.py --quick", description = "Quick benchmark (1K-10K vectors)" }
+benchmark-standard = { cmd = "python benchmarks/comprehensive_benchmark.py --standard", description = "Standard benchmark (1K-100K vectors)" }
+benchmark-enterprise = { cmd = "python benchmarks/comprehensive_benchmark.py --enterprise", description = "Enterprise benchmark (10K-500K vectors)" }
+benchmark-clean = { cmd = "rm -rf benchmarks/results/*", description = "Clean benchmark results" }
+benchmark-deps = { cmd = "echo 'Dependencies already installed via pixi.toml'", description = "Benchmark dependencies (already installed)" }
+benchmark-check = { cmd = "python -c \"import numpy, psutil; print('✅ Core deps ready'); import chromadb, faiss, qdrant_client; print('✅ All benchmark deps ready')\"", description = "Check benchmark dependencies" }
+
+# Specific competitor benchmarks
+benchmark-omendb = { cmd = "python benchmarks/comprehensive_benchmark.py --standard --competitors omendb", description = "OmenDB-only benchmark" }
+benchmark-chromadb = { cmd = "python benchmarks/comprehensive_benchmark.py --standard --competitors omendb chromadb", description = "ChromaDB comparison" }
+benchmark-faiss = { cmd = "python benchmarks/comprehensive_benchmark.py --standard --competitors omendb faiss", description = "Faiss comparison" }
+benchmark-qdrant = { cmd = "python benchmarks/comprehensive_benchmark.py --standard --competitors omendb qdrant", description = "Qdrant comparison" }
+
+[target.linux-64.dependencies]
+pytorch = ">=2.7.0,<3"
+torchvision = ">=0.22.0,<0.23"
+cuda-toolkit = ">=12.9.1,<13"
+cudnn = ">=9.10.1.4,<10"
+nccl = ">=2.27.5.1,<3"
