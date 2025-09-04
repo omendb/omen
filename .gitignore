@@ -66,8 +66,7 @@ Thumbs.db
 pixi.lock
 
 # Rust specific
-Cargo.lock
-# Note: Remove this if you want to commit lock files in a library
+# Cargo.lock is intentionally committed for reproducible builds
 
 # Mojo specific
 **/*.mojopkg
