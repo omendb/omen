@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# OmenDB Core Monorepo - Claude Code Context
-*Token-efficient entry point - include first*
+# OmenDB Core Monorepo - AI Agent Context
+*Token-efficient navigation - include first*
 
-## Current Architecture - Dual Engine Development 🟡
-**Repository Type**: Private monorepo with two complementary database engines
-**OmenDB Status**: PQ compression fixed (288 bytes/vector), performance bottlenecks at 25K+ vectors
-**ZenDB Status**: Production-grade foundation complete (61/70 tests passing)
-**Development Model**: AI agent coordination between vector and hybrid database projects
+## Current Focus: OmenDB Vector Database 🎯
+**Primary Project**: OmenDB - High-performance vector database in Mojo
+**Status**: PQ compression working (288 bytes/vector), debugging 25K+ vector bottleneck
+**Architecture**: DiskANN/Vamana algorithm, memory-mapped storage, Python/C bindings
+**Secondary Project**: ZenDB - Experimental multimodal database (on hold)
 
 ## Quick Facts
 - **OmenDB**: High-performance vector engine (Mojo, DiskANN algorithm)
@@ -19,20 +19,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Shared**: Benchmarks, vector formats, agent patterns
 - **Status**: OmenDB needs scale fixes, ZenDB ready for optimization
 
-## Repository Structure
+## Repository Structure (Updated)
 ```
-/omendb/             # OmenDB product suite
-├── engine/          # Mojo vector database (160KB core)
-├── server/          # Rust HTTP/gRPC server with Mojo FFI integration
-└── web/             # SolidJS frontend (marketing site + docs portal)
-/zendb/              # Rust hybrid database (ACID + vectors)
-/internal/           # Internal documentation & strategy
-├── research/        # Performance & architecture research
-├── strategy/        # Business planning
-└── archive/         # Historical investigations
-/shared/             # Cross-product components
-└── benchmarks/      # Cross-engine performance testing
-/agent-contexts/     # Git submodule for shared agent config
+/omendb/             # Main vector database project
+├── engine/          # Mojo vector engine (focus here)
+├── server/          # Rust HTTP/gRPC wrapper (may be outdated)
+└── web/             # Marketing site (needs content update)
+
+/zendb/              # Experimental multimodal DB (on hold)
+
+/internal/           # Internal knowledge base
+├── patterns/        # Extracted patterns (STORAGE, CONCURRENCY)
+├── research/        # Technical research
+├── archived/        # Historical investigations
+└── strategy/        # Business planning
+
+/external/           # External references
+└── agent-contexts/  # AI patterns submodule
 ```
 
 ## Development Commands
@@ -79,19 +82,30 @@ make benchmark-both        # Compare both engines
 make test-shared          # Shared component tests
 ```
 
-## Critical OmenDB Issues (from legacy context)
+## Error → Fix Mappings
 
-### What Actually Works
-1. **Vamana Algorithm**: Correct α-RNG, RobustPrune implementation  
-2. **PQ Compression**: FIXED - Now working (288 bytes/vector)
-3. **Python Bindings**: FFI interface functional
+| Error/Issue | Fix | Location |
+|------------|-----|----------|
+| 25K vector bottleneck | Check buffer flush, increase memory pool | omendb/engine/omendb/native.mojo:1850 |
+| Global singleton crash | Clear DB between tests, unique IDs | omendb/engine/omendb/native.mojo:78 |
+| Dict overhead (8KB/entry) | Use SparseMap instead | See patterns/STORAGE_PATTERNS.md |
+| FFI overhead | Batch operations, not individual | Use add_batch() not add() |
 
-### Current Bottlenecks
-1. **Scale Performance**: Issues at 25K+ vectors (needs investigation)
-2. **Disk Persistence**: MemoryMappedStorage never used  
-3. **Production Features**: Missing monitoring, auth, etc.
+## Decision Trees
 
-### Critical Patterns - Global Singleton Issue
+```
+IF debugging_bottleneck:
+    → Check internal/patterns/CONCURRENCY_PATTERNS.md
+    → Focus on buffer flush mechanism
+ELIF adding_feature:
+    → Check internal/patterns/STORAGE_PATTERNS.md
+    → Follow existing patterns in engine/
+ELIF fixing_error:
+    → Check error table above
+    → Run specific test: pixi run test-{component}
+```
+
+### Critical Pattern - Global Singleton
 ```python
 # ⚠️ All DB() instances share same VectorStore
 db1 = DB()

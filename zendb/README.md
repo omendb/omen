@@ -1,16 +1,19 @@
 # ZenDB
 
-**Rust-Based Hybrid Database with SQL + Vectors + Time-Travel**
+**Experimental Multimodal Database Project**
 
-ZenDB is a hybrid database system combining relational SQL, vector search, and time-travel queries. Built in Rust for rock-solid reliability with a goal of PostgreSQL compatibility.
+> ⚠️ **Status**: Research project for future multimodal database. Currently on hold while we focus on OmenDB (vector database).
 
-## 🚪 Current Status
+## 📊 Current State
 
-- **Storage Engine**: ✅ Complete (B+Tree, MVCC, WAL, compression)
-- **Test Coverage**: 61/70 tests passing (87%)
-- **SQL Layer**: 🔄 In development
-- **Vector Support**: 📅 Planned
-- **Time-Travel**: ✅ MVCC foundation ready
+ZenDB represents our research into building a sophisticated multimodal database combining:
+- Relational SQL queries
+- Vector search capabilities  
+- Time-travel/versioning
+- Disaggregated cloud-native architecture
+
+**Test Status**: 61/70 tests passing (87% coverage)  
+**Storage Engine**: Complete with B+Tree, MVCC, WAL, compression, multi-writer concurrency
 
 ## 🚀 Core Vision
 
