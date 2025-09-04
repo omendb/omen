@@ -1,0 +1,141 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omendb-server
+  labels:
+    app: omendb-server
+  annotations:
+    # AWS Load Balancer Controller annotations
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "2"
+    
+    # SSL/TLS configuration
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:region:account:certificate/cert-id
+    
+    # Rate limiting
+    alb.ingress.kubernetes.io/actions.rate-limit: |
+      {
+        "type": "fixed-response",
+        "fixedResponseConfig": {
+          "contentType": "text/plain",
+          "statusCode": "429",
+          "messageBody": "Rate limit exceeded"
+        }
+      }
+    
+    # CORS configuration
+    alb.ingress.kubernetes.io/actions.cors: |
+      {
+        "type": "response-headers",
+        "responseHeadersConfig": {
+          "customHeaders": {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type,Authorization,X-API-Key"
+          }
+        }
+      }
+
+spec:
+  tls:
+  - hosts:
+    - api.omendb.com
+    - omendb-api.example.com
+    secretName: omendb-tls
+  
+  rules:
+  - host: api.omendb.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: omendb-server
+            port:
+              number: 80
+  
+  - host: omendb-api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix  
+        backend:
+          service:
+            name: omendb-server
+            port:
+              number: 80
+
+---
+# Separate ingress for gRPC traffic
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omendb-server-grpc
+  labels:
+    app: omendb-server
+    protocol: grpc
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/backend-protocol: GRPC
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:region:account:certificate/cert-id
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    
+spec:
+  tls:
+  - hosts:
+    - grpc.omendb.com
+    secretName: omendb-tls
+  
+  rules:
+  - host: grpc.omendb.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: omendb-server
+            port:
+              number: 9090
+
+---
+# Internal ingress for metrics (admin access only)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omendb-server-metrics
+  labels:
+    app: omendb-server
+    component: metrics
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /metrics
+    
+    # Restrict access to admin IPs
+    alb.ingress.kubernetes.io/inbound-cidrs: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    
+spec:
+  rules:
+  - host: metrics.omendb.internal
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: omendb-server-metrics
+            port:
+              number: 9091

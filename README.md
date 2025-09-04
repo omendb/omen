@@ -7,16 +7,18 @@ This monorepo contains the core development for multiple database engines design
 ## Structure
 
 ```
-├── engines/           # Database engine implementations  
-│   ├── omendb/       # Vector database (Mojo + DiskANN)
-│   └── zendb/        # Hybrid database (Rust + SQL + Vectors)
-├── docs/             # Internal documentation & research
-├── agent-contexts/   # AI agent configuration patterns (submodule)
-├── shared/           # Shared components between engines
-│   ├── benchmarks/   # Cross-engine performance testing
-│   ├── vector-formats/ # Common vector serialization
-│   └── agent-patterns/ # Shared AI agent patterns
-└── experiments/      # R&D and prototypes
+├── omendb/           # OmenDB product suite
+│   ├── engine/       # Vector database (Mojo + DiskANN)
+│   ├── server/       # HTTP/gRPC service (Rust)
+│   └── web/          # Marketing site & docs portal (SolidJS)
+├── zendb/            # Hybrid database (Rust + SQL + Vectors)
+├── internal/         # Internal documentation & research
+│   ├── research/     # Performance & architecture research
+│   ├── strategy/     # Business & product strategy
+│   └── archive/      # Historical investigations
+├── shared/           # Cross-product components
+│   └── benchmarks/   # Cross-engine performance testing
+└── agent-contexts/   # AI agent configuration patterns (submodule)
 ```
 
 ## Database Engines
@@ -46,22 +48,31 @@ This monorepo enables AI agent coordination between both database projects:
 Each engine has its own build system and requirements:
 
 ```bash
-# OmenDB (Mojo)
-cd engines/omendb
+# OmenDB Engine (Mojo)
+cd omendb/engine
 pixi run mojo build omendb/native.mojo -o python/omendb/native.so --emit shared-lib
 
+# OmenDB Server (Rust)
+cd omendb/server
+cargo build
+cargo run -- --config config.toml
+
+# OmenDB Web (SolidJS)
+cd omendb/web
+npm install && npm run dev
+
 # ZenDB (Rust)
-cd engines/zendb  
+cd zendb
 cargo test
 cargo run --example basic_usage
 ```
 
 ## Documentation
 
-- `docs/` - Internal technical documentation
-- `engines/*/README.md` - Engine-specific documentation
+- `internal/` - Internal strategy, research, and architecture decisions
+- `omendb/*/README.md` - OmenDB component documentation
+- `zendb/README.md` - ZenDB documentation
 - `agent-contexts/` - AI agent configuration patterns
-- `docs/technical/` - Architecture and design decisions
 
 ---
 

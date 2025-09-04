@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omendb-server
+spec:
+  replicas: 5  # Higher replica count for production
+  template:
+    spec:
+      containers:
+      - name: omendb-server
+        # Production resource limits
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1"
+          limits:
+            memory: "16Gi" 
+            cpu: "8"
+        
+        # Production environment variables
+        env:
+        - name: RUST_LOG
+          value: "warn,omendb_server=info"  # Less verbose logging
+        - name: OMENDB_WORKER_THREADS
+          value: "16"
+        - name: OMENDB_DIMENSION
+          value: "1536"  # Production dimension for embeddings
+        
+        # Production security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: omendb-server
+spec:
+  minReplicas: 5   # Higher minimum for production
+  maxReplicas: 100 # Higher maximum scaling
+  
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60  # More aggressive scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 70

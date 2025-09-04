@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package omendb.v1;
+
+service VectorService {
+  // Vector operations
+  rpc Insert(InsertRequest) returns (InsertResponse);
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc Update(UpdateRequest) returns (UpdateResponse);
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+  rpc Search(SearchRequest) returns (SearchResponse);
+  rpc Count(CountRequest) returns (CountResponse);
+  rpc BatchInsert(BatchInsertRequest) returns (BatchInsertResponse);
+}
+
+// Message definitions for request/response payloads
+message Vector {
+  repeated float values = 1;
+}
+
+message Metadata {
+  map<string, string> fields = 1;
+}
+
+// Vector operations
+message InsertRequest {
+  string id = 1;
+  Vector vector = 2;
+  Metadata metadata = 3;
+}
+
+message InsertResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetRequest {
+  string id = 1;
+  bool include_vector = 2;
+  bool include_metadata = 3;
+}
+
+message GetResponse {
+  bool success = 1;
+  string message = 2;
+  string id = 3;
+  Vector vector = 4;
+  Metadata metadata = 5;
+}
+
+message UpdateRequest {
+  string id = 1;
+  Vector vector = 2;
+  Metadata metadata = 3;
+}
+
+message UpdateResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteRequest {
+  string id = 1;
+}
+
+message DeleteResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message SearchRequest {
+  Vector query_vector = 1;
+  int32 k = 2;
+  bool include_vectors = 3;
+  bool include_metadata = 4;
+  bool include_distances = 5;
+  repeated FilterOperation filters = 6;
+}
+
+message FilterOperation {
+  string field = 1;
+  string operator = 2;
+  string value = 3;
+}
+
+message SearchResponse {
+  bool success = 1;
+  string message = 2;
+  repeated SearchResult results = 3;
+}
+
+message SearchResult {
+  string id = 1;
+  float distance = 2;
+  Vector vector = 3;
+  Metadata metadata = 4;
+}
+
+message CountRequest {
+  repeated FilterOperation filters = 1;
+}
+
+message CountResponse {
+  int64 count = 1;
+}
+
+message BatchInsertRequest {
+  repeated InsertRequest requests = 1;
+}
+
+message BatchInsertResponse {
+  int32 successful_count = 1;
+  int32 failed_count = 2;
+  string message = 3;
+}

@@ -1,0 +1,120 @@
+# Build artifacts
+**/target/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.so
+**/*.dylib
+**/*.dll
+
+# Package managers
+**/node_modules/
+**/dist/
+**/build/
+
+# Server artifacts
+server/target/
+server/*.log
+server/*.db
+
+# Web artifacts  
+web/node_modules/
+web/dist/
+web/.solid/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Database files (test artifacts)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+**/logs/
+
+# Temporary files
+*.tmp
+*.temp
+**/tmp/
+
+# Backup files
+*.bak
+*.backup
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Pixi environment files (keep pixi.toml, ignore pixi.lock optionally)
+.pixi/
+pixi.lock
+
+# Rust specific
+Cargo.lock
+# Note: Remove this if you want to commit lock files in a library
+
+# Mojo specific
+**/*.mojopkg
+__mojocache__/
+*.profdata
+*.o
+*.a
+
+# Python specific  
+**/*.egg-info/
+**/site-packages/
+**/.pytest_cache/
+**/.coverage
+**/.mypy_cache/
+.ruff_cache/
+
+# Performance profiling
+perf.data*
+*.svg
+
+# Benchmark results
+benchmark_results/
+*.benchmark
+results/
+
+# Test artifacts and generated files
+test_artifacts/
+sample_image_*.png
+embeddings_cache/
+*/embeddings_cache/
+test/benchmarks/*.json
+examples/rag/*.omen
+
+# Debug and analysis files
+debug_*.py
+test_*.py  
+memory_*.py
+*debug*.mojo
+*test*.mojo
+
+# OmenDB database files
+*.omen/
+*.omen
+*.idx
+test_data/*.omen
+
+# Documentation build
+**/docs/_build/
+**/docs/build/
+docs/api/

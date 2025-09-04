@@ -1,0 +1,211 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: omendb-server
+  labels:
+    app: omendb-server
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: omendb-server
+      component: metrics
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: go_.*
+      action: drop  # Drop Go runtime metrics to reduce cardinality
+    - sourceLabels: [__name__]
+      regex: process_.*  
+      action: drop  # Drop process metrics
+  namespaceSelector:
+    matchNames:
+    - default  # Change to your namespace
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: omendb-server
+  labels:
+    app: omendb-server
+    release: prometheus
+spec:
+  groups:
+  - name: omendb.server
+    interval: 30s
+    rules:
+    
+    # High-level health alerts
+    - alert: OmenDBServerDown
+      expr: up{job="omendb-server"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "OmenDB server is down"
+        description: "OmenDB server {{ $labels.instance }} has been down for more than 1 minute"
+    
+    # Performance alerts
+    - alert: OmenDBHighLatency
+      expr: histogram_quantile(0.99, omendb_query_latency_seconds_bucket) > 0.05
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "OmenDB high query latency"
+        description: "OmenDB P99 latency is {{ $value }}s (>50ms) for {{ $labels.instance }}"
+    
+    - alert: OmenDBHighErrorRate
+      expr: rate(omendb_errors_total[5m]) > 0.01
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "OmenDB high error rate"
+        description: "OmenDB error rate is {{ $value }} errors/sec for {{ $labels.instance }}"
+    
+    # Resource alerts
+    - alert: OmenDBHighMemoryUsage
+      expr: omendb_memory_usage_bytes / omendb_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "OmenDB high memory usage"
+        description: "OmenDB memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+    
+    - alert: OmenDBHighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{pod=~"omendb-server-.*"}[5m]) > 3.5
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "OmenDB high CPU usage"
+        description: "OmenDB CPU usage is {{ $value }} cores on {{ $labels.pod }}"
+    
+    # Business metric alerts
+    - alert: OmenDBLowThroughput
+      expr: rate(omendb_searches_total[5m]) < 10
+      for: 10m
+      labels:
+        severity: info
+      annotations:
+        summary: "OmenDB low search throughput"
+        description: "OmenDB search rate is {{ $value }} searches/sec (expected >10/sec)"
+    
+    - alert: OmenDBTooManyVectors
+      expr: omendb_vectors_total > 50000000  # 50M vectors
+      for: 1m
+      labels:
+        severity: info
+      annotations:
+        summary: "OmenDB approaching vector limit"
+        description: "OmenDB has {{ $value }} vectors (approaching capacity)"
+
+    # Engine-specific alerts
+    - alert: OmenDBEnginePoolExhausted
+      expr: omendb_engine_pool_available == 0
+      for: 30s
+      labels:
+        severity: critical
+      annotations:
+        summary: "OmenDB engine pool exhausted"
+        description: "No available engines in pool on {{ $labels.instance }}"
+    
+    - alert: OmenDBTieredStorageImbalance
+      expr: omendb_hot_tier_vectors / omendb_vectors_total > 0.05  # Hot tier >5%
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "OmenDB tiered storage imbalanced"
+        description: "Hot tier contains {{ $value | humanizePercentage }} of vectors (expected <5%)"
+
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: omendb-dashboard
+  labels:
+    app: omendb-server
+    grafana_dashboard: "1"
+data:
+  omendb-server.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "OmenDB Server",
+        "tags": ["omendb", "vector-database"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "title": "Query Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(omendb_searches_total[5m])",
+                "legendFormat": "Searches/sec"
+              }
+            ]
+          },
+          {
+            "title": "Query Latency",
+            "type": "graph", 
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, omendb_query_latency_seconds_bucket)",
+                "legendFormat": "P50"
+              },
+              {
+                "expr": "histogram_quantile(0.95, omendb_query_latency_seconds_bucket)",
+                "legendFormat": "P95"
+              },
+              {
+                "expr": "histogram_quantile(0.99, omendb_query_latency_seconds_bucket)",
+                "legendFormat": "P99"
+              }
+            ]
+          },
+          {
+            "title": "Vector Count by Tier",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "omendb_hot_tier_vectors",
+                "legendFormat": "Hot Tier"
+              },
+              {
+                "expr": "omendb_warm_tier_vectors", 
+                "legendFormat": "Warm Tier"
+              },
+              {
+                "expr": "omendb_cold_tier_vectors",
+                "legendFormat": "Cold Tier"
+              }
+            ]
+          },
+          {
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "omendb_memory_usage_bytes",
+                "legendFormat": "Memory Used"
+              }
+            ]
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }

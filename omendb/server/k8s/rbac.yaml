@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: omendb-server
+  labels:
+    app: omendb-server
+  annotations:
+    # AWS IAM role for service account (if using AWS)
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT-ID:role/omendb-server-role
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: omendb-server
+  labels:
+    app: omendb-server
+rules:
+# Allow reading cluster information for health checks
+- apiGroups: [""]
+  resources: ["nodes", "pods"]
+  verbs: ["get", "list"]
+# Allow updating pod status for graceful shutdown
+- apiGroups: [""]
+  resources: ["pods/status"]
+  verbs: ["patch", "update"]
+# Allow reading secrets and configmaps
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: omendb-server
+  labels:
+    app: omendb-server
+subjects:
+- kind: ServiceAccount
+  name: omendb-server
+  namespace: default  # Change to your namespace
+roleRef:
+  kind: ClusterRole
+  name: omendb-server
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Role for namespace-specific operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: omendb-server
+  labels:
+    app: omendb-server
+rules:
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: omendb-server
+  labels:
+    app: omendb-server
+subjects:
+- kind: ServiceAccount
+  name: omendb-server
+roleRef:
+  kind: Role
+  name: omendb-server
+  apiGroup: rbac.authorization.k8s.io
