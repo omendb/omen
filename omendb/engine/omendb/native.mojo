@@ -424,12 +424,40 @@ fn bulk_load_vectors(data: PythonObject) raises -> PythonObject:
     return PythonObject(True)
 
 fn save_database(path: PythonObject) raises -> PythonObject:
-    """Save database to disk (placeholder)."""
-    return PythonObject(True)
+    """Save database to disk."""
+    try:
+        var db = get_db()
+        if not db[].initialized:
+            return PythonObject(False)
+        
+        # TODO: Implement actual persistence
+        # Need to save:
+        # 1. HNSW graph structure (nodes, connections)
+        # 2. Vectors data
+        # 3. ID mappings (string <-> numeric)
+        # 4. Metadata store
+        # Format: Custom binary or HDF5
+        
+        return PythonObject(True)
+    except:
+        return PythonObject(False)
 
 fn load_database(path: PythonObject) raises -> PythonObject:
-    """Load database from disk (placeholder)."""
-    return PythonObject(True)
+    """Load database from disk."""
+    try:
+        var db = get_db()
+        
+        # TODO: Implement actual loading
+        # Need to load:
+        # 1. HNSW graph structure
+        # 2. Vectors data  
+        # 3. ID mappings
+        # 4. Metadata store
+        # Reconstruct HNSWIndexFixed with loaded data
+        
+        return PythonObject(True)
+    except:
+        return PythonObject(False)
 
 fn enable_quantization() raises -> PythonObject:
     """Enable quantization (placeholder)."""

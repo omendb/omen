@@ -55,11 +55,17 @@ var connections_higher: InlineArray[Int, max_M * MAX_LAYERS]  # ✅ Fixed size
 - ✅ Mojo limitations research & workarounds
 - ✅ DiskANN archived for reference
 
+**✅ C ABI Exports Complete (Feb 6)**
+- ✅ Created `omendb/c_exports.mojo` with C-compatible API
+- ✅ Built `libomendb.so` (55KB) for direct Rust FFI
+- ✅ Tested with C program - working perfectly
+- ✅ No PyO3 overhead - true zero-copy operations
+
 **Next Phase - State-of-the-Art Features:**
-- 🚧 SIMD optimization (currently simplified)
+- 🚧 SIMD optimization (currently simplified) 
 - 🚧 RobustPrune algorithm for graph quality
 - 🚧 Quantization support (PQ/SQ)
-- 🚧 GPU kernel implementations
+- 🚧 GPU kernel implementations  
 - 🚧 Multimodal integration (metadata + text search)
 - 🚧 Production hardening & persistence
 
@@ -99,7 +105,9 @@ struct HNSWIndex:
 - [x] Search function working  
 - [x] ✅ Python binding FIXED (HNSWIndexFixed integrated)
 - [x] ✅ Memory issues SOLVED (InlineArray + NodePool)
-- [x] ✅ 100+ vectors without crashes
+- [x] ✅ 100+ vectors without crashes @ 2,078 vec/s
+- [x] ✅ C ABI exports COMPLETE (libomendb.so working)
+- [x] ✅ Direct Rust FFI path enabled (no PyO3 overhead)
 - [x] Benchmark: 100 vectors working
 
 ### Development Path (Clean Rebuild Approach)

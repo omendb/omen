@@ -3,6 +3,38 @@
 
 ---
 
+## 2025-02-06 | C ABI Exports for Direct Rust FFI
+
+### Context  
+Successfully resolved memory issues with HNSW+ implementation. Now need direct FFI path for Rust server to bypass Python/PyO3 overhead.
+
+### Decision
+Implement C-compatible exports in separate `c_exports.mojo` module.
+
+### Implementation
+- ✅ Created `omendb/c_exports.mojo` with 6 core C functions
+- ✅ Built as `libomendb.so` shared library (55KB)
+- ✅ Tested with C program - fully working
+- ✅ Provided Rust FFI example code
+
+**C API Functions:**
+```c
+int omendb_init(int dimension);
+int omendb_add(const char* id_ptr, int id_len, const float* vector_ptr, int dimension);
+int omendb_search(const float* query_ptr, int k, int* result_ids, float* result_distances);
+int omendb_clear(void);
+int omendb_count(void);  
+const char* omendb_version(void);
+```
+
+**Performance Benefits:**
+- Direct memory access (no Python serialization)
+- No PyO3 overhead
+- True zero-copy operations
+- Clean separation for Rust server integration
+
+---
+
 ## 2025-02-04 | Stay with Mojo over Rust
 
 ### Context
