@@ -16,8 +16,12 @@ Key Files (always check/update):
 Detail Files (load when needed):
 - internal/MOJO_WORKAROUNDS.md - When writing Mojo code
 - internal/IMPLEMENTATION_CHECKLIST.md - When implementing features
-- internal/architecture/*.md - When designing systems
 - internal/DOC_ORGANIZATION.md - When organizing docs
+    ↓
+Research Files (reference for decisions):
+- internal/research/COMPETITIVE_LANDSCAPE.md - Market & competitors
+- internal/research/TECHNICAL_ARCHITECTURE.md - System design
+- internal/research/MIGRATION_GUIDE.md - DiskANN → HNSW+
 ```
 
 **New session?** Start with key files (NOW → DECISIONS → KNOWLEDGE)
