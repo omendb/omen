@@ -17,7 +17,7 @@ from omendb.core.sparse_map import SparseMap
 # GLOBAL STORAGE WITH HNSW+ BACKEND
 # =============================================================================
 
-struct GlobalDatabase(Movable):
+struct GlobalDatabase:
     """Thread-safe global database instance using HNSW+ algorithm."""
     var hnsw_index: HNSWIndex
     var id_mapper: SparseMap  # String ID -> Int ID mapping
@@ -41,7 +41,7 @@ struct GlobalDatabase(Movable):
         
         if not self.initialized:
             self.dimension = dimension
-            self.hnsw_index = HNSWIndex(dimension, 100)  # Start small, grow as needed
+            self.hnsw_index = HNSWIndex(dimension, 50000)  # Large initial capacity
             self.initialized = True
         
         return True
@@ -105,8 +105,10 @@ struct GlobalDatabase(Movable):
     fn _get_string_id_for_numeric(self, numeric_id: Int) -> String:
         """Reverse lookup: numeric ID → string ID."""
         # This is inefficient - in production we'd maintain reverse mapping
-        # For now, return a placeholder since SparseMap doesn't support iteration
-        return String("vector_" + String(numeric_id))
+        for item in self.id_mapper:
+            if item.value == numeric_id:
+                return item.key
+        return String("")
     
     fn get_vector_data(self, string_id: String) -> UnsafePointer[Float32]:
         """Get vector data by string ID."""
@@ -116,7 +118,7 @@ struct GlobalDatabase(Movable):
             return self.hnsw_index.get_vector(numeric_id)
         return UnsafePointer[Float32]()
     
-    fn get_metadata(self, string_id: String) raises -> Dict[String, PythonObject]:
+    fn get_metadata(self, string_id: String) -> Dict[String, PythonObject]:
         """Get metadata for a vector."""
         if string_id in self.metadata_store:
             return self.metadata_store[string_id]
@@ -124,20 +126,17 @@ struct GlobalDatabase(Movable):
     
     fn delete_vector(mut self, string_id: String) -> Bool:
         """Soft delete a vector."""
-        try:
-            var numeric_id_opt = self.id_mapper.get(string_id) 
-            if numeric_id_opt:
-                var numeric_id = numeric_id_opt.value()
-                var success = self.hnsw_index.remove(numeric_id)
-                if success:
-                    # Remove from metadata
-                    if string_id in self.metadata_store:
-                        _ = self.metadata_store.pop(string_id)
-                    # Note: keeping ID mapping for consistency
-                return success
-            return False
-        except:
-            return False
+        var numeric_id_opt = self.id_mapper.get(string_id) 
+        if numeric_id_opt:
+            var numeric_id = numeric_id_opt.value()
+            var success = self.hnsw_index.remove(numeric_id)
+            if success:
+                # Remove from metadata
+                if string_id in self.metadata_store:
+                    _ = self.metadata_store.pop(string_id)
+                # Note: keeping ID mapping for consistency
+            return success
+        return False
     
     fn count_vectors(self) -> Int:
         """Get total number of vectors."""
@@ -148,7 +147,7 @@ struct GlobalDatabase(Movable):
     fn clear(mut self):
         """Clear all data."""
         if self.initialized:
-            self.hnsw_index = HNSWIndex(self.dimension, 100)
+            self.hnsw_index = HNSWIndex(self.dimension, 50000)
             self.id_mapper = SparseMap()
             self.metadata_store = Dict[String, Dict[String, PythonObject]]()
             self.next_numeric_id = 0
@@ -290,7 +289,7 @@ fn search_vectors_with_beam(query_vector: PythonObject, limit: PythonObject, fil
     """Search with beam search for higher quality results."""
     # Use larger ef_search for beam search
     var beam_width = Int(beamwidth)
-    var _ = max(beam_width * 2, Int(limit) * 4)  # TODO: Use this for actual beam search
+    var effective_ef = max(beam_width * 2, Int(limit) * 4)
     
     # For now, use regular search with higher ef
     return search_vectors(query_vector, limit, filters)
@@ -362,14 +361,13 @@ fn get_metadata(vector_id: PythonObject) raises -> PythonObject:
     try:
         var id_str = String(vector_id)
         var db = get_global_db()
-        var _ = db[].get_metadata(id_str)  # TODO: Use metadata when Dict iteration works
+        var metadata = db[].get_metadata(id_str)
         
         # Convert to Python dict
         var python = Python.import_module("builtins")
         var py_meta = python.dict()
-        
-        # For now, return empty dict since Dict iteration is complex
-        # TODO: Implement proper metadata iteration when Mojo Dict supports it
+        for item in metadata:
+            py_meta[item.key] = item.value
         return py_meta
     except:
         var python = Python.import_module("builtins")

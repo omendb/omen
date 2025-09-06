@@ -66,10 +66,8 @@ struct MinHeapPriorityQueue(Copyable, Movable):
         self.size = 0
         self.data = List[SearchCandidate]()
         
-        # Pre-allocate capacity for better performance
-        # Initialize with sentinel values
-        for i in range(capacity):
-            self.data.append(SearchCandidate(0, Float32.MAX, True))
+        # Start with empty list, grow as needed to avoid memory issues
+        # Pre-allocation was causing std::bad_alloc errors
         self.size = 0
     
     fn __copyinit__(out self, existing: Self):
@@ -92,6 +90,9 @@ struct MinHeapPriorityQueue(Copyable, Movable):
         """
         if self.size < self.capacity:
             # Standard insertion with heapify up
+            # Grow list if needed
+            while len(self.data) <= self.size:
+                self.data.append(SearchCandidate(0, Float32.MAX, True))
             self.data[self.size] = candidate
             self._heapify_up(self.size)
             self.size += 1

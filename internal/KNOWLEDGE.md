@@ -20,9 +20,32 @@ mojo build --emit shared-lib -o libomendb.so
 Dict[String, Int]  # 8KB per entry!
 List[String]       # 5KB per item!
 
+# ❌ Nested Lists cause exponential growth
+List[List[Int]]    # Doubles capacity on EACH level!
+# When List grows: capacity * 2 allocation
+# With nested: parent doubles AND children double = 4x+ memory
+
 # ✅ Use custom implementations
-SparseMap          # 180x better
+SparseMap          # 180x better than Dict
 Fixed arrays       # Predictable memory
+InlineArray        # Stack allocated, no heap
+
+# ✅ For graph structures use fixed-size arrays
+struct Node:
+    var connections: InlineArray[Int, MAX_CONNECTIONS]  # Stack allocated
+    var count: Int  # Track actual usage
+```
+
+### Pre-allocation Pattern (Critical!)
+```mojo
+# ❌ DON'T: Let Lists grow dynamically
+var nodes = List[Node]()  # Will double: 1→2→4→8→16...
+
+# ✅ DO: Pre-allocate pools
+struct NodePool:
+    var nodes: UnsafePointer[Node]
+    fn __init__(out self, capacity: Int):
+        self.nodes = UnsafePointer[Node].alloc(capacity)  # One allocation!
 ```
 
 ### SIMD Optimization

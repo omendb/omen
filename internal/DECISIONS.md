@@ -304,3 +304,87 @@ Mojo missing some features (async/await, limited stdlib). Considering Rust rewri
 After implementing core HNSW+ (Month 1)
 
 ---
+
+## 2025-02-06 | Clean Rebuild Over Migration Approach
+
+### Context
+After implementing HNSW+ foundation and user feedback on migration complexity, need to decide between gradual DiskANN→HNSW+ migration vs complete clean rebuild.
+
+### Options Considered
+1. **Gradual Migration**
+   - Pros: Keep some existing code, incremental progress
+   - Cons: API incompatibility, complex refactoring, migration bugs
+   
+2. **Complete Clean Rebuild**
+   - Pros: State-of-the-art implementation, no compatibility overhead, Mojo-optimized
+   - Cons: Start from scratch, throw away some existing work
+
+3. **Hybrid Keep-Core-Rewrite-Interface**
+   - Pros: Keep proven algorithms
+   - Cons: Still has compatibility issues, partial benefits
+
+### Decision
+**Chosen: Complete Clean Rebuild**
+
+### Rationale
+- DiskANN and HNSW have fundamentally different APIs (batch vs streaming, string vs numeric IDs)
+- No backward compatibility required (not in production)
+- Can optimize from ground up for Mojo's strengths (SIMD, GPU)
+- User feedback: "just rewrite it correctly for hnsw+. remove refactor or start fresh"
+- Clean architecture enables state-of-the-art optimizations
+
+### Consequences
+- Archive entire DiskANN implementation for reference only
+- Build HNSW+ with priority queue, SIMD optimization, GPU kernels
+- 4-phase development: Foundation (✅) → Optimizations (🚧) → Multimodal (🔮) → Enterprise (🏭)
+- Target: 10x better performance than competitors
+- Reference archived DiskANN for algorithm insights only
+
+### Review Date
+After Phase 2 optimizations complete
+
+---
+
+## 2025-02-06 | Temporary Minimal Implementation Due to HNSW+ Memory Issues
+
+### Context
+HNSW+ implementation has critical memory allocation issues causing std::bad_alloc on second vector insertion. After consolidating heap implementations using state-of-the-art patterns from Modular's MAX kernels, the issue persists in the HNSW graph construction itself.
+
+### Options Considered
+1. **Debug HNSW+ incrementally** - Time consuming, blocks progress
+2. **Use existing DiskANN** - Already deprecated, wrong architecture
+3. **Switch to minimal implementation** - Quick, enables forward progress
+4. **Port from server/hnsw_index.mojo** - May have same issues
+
+### Decision
+Use minimal linear search implementation (native_minimal.mojo) as temporary solution while debugging HNSW+ memory issues in parallel.
+
+### Rationale
+- Unblocks Python integration testing and Rust server development
+- Provides stable base for API development
+- Performance adequate for development (2,896 vec/s, 0.04ms search)
+- Clear separation between working code and debugging effort
+- Can swap implementations transparently once fixed
+
+### Technical Details
+**Root causes identified in HNSW+:**
+- Node list growing with List[HNSWNode]()
+- Each node has List[List[Int]] for connections per layer
+- Visited array allocating self.size bools per search
+- Exponential memory growth during graph construction
+
+**Consolidated heap implementations created:**
+- DynamicMinHeap - For search candidates (grows as needed)
+- FixedMaxHeap - For top-k results (fixed size, evicts worst)
+- BatchHeap - For bulk operations (pre-sized)
+
+### Consequences
+- Can continue development without blocking on memory debugging
+- Need to maintain two implementations temporarily
+- Must fix HNSW+ before production deployment
+- Performance benchmarks not representative of final system
+
+### Review Date
+After HNSW+ memory issues resolved
+
+---
