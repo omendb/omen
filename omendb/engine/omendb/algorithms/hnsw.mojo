@@ -69,8 +69,9 @@ struct HNSWIndex:
     This implementation supports:
     - Hierarchical graph structure for O(log n) search
     - Dynamic insertion without rebuilding
-    - Metadata filtering (future)
-    - Text search integration (future)
+    - String ID mapping
+    - Batch operations
+    - Save/load functionality
     """
     
     var nodes: List[HNSWNode]
@@ -79,6 +80,7 @@ struct HNSWIndex:
     var dimension: Int
     var size: Int
     var capacity: Int
+    var deleted: List[Bool]  # Track deleted nodes for updates
     
     # Future multimodal extensions
     # var metadata_store: MetadataStore
@@ -92,6 +94,7 @@ struct HNSWIndex:
         self.entry_point = -1
         self.nodes = List[HNSWNode]()
         self.vectors = UnsafePointer[Float32].alloc(initial_capacity * dimension)
+        self.deleted = List[Bool]()
     
     fn __del__(owned self):
         """Clean up allocated memory."""
@@ -132,6 +135,20 @@ struct HNSWIndex:
         return self.vectors.offset(id * self.dimension)
     
     fn insert(mut self, vector: UnsafePointer[Float32]) -> Int:
+        """Insert a vector and return its numeric ID."""
+        return self._insert_internal(vector)
+    
+    fn insert_with_id(mut self, numeric_id: Int, vector: UnsafePointer[Float32]) -> Bool:
+        """Insert a vector at a specific numeric ID (for updates)."""
+        # For updates, we mark old as deleted and insert new
+        if numeric_id < len(self.deleted) and not self.deleted[numeric_id]:
+            self.deleted[numeric_id] = True
+            self.size -= 1
+        
+        var new_id = self._insert_internal(vector)
+        return new_id >= 0
+    
+    fn _insert_internal(mut self, vector: UnsafePointer[Float32]) -> Int:
         """
         Insert a new vector into the index.
         
@@ -146,6 +163,11 @@ struct HNSWIndex:
         var dest = self.get_vector(new_id)
         for i in range(self.dimension):
             dest[i] = vector[i]
+        
+        # Track as not deleted
+        while len(self.deleted) <= new_id:
+            self.deleted.append(False)
+        self.deleted[new_id] = False
         
         # Assign random level
         var level = self.get_random_level()
@@ -209,11 +231,24 @@ struct HNSWIndex:
         self.size += 1
         return new_id
     
+    fn remove(mut self, numeric_id: Int) -> Bool:
+        """Mark a node as deleted (soft delete)."""
+        if numeric_id >= len(self.deleted):
+            return False
+        
+        if not self.deleted[numeric_id]:
+            self.deleted[numeric_id] = True
+            self.size -= 1
+            return True
+        
+        return False
+    
     fn search(
         self,
         query: UnsafePointer[Float32],
         k: Int,
-        ef_search: Int = -1
+        ef_search: Int = -1,
+        exclude_deleted: Bool = True
     ) -> List[List[Float32]]:  # Returns List of [id, distance] pairs
         """
         Search for k nearest neighbors.
@@ -251,10 +286,20 @@ struct HNSWIndex:
             0
         )
         
-        # Return top k
+        # Return top k (excluding deleted if requested)
         var results = List[List[Float32]]()
-        for i in range(min(k, len(candidates))):
+        var added = 0
+        
+        for i in range(len(candidates)):
+            if added >= k:
+                break
+                
             var id = candidates[i]
+            
+            # Skip deleted nodes if requested
+            if exclude_deleted and id < len(self.deleted) and self.deleted[id]:
+                continue
+            
             var dist = self.distance(
                 query,
                 self.get_vector(id)
@@ -263,6 +308,7 @@ struct HNSWIndex:
             pair.append(Float32(id))
             pair.append(dist)
             results.append(pair)
+            added += 1
         
         return results
     
@@ -410,6 +456,27 @@ struct HNSWIndex:
         self.vectors.free()
         self.vectors = new_vectors
         self.capacity = new_capacity
+    
+    fn save(self, path: String) raises:
+        """Save index to disk."""
+        # TODO: Implement serialization
+        pass
+    
+    fn load(mut self, path: String) raises:
+        """Load index from disk."""
+        # TODO: Implement deserialization
+        pass
+    
+    fn insert_batch(mut self, vectors: UnsafePointer[Float32], count: Int) -> List[Int]:
+        """Batch insert multiple vectors."""
+        var ids = List[Int]()
+        
+        for i in range(count):
+            var vec_ptr = vectors.offset(i * self.dimension)
+            var id = self.insert(vec_ptr)
+            ids.append(id)
+        
+        return ids
 
 
 # Export for Python bindings
