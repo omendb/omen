@@ -20,6 +20,7 @@ from random import random_float64
 from algorithm import vectorize
 from python import Python
 from sys.info import simdwidthof
+from .priority_queue import MinHeapPriorityQueue, SearchCandidate
 
 # SIMD configuration for performance
 alias simd_width = simdwidthof[DType.float32]()
@@ -275,41 +276,32 @@ struct HNSWIndex:
         """
         Search for nearest neighbors at a specific layer.
         
-        This is a greedy search that maintains a set of closest candidates.
+        Uses priority queue for efficient candidate management.
         """
-        # TODO: Implement priority queue for efficient candidate management
-        # For now, using simple list
-        var candidates = List[Int]()
+        var candidates = MinHeapPriorityQueue(num_closest * 2)  # Search expansion
+        var w = MinHeapPriorityQueue(num_closest)  # Result set
         var visited = List[Bool]()
         
         # Initialize visited array
-        for i in range(self.size):
+        for _ in range(self.size):
             visited.append(False)
         
-        candidates.append(entry_point)
+        # Add entry point
+        var entry_dist = self.distance(query, self.get_vector(entry_point))
+        candidates.push(SearchCandidate(UInt32(entry_point), entry_dist, False))
+        w.push(SearchCandidate(UInt32(entry_point), entry_dist, False))
         visited[entry_point] = True
         
-        var w = List[Int]()
-        w.append(entry_point)
-        
-        while len(candidates) > 0:
-            # Get closest unvisited candidate
-            # TODO: Use priority queue for efficiency
-            var current = candidates[0]
-            # Manual removal since List doesn't have remove
-            var new_candidates = List[Int]()
-            for i in range(1, len(candidates)):
-                new_candidates.append(candidates[i])
-            candidates = new_candidates
+        # Search loop
+        while not candidates.is_empty():
+            var current = candidates.pop()
             
             # Check if this point is farther than our farthest result
-            var current_dist = self.distance(
-                query,
-                self.get_vector(current)
-            )
+            if current.distance > w.peek_min().distance:
+                break
             
             # Check neighbors at this layer
-            var neighbors = self.nodes[current].connections[layer]
+            var neighbors = self.nodes[Int(current.node_id)].connections[layer]
             for neighbor in neighbors:
                 if not visited[neighbor]:
                     visited[neighbor] = True
@@ -318,15 +310,18 @@ struct HNSWIndex:
                         self.get_vector(neighbor)
                     )
                     
-                    # Add to candidates if promising
-                    candidates.append(neighbor)
-                    w.append(neighbor)
+                    # Add to candidates and results if promising
+                    var candidate = SearchCandidate(UInt32(neighbor), neighbor_dist, False)
+                    candidates.push(candidate)
+                    w.push(candidate)
         
-        # Return top num_closest
-        # TODO: Sort by distance and return top candidates
+        # Extract top num_closest results
         var results = List[Int]()
-        for i in range(min(num_closest, len(w))):
-            results.append(w[i])
+        var extracted = 0
+        while not w.is_empty() and extracted < num_closest:
+            var item = w.pop()
+            results.append(Int(item.node_id))
+            extracted += 1
         
         return results
     
@@ -338,14 +333,57 @@ struct HNSWIndex:
         """
         Select M neighbors using a heuristic that promotes connectivity.
         
-        This uses a simple heuristic that prefers diverse neighbors
-        to avoid clustering.
+        Implements a simple diversity-based selection:
+        - Selects closest neighbor first
+        - Then selects neighbors that are diverse (far from already selected)
         """
-        # TODO: Implement proper heuristic selection
-        # For now, just take first M candidates
+        if len(candidates) <= M:
+            return candidates
+        
         var selected = List[Int]()
-        for i in range(min(M, len(candidates))):
-            selected.append(candidates[i])
+        var selected_set = List[Bool]()
+        
+        # Initialize selected tracking
+        for _ in range(self.size):
+            selected_set.append(False)
+        
+        # Always select closest candidate first
+        if len(candidates) > 0:
+            selected.append(candidates[0])
+            selected_set[candidates[0]] = True
+        
+        # Select remaining neighbors based on diversity
+        for _ in range(1, M):
+            if len(selected) >= len(candidates):
+                break
+                
+            var best_candidate = -1
+            var best_score = Float32(-1)
+            
+            # Find candidate with best diversity score
+            for candidate in candidates:
+                if selected_set[candidate]:
+                    continue
+                    
+                # Calculate minimum distance to already selected nodes
+                var min_dist = Float32.MAX
+                for selected_node in selected:
+                    var dist = self.distance(
+                        self.get_vector(candidate),
+                        self.get_vector(selected_node)
+                    )
+                    if dist < min_dist:
+                        min_dist = dist
+                
+                # Higher minimum distance = more diverse
+                if min_dist > best_score:
+                    best_score = min_dist
+                    best_candidate = candidate
+            
+            if best_candidate != -1:
+                selected.append(best_candidate)
+                selected_set[best_candidate] = True
+        
         return selected
     
     fn _prune_connections(mut self, node_id: Int, layer: Int, max_connections: Int):
