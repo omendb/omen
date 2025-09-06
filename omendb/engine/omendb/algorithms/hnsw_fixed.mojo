@@ -35,7 +35,7 @@ alias MAX_LAYERS = 16  # Maximum hierarchical layers
 # Fixed-Size Node with Pre-allocated Connections
 # =============================================================================
 
-struct FixedHNSWNode:
+struct FixedHNSWNode(Copyable, Movable):
     """
     Fixed-size node with pre-allocated connection arrays.
     Avoids dynamic allocation during graph construction.
@@ -118,7 +118,7 @@ struct FixedHNSWNode:
 # Node Pool Allocator
 # =============================================================================
 
-struct NodePool:
+struct NodePool(Movable):
     """
     Pre-allocated pool of nodes to avoid runtime allocations.
     All memory allocated upfront.
@@ -136,6 +136,15 @@ struct NodePool:
         # Initialize all nodes
         for i in range(capacity):
             self.nodes[i] = FixedHNSWNode(-1, 0)
+    
+    fn __moveinit__(out self, owned existing: Self):
+        """Move constructor."""
+        self.nodes = existing.nodes
+        self.capacity = existing.capacity
+        self.size = existing.size
+        
+        # Null out the pointer in existing to prevent double-free
+        existing.nodes = UnsafePointer[FixedHNSWNode]()
     
     fn __del__(owned self):
         """Free the pool."""
@@ -164,7 +173,7 @@ struct NodePool:
 # Fixed-Memory HNSW Index
 # =============================================================================
 
-struct HNSWIndexFixed:
+struct HNSWIndexFixed(Movable):
     """
     HNSW implementation with fixed memory allocation.
     All memory pre-allocated to avoid runtime allocation issues.
@@ -195,6 +204,21 @@ struct HNSWIndexFixed:
         # Pre-allocate visited buffer for searches
         self.visited_size = capacity
         self.visited_buffer = UnsafePointer[Bool].alloc(capacity)
+    
+    fn __moveinit__(out self, owned existing: Self):
+        """Move constructor."""
+        self.dimension = existing.dimension
+        self.capacity = existing.capacity
+        self.size = existing.size
+        self.entry_point = existing.entry_point
+        self.node_pool = existing.node_pool^
+        self.vectors = existing.vectors
+        self.visited_size = existing.visited_size
+        self.visited_buffer = existing.visited_buffer
+        
+        # Null out the pointers in existing to prevent double-free
+        existing.vectors = UnsafePointer[Float32]()
+        existing.visited_buffer = UnsafePointer[Bool]()
     
     fn __del__(owned self):
         """Clean up all allocations."""
