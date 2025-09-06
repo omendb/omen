@@ -3,39 +3,48 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## 🎯 Quick Start for AI Agents
-**New session?** Follow this order:
-1. Read this file (CLAUDE.md) for instructions
-2. Check `internal/NOW.md` for current sprint
-3. Review `internal/DECISIONS.md` for major decisions
-4. Reference `internal/KNOWLEDGE.md` for patterns
 
-## 🔄 Version Control Rules
-
-**Commit regularly using Git:**
-- After each logical unit of work (feature, fix, refactor)
-- Before switching to different area of codebase  
-- Use atomic commits with clear messages
-- Format: `type: description` (feat, fix, docs, refactor, test)
-
-Example commit workflow:
-```bash
-git add -p  # Review changes
-git commit -m "feat: add HNSW layer management"
-git commit -m "refactor: extract distance calculations"
-git commit -m "docs: update architecture diagrams"
+### Documentation Hierarchy
 ```
+CLAUDE.md (this file - always read first)
+    ↓
+Key Files (always check/update):
+- internal/NOW.md - Current sprint & tasks
+- internal/DECISIONS.md - Major decisions (append-only)
+- internal/KNOWLEDGE.md - Common patterns & learnings
+    ↓
+Detail Files (load when needed):
+- internal/MOJO_WORKAROUNDS.md - When writing Mojo code
+- internal/IMPLEMENTATION_CHECKLIST.md - When implementing features
+- internal/architecture/*.md - When designing systems
+- internal/DOC_ORGANIZATION.md - When organizing docs
+```
+
+**New session?** Start with key files (NOW → DECISIONS → KNOWLEDGE)
 
 ## 📝 Documentation Management Rules
 
-**Core documentation files:**
-- `internal/NOW.md` - Current tasks and blockers
-- `internal/DECISIONS.md` - Why we chose X (append-only)
-- `internal/KNOWLEDGE.md` - Patterns, gotchas, learnings
-- `internal/DOC_ORGANIZATION.md` - How to organize docs (@reference this)
+### When to Update Key Files
+**NOW.md** - Update when:
+- Starting/completing tasks
+- Encountering blockers
+- Planning next steps
 
-**For complex topics**, use subdirectories:
-- `internal/architecture/` - System designs
-- `internal/research/` - Research findings
+**DECISIONS.md** - Append when:
+- Making architectural choices
+- Choosing between alternatives
+- Changing strategy
+
+**KNOWLEDGE.md** - Update when:
+- Finding patterns that work
+- Discovering gotchas
+- Learning optimizations
+
+### When to Reference Detail Files
+- Writing Mojo? → Check `MOJO_WORKAROUNDS.md`
+- Implementing features? → Check `IMPLEMENTATION_CHECKLIST.md`
+- Designing systems? → Check `architecture/*.md`
+- Organizing docs? → Check `DOC_ORGANIZATION.md`
 
 ## 📦 Archive Strategy
 
