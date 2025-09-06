@@ -2,35 +2,78 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# OmenDB Core Monorepo - AI Agent Context
-*Token-efficient navigation - include first*
+## 🎯 Quick Start for AI Agents
+**New session?** Follow this order:
+1. Read this file (CLAUDE.md) for instructions
+2. Check `internal/NOW.md` for current sprint
+3. Review `internal/DECISIONS.md` for major decisions
+4. Reference `internal/KNOWLEDGE.md` for patterns
 
-## Current Focus: OmenDB Vector Database 🎯
-**Primary Project**: OmenDB - High-performance vector database in Mojo
-**Status**: PQ compression working (288 bytes/vector), debugging 25K+ vector bottleneck
-**Architecture**: DiskANN/Vamana algorithm, memory-mapped storage, Python/C bindings
-**Secondary Project**: ZenDB - Experimental multimodal database (on hold)
+## 📝 Documentation Management Rules
+
+**Core documentation files:**
+- `internal/NOW.md` - Current tasks and blockers
+- `internal/DECISIONS.md` - Why we chose X (append-only)
+- `internal/KNOWLEDGE.md` - Patterns, gotchas, learnings
+- `internal/DOC_ORGANIZATION.md` - How to organize docs (@reference this)
+
+**For complex topics**, use subdirectories:
+- `internal/architecture/` - System designs
+- `internal/research/` - Research findings
+- `internal/archive/` - Old/outdated docs
+
+**Examples:**
+```python
+# ❌ WRONG: Creating analysis files
+write_file("HNSW_ANALYSIS.md", analysis)
+
+# ✅ RIGHT: Update appropriate location
+append_to("internal/DECISIONS.md", "## Decision: HNSW+ over DiskANN...")
+update("internal/KNOWLEDGE.md", "## HNSW Patterns...")
+```
+
+**Note**: Universal patterns are in `external/agent-contexts/` (git submodule)
+
+## 📊 Current Status (Feb 2025)
+**Project**: OmenDB - Multimodal database (vectors + text + metadata)
+**Strategy**: Build multimodal from start (10x better business than pure vector)
+**Algorithm**: HNSW+ with integrated metadata filtering
+**Architecture**: Mojo core + Rust server + Python/C bindings
+**Timeline**: 6-8 weeks to multimodal MVP
 
 ## Quick Facts
-- **OmenDB**: High-performance vector engine (Mojo, DiskANN algorithm)
-- **ZenDB**: Hybrid database with SQL + Vectors + Time-travel (Rust, MVCC/WAL)
-- **Server**: Rust HTTP/gRPC server (⚠️ potentially outdated)
-- **Web**: SolidJS frontend (⚠️ content outdated but functional)
-- **Shared**: Benchmarks, vector formats, agent patterns
-- **Status**: OmenDB needs scale fixes, ZenDB ready for optimization
+- **Algorithm**: Switching from DiskANN to HNSW+ (better market fit)
+- **Language**: Mojo for core engine (Python interop, SIMD, future GPU)
+- **Bindings**: Python native, C/Rust via shared library
+- **Business**: Open source (CPU) + Cloud (GPU-accelerated)
+- **Timeline**: 4 weeks to HNSW+ MVP, 8 weeks to cloud platform
 
-## Repository Structure (Updated)
+## Repository Structure
+
+### Active Development
 ```
-/omendb/             # Main vector database project
-├── engine/          # Mojo vector engine (focus here)
-├── server/          # Rust HTTP/gRPC wrapper (may be outdated)
-└── web/             # Marketing site (needs content update)
+/omendb/engine/          # Mojo multimodal database (FOCUS HERE)
+├── omendb/
+│   ├── algorithms/      # ⚠️ DiskANN files DEPRECATED (see DEPRECATED.md)
+│   ├── native.mojo      # Current entry point
+│   └── [new] hnsw.mojo  # TO BE CREATED - new algorithm
+├── python/              # Python bindings
+└── pixi.toml           # Build configuration
 
-/zendb/              # Experimental multimodal DB (on hold)
+/internal/               # Documentation (AI-agent optimized)
+├── NOW.md               # Current sprint tasks
+├── DECISIONS.md         # Major decisions (append-only)
+├── KNOWLEDGE.md         # Patterns and learnings
+├── MOJO_WORKAROUNDS.md  # Language limitations & solutions
+├── DOC_ORGANIZATION.md  # How to organize docs
+└── architecture/        # System design docs
 
-/internal/           # Internal knowledge base
-├── patterns/        # Extracted patterns (STORAGE, CONCURRENCY)
-├── research/        # Technical research
+### Archived/Deprecated
+```
+/zendb/                  # ⚠️ ARCHIVED - See ARCHIVED.md
+/omendb/server/          # May be outdated
+/omendb/web/             # Needs update
+/internal/archive/       # Old documentation
 ├── archived/        # Historical investigations
 └── strategy/        # Business planning
 
