@@ -29,6 +29,7 @@ struct GlobalDatabase(Movable):
     """Thread-safe global database instance using HNSW+ algorithm."""
     var hnsw_index: HNSWIndex
     var id_mapper: SparseMap  # String ID -> Int ID mapping
+    var reverse_id_mapper: Dict[Int, String]  # Int ID -> String ID mapping  
     var metadata_store: Dict[String, Dict[String, PythonObject]]
     var dimension: Int
     var initialized: Bool
@@ -37,6 +38,7 @@ struct GlobalDatabase(Movable):
     fn __init__(out self):
         self.hnsw_index = HNSWIndex(128, 10000)  # Default dimension, will be reset
         self.id_mapper = SparseMap()
+        self.reverse_id_mapper = Dict[Int, String]()
         self.metadata_store = Dict[String, Dict[String, PythonObject]]()
         self.dimension = 0
         self.initialized = False
@@ -74,8 +76,9 @@ struct GlobalDatabase(Movable):
         if numeric_id < 0:
             return False
         
-        # Store ID mapping
+        # Store ID mapping (both directions)
         _ = self.id_mapper.insert(string_id, numeric_id)
+        self.reverse_id_mapper[numeric_id] = string_id
         
         # Store metadata
         self.metadata_store[string_id] = metadata
@@ -112,9 +115,12 @@ struct GlobalDatabase(Movable):
     
     fn _get_string_id_for_numeric(self, numeric_id: Int) -> String:
         """Reverse lookup: numeric ID → string ID."""
-        # This is inefficient - in production we'd maintain reverse mapping
-        # For now, return a placeholder since SparseMap doesn't support iteration
-        return String("vector_" + String(numeric_id))
+        try:
+            if numeric_id in self.reverse_id_mapper:
+                return self.reverse_id_mapper[numeric_id]
+        except:
+            pass
+        return String("")  # Not found
     
     fn get_vector_data(self, string_id: String) -> UnsafePointer[Float32]:
         """Get vector data by string ID."""
@@ -156,6 +162,7 @@ struct GlobalDatabase(Movable):
         if self.initialized:
             self.hnsw_index = HNSWIndex(self.dimension, 10000)
             self.id_mapper = SparseMap()
+            self.reverse_id_mapper = Dict[Int, String]()
             self.metadata_store = Dict[String, Dict[String, PythonObject]]()
             self.next_numeric_id = 0
 
