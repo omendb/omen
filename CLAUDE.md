@@ -9,6 +9,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. Review `internal/DECISIONS.md` for major decisions
 4. Reference `internal/KNOWLEDGE.md` for patterns
 
+## 🔄 Version Control Rules
+
+**Commit regularly using Git:**
+- After each logical unit of work (feature, fix, refactor)
+- Before switching to different area of codebase  
+- Use atomic commits with clear messages
+- Format: `type: description` (feat, fix, docs, refactor, test)
+
+Example commit workflow:
+```bash
+git add -p  # Review changes
+git commit -m "feat: add HNSW layer management"
+git commit -m "refactor: extract distance calculations"
+git commit -m "docs: update architecture diagrams"
+```
+
 ## 📝 Documentation Management Rules
 
 **Core documentation files:**
@@ -20,7 +36,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **For complex topics**, use subdirectories:
 - `internal/architecture/` - System designs
 - `internal/research/` - Research findings
-- `internal/archive/` - Old/outdated docs
+
+## 📦 Archive Strategy
+
+**Where to archive:**
+- `internal/archive/` - Internal docs, research, decisions
+- `omendb/engine/archive/` - Old Mojo implementations (keep as reference)
+- Delete completely: Redundant analyses, temp files, old TODOs
+
+**When to archive vs delete:**
+- **Archive**: Code patterns, algorithm implementations, design decisions
+- **Delete**: Duplicate content, outdated plans, temporary notes
+
+**Archive structure:**
+```
+internal/archive/
+├── YYYY-MM-DD-description/  # Date-based for context
+└── reference/               # Permanent reference material
+    └── mojo-patterns/       # Useful code to keep
 
 **Examples:**
 ```python
