@@ -15,10 +15,11 @@ Key improvements over original HNSW:
 """
 
 from memory import UnsafePointer
-from math import log, exp
+from math import log, exp, sqrt
 from random import random_float64
 from algorithm import vectorize
 from python import Python
+from sys.info import simdwidthof
 
 # SIMD configuration for performance
 alias simd_width = simdwidthof[DType.float32]()
@@ -46,6 +47,18 @@ struct HNSWNode:
         # Initialize connection lists for each layer
         for i in range(level + 1):
             self.connections.append(List[Int]())
+    
+    fn __copyinit__(out self, existing: Self):
+        """Copy constructor required for List storage."""
+        self.id = existing.id
+        self.level = existing.level
+        self.connections = existing.connections
+    
+    fn __moveinit__(out self, owned existing: Self):
+        """Move constructor required for List storage."""
+        self.id = existing.id
+        self.level = existing.level
+        self.connections = existing.connections^
 
 
 struct HNSWIndex:
@@ -94,7 +107,7 @@ struct HNSWIndex:
         return level
     
     @always_inline
-    fn distance[simd_width: Int](
+    fn distance(
         self,
         a: UnsafePointer[Float32],
         b: UnsafePointer[Float32]
@@ -104,17 +117,14 @@ struct HNSWIndex:
         
         This is the hot path - must be highly optimized.
         """
-        var sum = SIMD[DType.float32, simd_width](0)
+        var sum = Float32(0)
         
-        @parameter
-        fn simd_distance[simd_width: Int](idx: Int):
-            var va = a.load[width=simd_width](idx)
-            var vb = b.load[width=simd_width](idx)
-            var diff = va - vb
-            sum = diff.fma(diff, sum)  # diff * diff + sum
+        # Simple loop for now - SIMD optimization needs different approach
+        for i in range(self.dimension):
+            var diff = a[i] - b[i]
+            sum += diff * diff
         
-        vectorize[simd_distance, simd_width](self.dimension)
-        return sum.reduce_add().sqrt()
+        return sqrt(sum)
     
     fn get_vector(self, id: Int) -> UnsafePointer[Float32]:
         """Get pointer to vector by ID."""
@@ -158,10 +168,15 @@ struct HNSWIndex:
         )
         
         # Insert at all layers from top to target layer
-        for lc in range(level, -1, -1):
+        var lc = level
+        while lc >= 0:
+            var entry = self.entry_point
+            if len(current_closest) > 0:
+                entry = current_closest[0]
+            
             var candidates = self._search_layer(
                 vector,
-                current_closest[0] if len(current_closest) > 0 else self.entry_point,
+                entry,
                 ef_construction,
                 lc
             )
@@ -183,6 +198,8 @@ struct HNSWIndex:
                 if len(neighbor_connections) > M_layer:
                     # Prune to M_layer connections
                     self._prune_connections(neighbor_id, lc, M_layer)
+            
+            lc -= 1
         
         # Update entry point if new node is at higher layer
         if level > self.nodes[self.entry_point].level:
@@ -195,16 +212,17 @@ struct HNSWIndex:
         self,
         query: UnsafePointer[Float32],
         k: Int,
-        ef: Int = -1
-    ) -> List[Tuple[Int, Float32]]:
+        ef_search: Int = -1
+    ) -> List[List[Float32]]:  # Returns List of [id, distance] pairs
         """
         Search for k nearest neighbors.
         
         Returns list of (id, distance) tuples.
         """
         if self.size == 0:
-            return List[Tuple[Int, Float32]]()
+            return List[List[Float32]]()
         
+        var ef = ef_search
         if ef == -1:
             ef = max(ef_construction, k)
         
@@ -213,13 +231,16 @@ struct HNSWIndex:
         
         # Search from top layer to layer 0
         var top_layer = self.nodes[self.entry_point].level
-        for layer in range(top_layer, 0, -1):
+        # Reverse iteration manually since range doesn't support step
+        var layer = top_layer
+        while layer > 0:
             current_closest = self._search_layer(
                 query,
                 current_closest[0],
                 1,
                 layer
             )
+            layer -= 1
         
         # Search at layer 0 with ef candidates
         var candidates = self._search_layer(
@@ -230,14 +251,17 @@ struct HNSWIndex:
         )
         
         # Return top k
-        var results = List[Tuple[Int, Float32]]()
+        var results = List[List[Float32]]()
         for i in range(min(k, len(candidates))):
             var id = candidates[i]
-            var dist = self.distance[simd_width](
+            var dist = self.distance(
                 query,
                 self.get_vector(id)
             )
-            results.append((id, dist))
+            var pair = List[Float32]()
+            pair.append(Float32(id))
+            pair.append(dist)
+            results.append(pair)
         
         return results
     
@@ -272,10 +296,14 @@ struct HNSWIndex:
             # Get closest unvisited candidate
             # TODO: Use priority queue for efficiency
             var current = candidates[0]
-            candidates.remove(0)
+            # Manual removal since List doesn't have remove
+            var new_candidates = List[Int]()
+            for i in range(1, len(candidates)):
+                new_candidates.append(candidates[i])
+            candidates = new_candidates
             
             # Check if this point is farther than our farthest result
-            var current_dist = self.distance[simd_width](
+            var current_dist = self.distance(
                 query,
                 self.get_vector(current)
             )
@@ -285,7 +313,7 @@ struct HNSWIndex:
             for neighbor in neighbors:
                 if not visited[neighbor]:
                     visited[neighbor] = True
-                    var neighbor_dist = self.distance[simd_width](
+                    var neighbor_dist = self.distance(
                         query,
                         self.get_vector(neighbor)
                     )
