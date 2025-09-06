@@ -1,0 +1,49 @@
+name: Feature Request
+description: Suggest a feature for OmenDB
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check ACTION_PLAN.md and TASKS.md for planned features.
+        
+  - type: input
+    id: task-ref
+    attributes:
+      label: Task Reference
+      description: If in TASKS.md, provide reference
+      placeholder: "Backlog: Streaming Merge"
+      
+  - type: textarea
+    id: description
+    attributes:
+      label: Feature Description
+      description: What should be built?
+    validations:
+      required: true
+      
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this needed?
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Critical (blocking production)
+        - High (major improvement)
+        - Medium (nice to have)
+        - Low (future consideration)
+        
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation Notes
+      description: Technical approach if known
+      render: mojo
