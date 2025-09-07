@@ -1,0 +1,53 @@
+[
+  {
+    "system": "ChromaDB",
+    "dataset_size": 1000,
+    "dimension": 128,
+    "insertion_rate_vec_per_sec": 15959.739087083934,
+    "insertion_total_time_sec": 0.06265766592696309,
+    "insertion_memory_mb": 15.34375,
+    "search_latency_p50_ms": 0.3061671741306782,
+    "search_latency_p95_ms": 0.41266600601375103,
+    "search_latency_p99_ms": 1.384458038955927,
+    "search_qps": 3058.743285206175,
+    "recall_at_1": 0.95,
+    "recall_at_5": 0.98,
+    "recall_at_10": 0.99,
+    "bytes_per_vector": 16089.088,
+    "total_memory_mb": 15.34375
+  },
+  {
+    "system": "ChromaDB",
+    "dataset_size": 5000,
+    "dimension": 128,
+    "insertion_rate_vec_per_sec": 16195.588706756474,
+    "insertion_total_time_sec": 0.3087260420434177,
+    "insertion_memory_mb": 52.65625,
+    "search_latency_p50_ms": 0.3738750237971544,
+    "search_latency_p95_ms": 0.5067500751465559,
+    "search_latency_p99_ms": 1.5525000635534525,
+    "search_qps": 2521.257278806316,
+    "recall_at_1": 0.95,
+    "recall_at_5": 0.98,
+    "recall_at_10": 0.99,
+    "bytes_per_vector": 11042.816,
+    "total_memory_mb": 52.65625
+  },
+  {
+    "system": "ChromaDB",
+    "dataset_size": 10000,
+    "dimension": 128,
+    "insertion_rate_vec_per_sec": 17061.792909674255,
+    "insertion_total_time_sec": 0.5861048749648035,
+    "insertion_memory_mb": 60.421875,
+    "search_latency_p50_ms": 0.3560830373317003,
+    "search_latency_p95_ms": 0.45087491162121296,
+    "search_latency_p99_ms": 1.6142500098794699,
+    "search_qps": 2604.757469579476,
+    "recall_at_1": 0.95,
+    "recall_at_5": 0.98,
+    "recall_at_10": 0.99,
+    "bytes_per_vector": 6335.6928,
+    "total_memory_mb": 60.421875
+  }
+]
