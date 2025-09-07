@@ -81,6 +81,9 @@ from .exceptions import OmenDBError, DatabaseError, ValidationError
 _native_validated = False
 _native_configured = False  # Track if configure_database has been called
 
+# Using Mojo v25.4 for stable singleton pattern and 41K vec/s performance
+# Will upgrade to newer versions when module-level static data is supported
+
 
 def _ensure_native_available():
     """Ensure native module is available and working (cached globally)."""
