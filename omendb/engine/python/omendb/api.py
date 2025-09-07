@@ -158,16 +158,25 @@ def _convert_to_vector(data: VectorInput) -> List[float]:
     raise ValidationError(f"Cannot convert {type(data)} to vector")
 
 
-def _validate_vector(vector: List[float]) -> None:
-    """Validate vector format."""
-    if not isinstance(vector, list):
-        raise ValidationError("Vector must be a list of floats")
-
-    if len(vector) == 0:
-        raise ValidationError("Vector cannot be empty")
-
-    if not all(isinstance(x, (int, float)) for x in vector):
-        raise ValidationError("All vector elements must be numeric")
+def _validate_vector(vector) -> None:
+    """Validate vector format (accepts lists or NumPy arrays)."""
+    import numpy as np
+    
+    # Accept both lists and NumPy arrays
+    if isinstance(vector, np.ndarray):
+        # NumPy array validation
+        if vector.size == 0:
+            raise ValidationError("Vector cannot be empty")
+        if not np.issubdtype(vector.dtype, np.number):
+            raise ValidationError("All vector elements must be numeric")
+    elif isinstance(vector, list):
+        # List validation
+        if len(vector) == 0:
+            raise ValidationError("Vector cannot be empty")
+        if not all(isinstance(x, (int, float)) for x in vector):
+            raise ValidationError("All vector elements must be numeric")
+    else:
+        raise ValidationError("Vector must be a list of floats or NumPy array")
 
 
 @dataclass
@@ -250,7 +259,9 @@ class DB:
 
         # Auto-batching for performance (5-10x speedup for individual adds)
         # Use more conservative settings to avoid memory issues
-        self._auto_batch_enabled = True
+        # IMPORTANT: Auto-batching disabled for HNSW+ 
+        # Batching destroys NumPy arrays and hurts HNSW+ graph quality
+        self._auto_batch_enabled = False
         self._auto_batcher = None  # Lazy init
         self._batch_lock = threading.RLock()  # Use RLock to avoid deadlocks
         self._pending_batch = []
@@ -604,18 +615,28 @@ class DB:
         if not isinstance(id, str) or len(id.strip()) == 0:
             raise ValidationError("Vector ID must be a non-empty string")
 
-        # Convert various input types to vector list
+        # Convert various input types to vector (preserve NumPy for zero-copy)
         try:
-            vector_list = _convert_to_vector(vector)
-            _validate_vector(vector_list)
+            # Check if it's already a NumPy array - DON'T CONVERT!
+            import numpy as np
+            if isinstance(vector, np.ndarray):
+                # Keep as NumPy for zero-copy optimization in native layer
+                vector_data = vector
+                if vector.dtype != np.float32:
+                    vector_data = vector.astype(np.float32)
+                _validate_vector(vector_data)  # Validate shape/size
+            else:
+                # Convert other types to list
+                vector_data = _convert_to_vector(vector)
+                _validate_vector(vector_data)
         except Exception as e:
             raise ValidationError(f"Invalid vector format: {e}")
 
         # Auto-batching logic for better performance
         if self._auto_batch_enabled:
             with self._batch_lock:
-                # Add to pending batch
-                self._pending_batch.append((id, vector_list, metadata or {}))
+                # Add to pending batch (preserve NumPy arrays!)
+                self._pending_batch.append((id, vector_data, metadata or {}))
 
                 # Check for backpressure - don't accumulate too many pending items
                 if len(self._pending_batch) >= self._batch_size_limit:
@@ -630,19 +651,23 @@ class DB:
 
                 return True  # Optimistic return
         else:
-            # Direct add without batching
-            return self._add_single(id, vector_list, metadata or {})
+            # Direct add without batching (pass vector_data to preserve NumPy)
+            return self._add_single(id, vector_data, metadata or {})
 
     def _add_single(
-        self, id: str, vector_list: List[float], metadata: Dict[str, str]
+        self, id: str, vector_data, metadata: Dict[str, str]
     ) -> bool:
-        """Add a single vector directly (no batching)."""
+        """Add a single vector directly (no batching).
+        
+        vector_data can be either a List[float] or numpy.ndarray for zero-copy.
+        """
         try:
-            result = _native.add_vector(id, vector_list, metadata)
+            # Pass NumPy arrays directly for zero-copy, lists as-is
+            result = _native.add_vector(id, vector_data, metadata)
 
             # Track dimension for better error messages
             if result and self._dimension is None:
-                self._dimension = len(vector_list)
+                self._dimension = len(vector_data)
 
             return bool(result)
         except Exception as e:
