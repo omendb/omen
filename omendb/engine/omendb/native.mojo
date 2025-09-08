@@ -36,7 +36,7 @@ struct GlobalDatabase(Movable):
     var next_numeric_id: Int
     
     fn __init__(out self):
-        self.hnsw_index = HNSWIndex(128, 10000)  # Default dimension, will be reset
+        self.hnsw_index = HNSWIndex(128, 5000)  # Dynamic growth: start small, grow as needed
         self.id_mapper = SparseMap()
         self.reverse_id_mapper = Dict[Int, String]()
         self.metadata_store = Dict[String, Dict[String, PythonObject]]()
@@ -51,7 +51,7 @@ struct GlobalDatabase(Movable):
         
         if not self.initialized:
             self.dimension = dimension
-            self.hnsw_index = HNSWIndex(dimension, 10000)  # Fixed capacity
+            self.hnsw_index = HNSWIndex(dimension, 5000)  # Dynamic growth: start small
             
             # Enable state-of-the-art optimizations
             self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
@@ -171,7 +171,7 @@ struct GlobalDatabase(Movable):
         # Reset everything to allow reinitialization with different dimension
         self.initialized = False
         self.dimension = 0
-        self.hnsw_index = HNSWIndex(128, 10000)  # Default dimension
+        self.hnsw_index = HNSWIndex(128, 5000)  # Default dimension, dynamic growth
         self.id_mapper = SparseMap()
         self.reverse_id_mapper = Dict[Int, String]()
         self.metadata_store = Dict[String, Dict[String, PythonObject]]()

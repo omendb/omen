@@ -316,6 +316,71 @@ struct HNSWIndex(Movable):
         if self.visited_buffer:
             self.visited_buffer.free()
     
+    fn resize(mut self, new_capacity: Int):
+        """Dynamically grow capacity. Reallocates and copies existing data."""
+        if new_capacity <= self.capacity:
+            return  # Don't shrink
+        
+        print("HNSW growing capacity:", self.capacity, "->", new_capacity)
+        
+        # Allocate new memory
+        var new_vectors = UnsafePointer[Float32].alloc(new_capacity * self.dimension)
+        var new_visited_buffer = UnsafePointer[Int].alloc(new_capacity)
+        
+        # Copy existing data
+        if self.size > 0:
+            memcpy(new_vectors, self.vectors, self.size * self.dimension)
+            memcpy(new_visited_buffer, self.visited_buffer, self.size)
+        
+        # Initialize new visited buffer entries
+        for i in range(self.size, new_capacity):
+            new_visited_buffer[i] = 0
+        
+        # Free old memory
+        if self.vectors:
+            self.vectors.free()
+        if self.visited_buffer:
+            self.visited_buffer.free()
+        
+        # Update pointers and capacity
+        self.vectors = new_vectors
+        self.visited_buffer = new_visited_buffer
+        self.visited_size = new_capacity
+        
+        # Grow node pool (this is the tricky part)
+        # For now, create new pool and migrate - not ideal but works
+        var old_size = self.size
+        var new_node_pool = NodePool(new_capacity)
+        
+        # Copy nodes from old pool to new pool
+        for i in range(old_size):
+            if self.node_pool.size > i:
+                var old_node = self.node_pool.get(i)
+                if old_node:
+                    # Create new node with same properties
+                    var new_id = new_node_pool.allocate(old_node[].level)
+                    if new_id >= 0:
+                        var new_node = new_node_pool.get(new_id)
+                        if new_node:
+                            # Copy all node data
+                            new_node[].id = old_node[].id
+                            new_node[].level = old_node[].level 
+                            new_node[].deleted = old_node[].deleted
+                            new_node[].connections_l0_count = old_node[].connections_l0_count
+                            
+                            # Copy connections arrays
+                            for j in range(old_node[].connections_l0_count):
+                                new_node[].connections_l0[j] = old_node[].connections_l0[j]
+                            
+                            for layer in range(old_node[].level):
+                                new_node[].connections_count[layer] = old_node[].connections_count[layer]
+                                for j in range(old_node[].connections_count[layer]):
+                                    new_node[].connections_higher[layer * max_M + j] = old_node[].connections_higher[layer * max_M + j]
+        
+        # Replace node pool
+        self.node_pool = new_node_pool^
+        self.capacity = new_capacity
+    
     @always_inline
     fn get_random_level(self) -> Int:
         """Select level for new node (exponential decay)."""
@@ -619,9 +684,15 @@ struct HNSWIndex(Movable):
         return self.vectors.offset(idx * self.dimension)
     
     fn insert(mut self, vector: UnsafePointer[Float32]) -> Int:
-        """Insert vector into index. Returns ID or -1 if full."""
-        if self.size >= self.capacity:
-            return -1  # Capacity reached
+        """Insert vector into index with dynamic growth."""
+        # Check if we need to grow (80% capacity threshold)
+        if self.size >= Int(self.capacity * 0.8):
+            # Calculate new capacity with 1.5x growth factor
+            var new_capacity = Int(self.capacity * 1.5)
+            # Ensure minimum growth of 1000 vectors
+            if new_capacity < self.capacity + 1000:
+                new_capacity = self.capacity + 1000
+            self.resize(new_capacity)
         
         # Allocate node from pool
         var level = self.get_random_level()
