@@ -123,5 +123,68 @@ For genuine 5-10x speedup, we need:
 - 🎯 Maintain search accuracy
 - 🎯 Scale to millions of vectors
 
+## 🚨 **TRUE BULK OPTIMIZATION ATTEMPT - FAILED**
+
+### Implementation Attempt
+- **File**: `omendb/engine/omendb/algorithms/hnsw.mojo:852-966`
+- **Methods**: 
+  - `_compute_distance_matrix()` - Vectorized distance computation
+  - `_bulk_neighbor_search()` - Bulk neighbor finding
+  - Updated `insert_bulk()` - Layer-based vectorized processing
+
+### Critical Failures Discovered
+
+1. **SEGMENTATION FAULTS**: Crashes at 5,000+ vectors in bulk operations
+2. **NO PERFORMANCE IMPROVEMENT**: Still ~9,800 vec/s (same as before) 
+3. **MEMORY CORRUPTION**: Pointer arithmetic errors in vectorized distance matrix
+4. **ALGORITHMIC ISSUES**: Vectorization overhead negates benefits
+
+### Performance Reality Check
+
+| Batch Size | Rate | Status |
+|------------|------|---------|
+| 500 | 8,561 vec/s | ✅ Stable |
+| 1,000 | 9,804 vec/s | ✅ Stable |  
+| 2,000 | 9,788 vec/s | ✅ Stable |
+| 5,000 | **CRASH** | ❌ Segfault |
+
+**Key Insight**: Even when stable, vectorization provides **ZERO speedup improvement**
+
+## 🎯 **ROOT CAUSE ANALYSIS**
+
+### Why Vectorization Failed
+
+1. **Distance Matrix Overhead**: Creating O(n×m) matrix is expensive
+2. **Memory Allocation Costs**: Bulk allocations offset computation savings  
+3. **Cache Performance**: Large matrices don't fit in cache
+4. **Algorithm Mismatch**: HNSW inherently requires incremental graph building
+
+### Fundamental Issue
+
+**HNSW Algorithm Constraint**: Graph construction is inherently **sequential** because:
+- Each new node needs to connect to existing graph
+- Neighbor selection depends on current graph state  
+- Cannot parallelize graph structure updates safely
+
+## 🚀 **BETTER OPTIMIZATION STRATEGIES**
+
+Based on analysis, focus should be:
+
+### High Impact (Algorithmic)
+1. **Better Memory Layout**: Reduce per-vector overhead from 187ms to <50ms
+2. **SIMD Distance Optimization**: Fix dimension scaling (64D: 8.4K vs 512D: 3K vec/s)
+3. **Connection Pooling**: Pre-allocate graph connections
+4. **Quantization Fixes**: Verify binary quantization is actually working
+
+### Medium Impact (System)
+5. **Zero-Copy Fixes**: FFI showing **negative** performance (NumPy slower than lists!)
+6. **Memory Pre-allocation**: Avoid repeated allocations
+7. **Batch Size Tuning**: Find optimal batch sizes (1K-2K seems best)
+
+### Target Performance  
+- **Realistic Target**: 15,000-20,000 vec/s (3x current)
+- **Stretch Target**: 25,000 vec/s (competitive)
+- **Approach**: Optimize existing algorithm, not redesign it
+
 ---
-**Next Phase**: Implement true vectorized bulk operations with O(log n) total complexity instead of O(n×log n).
+**Status**: Vectorized bulk approach **ABANDONED** - focusing on incremental optimizations with higher ROI
