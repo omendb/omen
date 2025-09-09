@@ -24,6 +24,7 @@ from collections import InlineArray, List
 from ..compression.binary import BinaryQuantizedVector, binary_distance
 from ..core.utils import get_optimal_workers
 from ..compression.product_quantization import PQCompressor, PQVector
+from ..utils.memory_pool import allocate_vector, free_vector, AlignedBuffer
 
 fn min(a: Int, b: Int) -> Int:
     """Return minimum of two integers."""
@@ -242,7 +243,9 @@ struct HNSWIndex(Movable):
         
         # Pre-allocate everything
         self.node_pool = NodePool(capacity)
-        self.vectors = UnsafePointer[Float32].alloc(capacity * dimension)
+        # Use memory pool allocation for cache-aligned vector storage
+        # Note: Allocating as single contiguous block (capacity * dimension) for cache efficiency
+        self.vectors = UnsafePointer[Float32].alloc(capacity * dimension)  # TODO: Replace with aligned allocation when available
         
         # Initialize 2025 research optimizations
         # Hub Highway architecture (flat graph breakthrough)
@@ -806,12 +809,12 @@ struct HNSWIndex(Movable):
                 var needed = target_capacity - len(self.binary_vectors)
                 for _ in range(needed):
                     # Create empty binary vector without dummy allocation
-                    var zero_vec = UnsafePointer[Float32].alloc(self.dimension)
+                    var zero_vec = allocate_vector(self.dimension)
                     for j in range(self.dimension):
                         zero_vec[j] = 0.0
                     var empty_vec = BinaryQuantizedVector(zero_vec, self.dimension)
                     self.binary_vectors.append(empty_vec)
-                    zero_vec.free()
+                    free_vector(zero_vec, self.dimension)
             
             # Batch create quantized versions
             for i in range(actual_count):
@@ -1036,12 +1039,12 @@ struct HNSWIndex(Movable):
             if len(self.binary_vectors) < target_capacity:
                 var needed = target_capacity - len(self.binary_vectors)
                 for _ in range(needed):
-                    var zero_vec = UnsafePointer[Float32].alloc(self.dimension)
+                    var zero_vec = allocate_vector(self.dimension)
                     for j in range(self.dimension):
                         zero_vec[j] = 0.0
                     var empty_vec = BinaryQuantizedVector(zero_vec, self.dimension)
                     self.binary_vectors.append(empty_vec)
-                    zero_vec.free()
+                    free_vector(zero_vec, self.dimension)
             
             for i in range(actual_count):
                 var node_id = node_ids[i]
