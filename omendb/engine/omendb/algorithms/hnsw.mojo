@@ -979,8 +979,11 @@ struct HNSWIndex(Movable):
         
         return results
     
-    fn insert_bulk_parallel(mut self, vectors: UnsafePointer[Float32], n_vectors: Int) -> List[Int]:
-        """🚀 PARALLEL bulk insert using Mojo's native parallelize - 5-8x speedup!
+    fn insert_bulk_wip(mut self, vectors: UnsafePointer[Float32], n_vectors: Int) -> List[Int]:
+        """🚧 WIP: PARALLEL bulk insert using Mojo's native parallelize
+        
+        ⚠️  WORK IN PROGRESS - NOT PRODUCTION READY
+        ⚠️  Requires thorough testing at scale before use
         
         Uses Mojo-native threading (NOT Python) for true parallelism:
         - Zero FFI overhead (pure Mojo execution)
@@ -1149,6 +1152,24 @@ struct HNSWIndex(Movable):
         
         print("✅ PARALLEL INSERT COMPLETE:", actual_count, "vectors processed in parallel")
         return results
+    
+    fn insert_bulk_auto(mut self, vectors: UnsafePointer[Float32], n_vectors: Int, use_wip: Bool = False) -> List[Int]:
+        """Auto-select between stable and WIP bulk insertion based on flag.
+        
+        Args:
+            vectors: Pointer to contiguous vector data
+            n_vectors: Number of vectors to insert
+            use_wip: If True, use WIP parallel version (requires testing)
+                    If False, use stable sequential version (default)
+        
+        Returns:
+            List of node IDs for inserted vectors
+        """
+        if use_wip:
+            print("🚧 Using WIP parallel insertion (experimental)")
+            return self.insert_bulk_wip(vectors, n_vectors)
+        else:
+            return self.insert_bulk(vectors, n_vectors)
     
     fn _process_layer_sub_batch_threadsafe(
         mut self,

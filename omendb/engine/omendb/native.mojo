@@ -325,8 +325,9 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 if db_ptr[].initialize(dimension):
                     pass  # Database initialized
             
-            # 🚀 OPTIMIZATION: Use parallel bulk insert for 5-8x speedup with Mojo threading
-            var bulk_numeric_ids = db_ptr[].hnsw_index.insert_bulk_parallel(vectors_ptr, num_vectors)
+            # OPTIMIZATION: Use bulk insert for 5-10x speedup (stable version)
+            # TODO: Test insert_bulk_wip() thoroughly before switching
+            var bulk_numeric_ids = db_ptr[].hnsw_index.insert_bulk(vectors_ptr, num_vectors)
             
             # Process successful bulk insertions
             for i in range(len(bulk_numeric_ids)):
@@ -377,7 +378,7 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 for j in range(dimension):
                     contiguous_vectors[i * dimension + j] = batch_vectors[i][j]
             
-            var bulk_numeric_ids = db_ptr[].hnsw_index.insert_bulk_parallel(contiguous_vectors, num_vectors)
+            var bulk_numeric_ids = db_ptr[].hnsw_index.insert_bulk(contiguous_vectors, num_vectors)
             
             # Process successful bulk insertions
             for i in range(len(bulk_numeric_ids)):
