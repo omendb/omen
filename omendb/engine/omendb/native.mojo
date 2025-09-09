@@ -199,10 +199,14 @@ fn destroy_database(db_ptr: UnsafePointer[GlobalDatabase]):
         db_ptr.destroy_pointee()
         db_ptr.free()
 
-# For backward compatibility, keep global accessor but create new instance each time
+# Global database instance (singleton pattern)
+var global_db: UnsafePointer[GlobalDatabase] = UnsafePointer[GlobalDatabase]()
+
 fn get_global_db() -> UnsafePointer[GlobalDatabase]:
-    """DEPRECATED: Creates new instance each time to avoid corruption."""
-    return create_database()
+    """Get or create the global database singleton."""
+    if not global_db:
+        global_db = create_database()
+    return global_db
 
 # =============================================================================
 # PYTHON API FUNCTIONS
@@ -420,11 +424,17 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 batch_vectors[i].free()
             batch_vectors.free()
         
-        # Return results
-        # Use already imported python from earlier
+        # Return boolean list indicating success for each position
+        # The Python API expects a list of booleans, not IDs
         var py_results = python.list()
-        for i in range(len(results)):
-            _ = py_results.append(PythonObject(results[i]))
+        for i in range(num_vectors):
+            var id_str = String(vector_ids[i])
+            var success = False
+            for j in range(len(results)):
+                if results[j] == id_str:
+                    success = True
+                    break
+            _ = py_results.append(PythonObject(success))
         
         return py_results
         
