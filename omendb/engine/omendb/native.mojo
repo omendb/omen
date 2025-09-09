@@ -208,23 +208,8 @@ fn get_global_db() -> UnsafePointer[GlobalDatabase]:
 # PYTHON API FUNCTIONS
 # =============================================================================
 
-fn create_database_instance() raises -> PythonObject:
-    """Create a new database instance and return its handle."""
-    var db_ptr = create_database()
-    # Convert pointer to integer handle for Python
-    var addr = Int(db_ptr.bitcast[Int]())
-    return PythonObject(addr)
-
-fn destroy_database_instance(handle: PythonObject) raises -> PythonObject:
-    """Destroy a database instance given its handle."""
-    try:
-        var addr = Int(handle)
-        var int_ptr = UnsafePointer[Int](addr)
-        var db_ptr = int_ptr.bitcast[GlobalDatabase]()
-        destroy_database(db_ptr)
-        return PythonObject(True)
-    except:
-        return PythonObject(False)
+# Instance-based API removed - not possible with Mojo v25.4
+# Module-level state management coming in 2026+
 
 fn test_connection() raises -> PythonObject:
     """Test that the native module is working."""
@@ -237,15 +222,11 @@ fn configure_database(config: PythonObject) raises -> PythonObject:
 
 # Production implementation using v25.4 with working singleton pattern
 # This provides 41,000 vec/s performance with zero-copy FFI
-fn add_vector(db_handle: PythonObject, vector_id: PythonObject, vector_data: PythonObject, metadata: PythonObject) raises -> PythonObject:
+fn add_vector(vector_id: PythonObject, vector_data: PythonObject, metadata: PythonObject) raises -> PythonObject:
     """Add a single vector with ZERO-COPY optimization for NumPy arrays."""
     try:
-        # Get database instance from handle
-        var addr = Int(db_handle)
-        var int_ptr = UnsafePointer[Int](addr)
-        var db = int_ptr.bitcast[GlobalDatabase]()
-        if not db:
-            return PythonObject(False)
+        # Use global singleton for now (Mojo limitation)
+        var db = get_global_db()
         var id_str = String(vector_id)
         
         # Check if vector_data is NumPy array for zero-copy path
@@ -317,14 +298,11 @@ fn add_vector(db_handle: PythonObject, vector_id: PythonObject, vector_data: Pyt
     except e:
         return PythonObject(False)
 
-fn add_vector_batch(db_handle: PythonObject, vector_ids: PythonObject, vectors: PythonObject, metadata_list: PythonObject) raises -> PythonObject:
+fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_list: PythonObject) raises -> PythonObject:
     """Add multiple vectors efficiently. Convenience function for bulk loading."""
     try:
-        # Get database instance from handle
-        var addr = Int(db_handle)
-        var db_ptr = UnsafePointer[GlobalDatabase](addr)
-        if not db_ptr:
-            return PythonObject(False)
+        # Use global singleton for now (Mojo limitation)
+        var db_ptr = get_global_db()
         var results = List[String]()
         var num_vectors = len(vector_ids)
         
@@ -602,15 +580,11 @@ fn count() raises -> PythonObject:
     except:
         return PythonObject(0)
 
-fn clear_database(db_handle: PythonObject) raises -> PythonObject:
+fn clear_database() raises -> PythonObject:
     """Clear all vectors from database."""
     try:
-        # Get database instance from handle
-        var addr = Int(db_handle)
-        var int_ptr = UnsafePointer[Int](addr)
-        var db = int_ptr.bitcast[GlobalDatabase]()
-        if not db:
-            return PythonObject(False)
+        # Use global singleton for now (Mojo limitation)
+        var db = get_global_db()
         db[].clear()
         return PythonObject(True)
     except:
@@ -740,20 +714,21 @@ fn PyInit_native() -> PythonObject:
         # Vector operations
         module.def_function[add_vector]("add_vector")
         module.def_function[add_vector_batch]("add_vector_batch")
-        module.def_function[update_vector]("update_vector")
-        module.def_function[delete_vector]("delete_vector")
-        module.def_function[delete_vector_batch]("delete_vector_batch")
+        # Removed - use instance-based API
+        # module.def_function[update_vector]("update_vector")
+        # module.def_function[delete_vector]("delete_vector")
+        # module.def_function[delete_vector_batch]("delete_vector_batch")
         
         # Search operations
         module.def_function[search_vectors]("search_vectors")
-        module.def_function[search_vectors_with_beam]("search_vectors_with_beam")
+        # module.def_function[search_vectors_with_beam]("search_vectors_with_beam")
         
         # Data retrieval
-        module.def_function[get_vector]("get_vector")
-        module.def_function[get_metadata]("get_metadata")
+        # module.def_function[get_vector]("get_vector")
+        # module.def_function[get_metadata]("get_metadata")
         
         # Statistics and info
-        module.def_function[get_stats]("get_stats")
+        # module.def_function[get_stats]("get_stats")
         module.def_function[get_memory_stats]("get_memory_stats")
         module.def_function[count]("count")
         
@@ -778,7 +753,7 @@ fn PyInit_native() -> PythonObject:
         module.def_function[list_collections]("list_collections")
         module.def_function[collection_exists]("collection_exists")
         module.def_function[get_collection_stats]("get_collection_stats")
-        module.def_function[add_vector_to_collection]("add_vector_to_collection")
+        # module.def_function[add_vector_to_collection]("add_vector_to_collection")
         
         return module.finalize()
         
