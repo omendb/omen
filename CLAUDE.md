@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+⚠️ **PRE-RELEASE STATUS**: All code in this repository is under active development and not ready for production use.
+
 ## 🎯 Quick Start for AI Agents
 
 ### Documentation Hierarchy
@@ -81,6 +83,7 @@ update("internal/KNOWLEDGE.md", "## HNSW Patterns...")
 **Note**: Universal patterns are in `external/agent-contexts/` (git submodule)
 
 ## 📊 Current Status (Feb 2025)
+**Phase**: 🚧 PRE-RELEASE DEVELOPMENT - Not production ready
 **Project**: OmenDB - Multimodal database (vectors + text + metadata)
 **Strategy**: Build multimodal from start (10x better business than pure vector)
 **Algorithm**: HNSW+ with integrated metadata filtering
@@ -88,6 +91,7 @@ update("internal/KNOWLEDGE.md", "## HNSW Patterns...")
 **Timeline**: 6-8 weeks to multimodal MVP
 
 ## Quick Facts
+- **Status**: Pre-release R&D - iterating rapidly, not shipping yet
 - **Algorithm**: Switching from DiskANN to HNSW+ (better market fit)
 - **Language**: Mojo for core engine (Python interop, SIMD, future GPU)
 - **Bindings**: Python native, C/Rust via shared library
