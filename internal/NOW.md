@@ -3,10 +3,11 @@
 ## 🎯 Current Status: Global Singleton Fixed! 
 
 ### Current Performance ✅
-- **4,605 vec/s** single-threaded (restored from 133 vec/s regression!)
-- **0.80ms** search latency  
+- **4,556 vec/s** single-threaded (stable performance)
+- **0.56ms** search latency (1800 QPS)
 - **288 bytes/vector** memory usage
 - **Multiple batches working**: Global singleton properly restored
+- **No warnings**: Using __ prefix for global state
 
 ### Critical Fix Applied (Feb 2025)
 **Fixed**: Restored global singleton pattern with explicit global variable
@@ -17,16 +18,17 @@
 
 ### What's Working ✅
 1. **Zero-copy FFI**: NumPy arrays passed directly (5x speedup)
-2. **SIMD optimizations**: Adaptive width, multi-accumulator
+2. **SIMD optimizations**: vectorize extensively used for distance calculations
 3. **Memory pool**: Pre-allocated, no malloc overhead
-4. **Parallelize for math**: Distance calculations ARE parallelized
-5. **Binary quantization**: Ready but disabled due to global state
+4. **Parallelize for math**: Distance matrix operations use parallelize
+5. **Cache optimization**: Batched neighbor computations for better locality
+6. **Global state**: Working with __ prefix (suppresses warning)
 
-### What's Blocked ⛔
-1. **Multiple batches**: Second batch crashes with memory corruption
-2. **Graph parallelization**: No mutexes for thread-safe graph updates
-3. **Multiple instances**: Can't create separate DB instances
-4. **GPU support**: Not available until Q3 2025
+### What's Limited ⛔
+1. **Graph parallelization**: No mutexes for thread-safe graph updates
+2. **Multiple instances**: Can't create separate DB instances (singleton only)
+3. **Prefetching**: No explicit prefetch instructions available yet
+4. **GPU support**: Ready but requires NVIDIA hardware
 
 ### Parallelize Usage Analysis
 **Working**:
