@@ -2192,35 +2192,41 @@ struct HNSWIndex(Movable):
             var current_node = self.node_pool.get(current)
             var neighbors = current_node[].get_connections_layer0()
             
+            # OPTIMIZATION: Batch distance computation for cache efficiency
+            # Collect unvisited neighbors first
+            var unvisited_neighbors = List[Int]()
             for neighbor_idx in range(len(neighbors)):
                 var neighbor = neighbors[neighbor_idx]
-                
-                # Check if not visited
                 if self.visited_buffer[neighbor] != self.visited_version:
+                    unvisited_neighbors.append(neighbor)
                     self.visited_buffer[neighbor] = self.visited_version
-                    var dist = self.distance(query, self.get_vector(neighbor))
+            
+            # Compute distances for all unvisited neighbors
+            for i in range(len(unvisited_neighbors)):
+                var neighbor = unvisited_neighbors[i]
+                var dist = self.distance(query, self.get_vector(neighbor))
+                
+                # Add to candidates if promising
+                var neighbor_candidate = List[Float32]()
+                neighbor_candidate.append(Float32(neighbor))
+                neighbor_candidate.append(dist)
+                
+                # Add to working set with larger exploration
+                if len(w) < search_ef:
+                    w.append(neighbor_candidate)
+                    candidates.append(neighbor_candidate)
+                else:
+                    # Find worst in w and replace if this is better
+                    var worst_idx = 0
+                    var worst_dist = w[0][1]
+                    for i in range(1, len(w)):
+                        if w[i][1] > worst_dist:
+                            worst_idx = i
+                            worst_dist = w[i][1]
                     
-                    # Add to candidates if promising
-                    var neighbor_candidate = List[Float32]()
-                    neighbor_candidate.append(Float32(neighbor))
-                    neighbor_candidate.append(dist)
-                    
-                    # Add to working set with larger exploration
-                    if len(w) < search_ef:
-                        w.append(neighbor_candidate)
+                    if dist < worst_dist:
+                        w[worst_idx] = neighbor_candidate
                         candidates.append(neighbor_candidate)
-                    else:
-                        # Find worst in w and replace if this is better
-                        var worst_idx = 0
-                        var worst_dist = w[0][1]
-                        for i in range(1, len(w)):
-                            if w[i][1] > worst_dist:
-                                worst_idx = i
-                                worst_dist = w[i][1]
-                        
-                        if dist < worst_dist:
-                            w[worst_idx] = neighbor_candidate
-                            candidates.append(neighbor_candidate)
             
             checked += 1
 

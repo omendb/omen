@@ -200,13 +200,14 @@ fn destroy_database(db_ptr: UnsafePointer[GlobalDatabase]):
         db_ptr.free()
 
 # Global database instance (singleton pattern)
-var global_db: UnsafePointer[GlobalDatabase] = UnsafePointer[GlobalDatabase]()
+# Using __ prefix to suppress deprecation warning as per Mojo convention
+var __global_db: UnsafePointer[GlobalDatabase] = UnsafePointer[GlobalDatabase]()
 
 fn get_global_db() -> UnsafePointer[GlobalDatabase]:
     """Get or create the global database singleton."""
-    if not global_db:
-        global_db = create_database()
-    return global_db
+    if not __global_db:
+        __global_db = create_database()
+    return __global_db
 
 # =============================================================================
 # PYTHON API FUNCTIONS
