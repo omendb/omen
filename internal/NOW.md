@@ -45,7 +45,24 @@ Memory Management: Now using optimized allocate_vector() / free_vector() system
 - ✅ **Infrastructure Ready**: Foundation for cache-aligned extensions
 - ✅ **Code Cleanup**: Eliminated ad-hoc memory allocations in favor of system design
 
-**Next Target**: HNSW parameters (M=32, efConstruction=200) + threading → 41K+ vec/s competitive performance
+### ⚠️ Parameter Optimization Experiment: M=32 Results (Sep 2025)
+
+**EXPERIMENT CONCLUSION**: M=32 parameter optimization caused significant performance degradation.
+
+**Test Results**:
+```
+M=16 (baseline): ~1,408 vec/s, stable accuracy ✅
+M=32 (competitor standard): 200 vec/s, 0% accuracy ❌
+Performance Impact: 7x slower with M=32
+```
+
+**Analysis**:
+- Higher M increases memory overhead and computational complexity
+- Current implementation may have memory constraints with larger connection arrays
+- Graph connectivity algorithms may not be optimized for M=32
+- **Decision**: Keeping M=16 for stability until core infrastructure can support higher M values
+
+**Next Target**: Multi-threading with Mojo `parallelize` → 5-8x performance gain targeting 7K+ vec/s
 
 ### 🚀 BREAKTHROUGH: True Zero-Copy FFI with Mojo 25.4! (Jan 2025 - PRODUCTION READY)
 
