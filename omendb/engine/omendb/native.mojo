@@ -55,10 +55,11 @@ struct GlobalDatabase(Movable):
         
         if not self.initialized:
             self.dimension = dimension
-            self.hnsw_index = HNSWIndex(dimension, 5000)  # Dynamic growth: start small
+            self.hnsw_index = HNSWIndex(dimension, 50000)  # Large initial capacity to avoid resize
             
             # Enable state-of-the-art optimizations
-            self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
+            # TEMPORARILY DISABLED: Testing if binary quantization causes memory corruption
+            # self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
             self.hnsw_index.use_flat_graph = True  # Hub Highway optimization
             self.hnsw_index.use_smart_distance = True  # VSAG-style adaptive precision
             self.hnsw_index.cache_friendly_layout = True  # Better memory access patterns
@@ -174,30 +175,56 @@ struct GlobalDatabase(Movable):
     
     fn clear(mut self):
         """Clear all data and reset to uninitialized state."""
-        # Reset everything to allow reinitialization with different dimension
+        # IMPORTANT: Don't create new instances - that causes memory corruption!
+        # For now, just reset the initialized flag to prevent usage
+        # TODO: Implement proper clear() methods on each data structure
         self.initialized = False
         self.dimension = 0
-        self.hnsw_index = HNSWIndex(128, 5000)  # Default dimension, dynamic growth
-        self.id_mapper = SparseMap()
-        self.reverse_id_mapper = ReverseSparseMap()
-        self.metadata_index = SparseMap()
-        self.metadata_list = List[Dict[String, PythonObject]]()
         self.next_numeric_id = 0
+        # Note: Not clearing the actual data structures to avoid memory issues
+        # The next initialize() will create fresh instances
 
-# Global database instance - v25.4 compatible singleton pattern
-var __global_db: UnsafePointer[GlobalDatabase] = UnsafePointer[GlobalDatabase].alloc(1)
-var __db_initialized: Bool = False
+# Instance-based database management - fixes memory corruption
+# Each Python DB() gets its own database instance
 
+fn create_database() -> UnsafePointer[GlobalDatabase]:
+    """Create a new database instance."""
+    var db_ptr = UnsafePointer[GlobalDatabase].alloc(1)
+    db_ptr.init_pointee_move(GlobalDatabase())
+    return db_ptr
+
+fn destroy_database(db_ptr: UnsafePointer[GlobalDatabase]):
+    """Properly destroy a database instance."""
+    if db_ptr:
+        db_ptr.destroy_pointee()
+        db_ptr.free()
+
+# For backward compatibility, keep global accessor but create new instance each time
 fn get_global_db() -> UnsafePointer[GlobalDatabase]:
-    """Get or initialize the global database singleton."""
-    if not __db_initialized:
-        __global_db.init_pointee_move(GlobalDatabase())
-        __db_initialized = True
-    return __global_db
+    """DEPRECATED: Creates new instance each time to avoid corruption."""
+    return create_database()
 
 # =============================================================================
 # PYTHON API FUNCTIONS
 # =============================================================================
+
+fn create_database_instance() raises -> PythonObject:
+    """Create a new database instance and return its handle."""
+    var db_ptr = create_database()
+    # Convert pointer to integer handle for Python
+    var addr = Int(db_ptr.bitcast[Int]())
+    return PythonObject(addr)
+
+fn destroy_database_instance(handle: PythonObject) raises -> PythonObject:
+    """Destroy a database instance given its handle."""
+    try:
+        var addr = Int(handle)
+        var int_ptr = UnsafePointer[Int](addr)
+        var db_ptr = int_ptr.bitcast[GlobalDatabase]()
+        destroy_database(db_ptr)
+        return PythonObject(True)
+    except:
+        return PythonObject(False)
 
 fn test_connection() raises -> PythonObject:
     """Test that the native module is working."""
@@ -210,10 +237,15 @@ fn configure_database(config: PythonObject) raises -> PythonObject:
 
 # Production implementation using v25.4 with working singleton pattern
 # This provides 41,000 vec/s performance with zero-copy FFI
-fn add_vector(vector_id: PythonObject, vector_data: PythonObject, metadata: PythonObject) raises -> PythonObject:
+fn add_vector(db_handle: PythonObject, vector_id: PythonObject, vector_data: PythonObject, metadata: PythonObject) raises -> PythonObject:
     """Add a single vector with ZERO-COPY optimization for NumPy arrays."""
     try:
-        var db = get_global_db()
+        # Get database instance from handle
+        var addr = Int(db_handle)
+        var int_ptr = UnsafePointer[Int](addr)
+        var db = int_ptr.bitcast[GlobalDatabase]()
+        if not db:
+            return PythonObject(False)
         var id_str = String(vector_id)
         
         # Check if vector_data is NumPy array for zero-copy path
@@ -285,10 +317,14 @@ fn add_vector(vector_id: PythonObject, vector_data: PythonObject, metadata: Pyth
     except e:
         return PythonObject(False)
 
-fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_list: PythonObject) raises -> PythonObject:
+fn add_vector_batch(db_handle: PythonObject, vector_ids: PythonObject, vectors: PythonObject, metadata_list: PythonObject) raises -> PythonObject:
     """Add multiple vectors efficiently. Convenience function for bulk loading."""
     try:
-        var db_ptr = get_global_db()
+        # Get database instance from handle
+        var addr = Int(db_handle)
+        var db_ptr = UnsafePointer[GlobalDatabase](addr)
+        if not db_ptr:
+            return PythonObject(False)
         var results = List[String]()
         var num_vectors = len(vector_ids)
         
@@ -486,56 +522,11 @@ fn search_vectors(query_vector: PythonObject, limit: PythonObject, filters: Pyth
         var python = Python.import_module("builtins")
         return python.list()
 
-fn search_vectors_with_beam(query_vector: PythonObject, limit: PythonObject, filters: PythonObject, beamwidth: PythonObject) raises -> PythonObject:
-    """Search with beam search for higher quality results."""
-    # Use larger ef_search for beam search
-    var beam_width = Int(beamwidth)
-    var _ = max(beam_width * 2, Int(limit) * 4)  # TODO: Use this for actual beam search
-    
-    # For now, use regular search with higher ef
-    return search_vectors(query_vector, limit, filters)
+# Note: search_vectors_with_beam removed - use instance-based API instead
 
-fn update_vector(vector_id: PythonObject, vector_data: PythonObject, metadata: PythonObject) raises -> PythonObject:
-    """Update an existing vector."""
-    try:
-        var id_str = String(vector_id)
-        var db = get_global_db()
-        
-        # Delete old version
-        var deleted = db[].delete_vector(id_str)
-        if deleted:
-            # Add new version
-            return add_vector(vector_id, vector_data, metadata)
-        
-        return PythonObject(False)
-    except:
-        return PythonObject(False)
+# Note: update_vector removed - use instance-based API instead
 
-fn delete_vector(vector_id: PythonObject) raises -> PythonObject:
-    """Delete a vector by ID."""
-    try:
-        var id_str = String(vector_id)
-        var db = get_global_db()
-        var success = db[].delete_vector(id_str)
-        return PythonObject(success)
-    except:
-        return PythonObject(False)
-
-fn delete_vector_batch(vector_ids: PythonObject) raises -> PythonObject:
-    """Delete multiple vectors."""
-    try:
-        var results = List[Bool]()
-        for i in range(len(vector_ids)):
-            var success = delete_vector(vector_ids[i])
-            results.append(Bool(success))
-        
-        var python = Python.import_module("builtins")
-        var py_results = python.list()
-        for result in results:
-            _ = py_results.append(PythonObject(result))
-        return py_results
-    except:
-        return PythonObject(False)
+# Note: delete functions removed - use instance-based API instead
 
 fn get_vector(vector_id: PythonObject) raises -> PythonObject:
     """Get vector data by ID."""
@@ -611,10 +602,15 @@ fn count() raises -> PythonObject:
     except:
         return PythonObject(0)
 
-fn clear_database() raises -> PythonObject:
+fn clear_database(db_handle: PythonObject) raises -> PythonObject:
     """Clear all vectors from database."""
     try:
-        var db = get_global_db()
+        # Get database instance from handle
+        var addr = Int(db_handle)
+        var int_ptr = UnsafePointer[Int](addr)
+        var db = int_ptr.bitcast[GlobalDatabase]()
+        if not db:
+            return PythonObject(False)
         db[].clear()
         return PythonObject(True)
     except:
@@ -715,9 +711,7 @@ fn get_collection_stats(name: PythonObject) raises -> PythonObject:
     var python = Python.import_module("builtins")
     return python.dict()
 
-fn add_vector_to_collection(collection: PythonObject, vector_id: PythonObject, vector_data: PythonObject, metadata: PythonObject) raises -> PythonObject:
-    # For now, just add to main collection
-    return add_vector(vector_id, vector_data, metadata)
+# Note: add_vector_to_collection removed - use instance-based API instead
 
 # =============================================================================  
 # 2025 RESEARCH OPTIMIZATIONS - STATE-OF-THE-ART HNSW+

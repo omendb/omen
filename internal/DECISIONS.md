@@ -741,3 +741,72 @@ var __global_db: UnsafePointer[GlobalDatabase] = ...
 When Mojo v26.x releases with static data support
 
 ---
+
+## 2025-02-09 | STAY WITH MOJO DESPITE GLOBAL STATE LIMITATIONS
+
+### Context
+Discovered fundamental limitation: Mojo v25.4 can't maintain state between Python calls. Module-level variables coming 2026+.
+
+### Problem Analysis
+- **Memory corruption**: Second batch crashes with invalid pointer
+- **Root cause**: Global singleton pattern doesn't work in Mojo
+- **Timeline**: Module-level vars not until 2026+ (later than expected)
+- **Workarounds**: Process isolation has 33% overhead
+
+### Options Evaluated
+
+**Option 1: Switch to Rust**
+- ✅ Mature, no memory issues
+- ✅ Good performance (10-20K vec/s)
+- ❌ No GPU support path
+- ❌ Complex Python interop
+- ❌ Would be equivalent to competitors
+
+**Option 2: Stay with Mojo**
+- ✅ Python zero-copy interop (5x speedup)
+- ✅ Future GPU support (100x potential)
+- ✅ SIMD by default
+- ❌ Current limitations severe
+- ❌ Timeline uncertain
+
+**Option 3: Hybrid (Rust + Mojo)**
+- ✅ Stable core
+- ❌ Complex architecture
+- ❌ Loses Mojo advantages
+
+### Decision
+**STAY WITH MOJO** - Accept current limitations for future advantages
+
+### Rationale
+1. **Unique advantage**: GPU support will provide 100x speedup
+2. **Python ecosystem**: Perfect interop is valuable
+3. **Early mover**: Being early adopter worth temporary pain
+4. **Workarounds exist**: Server mode, single batch, process isolation
+
+### Implementation Strategy
+1. **Immediate**: Document limitations clearly
+2. **Short-term**: Maximize single-thread performance (10K vec/s achievable)
+3. **Production**: Use server mode to manage state
+4. **Long-term**: Wait for Mojo improvements
+
+### Parallelization Status
+**Working**:
+- Distance calculations (matrix_ops.mojo)
+- Query processing (simd.mojo)
+
+**Not Working**:
+- Graph updates (no thread synchronization)
+- Bulk inserts crash at 5K+ vectors
+
+### Performance Potential
+- **Current**: 1,400 vec/s (10% of potential)
+- **Achievable (CPU)**: 10,000-15,000 vec/s
+- **Future (GPU)**: 100,000+ vec/s
+
+### Next Steps
+1. Optimize specialized SIMD kernels
+2. Implement cache-aligned structures
+3. Use server mode for production
+4. Track Mojo development closely
+
+---

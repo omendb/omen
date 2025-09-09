@@ -1442,7 +1442,7 @@ class DB:
 
             # UNLIMITED SCALE: Stream large batches to prevent memory issues
             batch_size = len(ids) if hasattr(ids, '__len__') else len(vectors)
-            if batch_size > 2000:  # Stream anything larger than 2K vectors
+            if batch_size > 50000:  # Increased threshold - streaming causes crashes
                 print(f"🌊 STREAMING: Processing {batch_size:,} vectors in streaming mode")
                 return self._stream_add_batch(ids, vectors, metadata)
             

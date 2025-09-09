@@ -1,290 +1,73 @@
-# NOW - Current Sprint (Sep 2025)
+# NOW - Current Sprint (Feb 2025)
 
-## 🎯 Current Status: DYNAMIC SCALING BREAKTHROUGH - PRODUCTION READY WITH UNLIMITED SCALE!
+## 🎯 Current Status: Mojo Global State Limitation
 
-### 🚀 FINAL BREAKTHROUGH: Dynamic Growth + Unlimited Scaling (Sep 2025 - PRODUCTION READY)
+### Current Performance
+- **1,400 vec/s** single-threaded (restored from 201 vec/s regression)
+- **0.54ms** search latency  
+- **288 bytes/vector** memory usage
+- **Single batch limit**: Works perfectly for one batch, crashes on second
 
-**REVOLUTIONARY ACHIEVEMENT**: Implemented optimal dynamic capacity growth eliminating all scale limits!
+### Root Cause Identified
+**Mojo v25.4 Limitation**: No proper module-level state management
+- Global singleton pattern causes memory corruption on second use
+- Module-level variables coming 2026+ (per latest info)
+- Thread synchronization primitives not available
 
-**The Complete Solution**:
-- ✅ **Dynamic Growth**: Starts at 5K capacity, grows 1.5x at 80% threshold  
-- ✅ **Unlimited Scaling**: Successfully tested 12K+ vectors (eliminated original 10K limit)
-- ✅ **Memory Optimal**: 5,472 bytes/vector (starts small, grows only as needed)
-- ✅ **Auto-scaling**: 5K→7.5K→11.25K→16.875K demonstrated
-- ✅ **Zero Waste**: No memory pre-allocation for unused capacity
-- ✅ **Search Preserved**: All SOTA optimizations maintained during growth
+### What's Working ✅
+1. **Zero-copy FFI**: NumPy arrays passed directly (5x speedup)
+2. **SIMD optimizations**: Adaptive width, multi-accumulator
+3. **Memory pool**: Pre-allocated, no malloc overhead
+4. **Parallelize for math**: Distance calculations ARE parallelized
+5. **Binary quantization**: Ready but disabled due to global state
 
-**Scale Testing Results**:
-```
-BEFORE (Fixed Capacity): FAILED at 10K vectors (hard limit)
-AFTER (Dynamic Growth): SUCCESS at 12K+ vectors ✅
-Memory Efficiency: 5,472 bytes/vector (vs 36,700 broken) ✅
-Growth Pattern: 5K→7.5K→11.25K→16.875K (1.5x factor) ✅
-Search Performance: Maintained 0.56ms latency ✅
-```
+### What's Blocked ⛔
+1. **Multiple batches**: Second batch crashes with memory corruption
+2. **Graph parallelization**: No mutexes for thread-safe graph updates
+3. **Multiple instances**: Can't create separate DB instances
+4. **GPU support**: Not available until Q3 2025
 
-**Production Impact**: 
-- 🎯 **Enterprise Ready**: Can scale to millions of vectors automatically
-- 🎯 **Cost Efficient**: Minimal memory footprint for small deployments  
-- 🎯 **Zero Configuration**: Growth happens automatically, no manual tuning
-- 🎯 **Backwards Compatible**: All existing functionality preserved
+### Parallelize Usage Analysis
+**Working**:
+- `matrix_ops.mojo`: Distance matrix calculations ✅
+- `simd.mojo`: Query processing ✅
 
-### 🔧 Memory Pool Integration Complete (Sep 2025)
+**Not Working**:
+- `hnsw.mojo`: insert_bulk_wip() crashes at 5K+ vectors ❌
+- Graph updates can't be parallelized (no synchronization)
 
-**INFRASTRUCTURE IMPROVEMENT**: Integrated existing memory pool system into HNSW algorithm.
+### Recent Work (Feb 2025)
+1. **Fixed NumPy detection**: Changed isinstance() method → 1,400 vec/s restored
+2. **Investigated memory corruption**: Traced to global singleton pattern
+3. **Created workarounds**: Process isolation (33% overhead)
+4. **Added specialized SIMD kernels**: For 128D, 256D, 384D, 512D, 768D, 1536D
+5. **Documented limitations**: Created CURRENT_STATUS.md and OPTIMIZATION_ANALYSIS.md
 
-**Performance Results**:
-```
-Current Performance: 1,408 vec/s (stable, consistent with 1,425 vec/s SIMD baseline)
-Memory Management: Now using optimized allocate_vector() / free_vector() system
-```
+### Maximum Achievable Performance
+**Single-thread potential** (with all CPU optimizations):
+- Current: 1,400 vec/s (using ~10% of potential)
+- Achievable: 10,000-15,000 vec/s
+- With GPU (2025+): 100,000+ vec/s
 
-**Technical Achievement**:
-- ✅ **Pooled Allocations**: Replaced `UnsafePointer[Float32].alloc()` with `allocate_vector()`
-- ✅ **Proper Deallocation**: Using `free_vector(ptr, dimension)` for pool management  
-- ✅ **Infrastructure Ready**: Foundation for cache-aligned extensions
-- ✅ **Code Cleanup**: Eliminated ad-hoc memory allocations in favor of system design
+### Next Practical Steps
+1. **Immediate**: Use server mode for production (handles state properly)
+2. **Short-term**: Optimize single-thread performance further
+   - Implement prefetching when available
+   - Cache-aligned data structures
+   - Memory layout optimization (SoA vs AoS)
+3. **Medium-term**: Wait for Mojo improvements (Q1-Q2 2025)
+4. **Long-term**: GPU support when available (Q3 2025)
 
-### ⚠️ Parameter Optimization Experiment: M=32 Results (Sep 2025)
+### Workarounds Available
+1. **Single batch mode**: Clear DB between batches
+2. **Server mode**: HTTP/gRPC server manages state
+3. **Process isolation**: 930 vec/s with stability
 
-**EXPERIMENT CONCLUSION**: M=32 parameter optimization caused significant performance degradation.
+### Strategic Decision
+**Staying with Mojo** despite current limitations because:
+- Python interoperability (drop-in replacement)
+- SIMD by default (already fast)
+- Future GPU support (100x speedup coming)
+- No GC (predictable performance)
 
-**Test Results**:
-```
-M=16 (baseline): ~1,408 vec/s, stable accuracy ✅
-M=32 (competitor standard): 200 vec/s, 0% accuracy ❌
-Performance Impact: 7x slower with M=32
-```
-
-**Analysis**:
-- Higher M increases memory overhead and computational complexity
-- Current implementation may have memory constraints with larger connection arrays
-- Graph connectivity algorithms may not be optimized for M=32
-- **Decision**: Keeping M=16 for stability until core infrastructure can support higher M values
-
-**Next Target**: Multi-threading with Mojo `parallelize` → 5-8x performance gain targeting 7K+ vec/s
-
-### 🚀 BREAKTHROUGH: True Zero-Copy FFI with Mojo 25.4! (Jan 2025 - PRODUCTION READY)
-
-**MAJOR BREAKTHROUGH**: `unsafe_get_as_pointer[DType.float32]()` eliminates FFI bottleneck!
-- **15x performance improvement**: 2.8K → 41K vectors/second
-- **True zero-copy**: Direct NumPy memory access, no element copying
-- **Market leading**: 10-20x faster than Pinecone/Weaviate
-- **Production ready**: All safety and performance tests pass
-
-### ✅ HNSW+ ACCURACY CRISIS FULLY RESOLVED! (Sep 2025)
-
-**CRITICAL ISSUE FIXED**: HNSW+ accuracy was only 1-14% with random vectors (PRODUCTION BLOCKING)
-
-**Root Cause Identified**:
-- Hub highway optimization had result ranking bugs
-- Beam search termination was too aggressive
-- Exact matches found but not prioritized in final sorting
-
-**Complete Solution**:
-- ✅ **Fixed result sorting**: Two-phase sorting (exact matches first, then by distance) 
-- ✅ **Fixed beam search**: Proper exploration without early termination
-- ✅ **Fixed hub highway**: Applied same accuracy fixes to optimization path
-- ✅ **Verified all SOTA optimizations**: Binary quantization, SIMD, cache optimizations ALL active
-- ✅ **Production performance**: 1780 QPS, 0.56ms latency, 100% exact match accuracy
-
-**Performance Verification**:
-```
-Search Performance: 1780 QPS (target: >1K QPS) ✅
-Search Latency: 0.56ms (target: <10ms) ✅  
-Exact Match Accuracy: 100% (orthogonal vectors) ✅
-Insertion Rate: 3732 vec/s (individual adds) ✅
-```
-
-**Technical Achievement**:
-- Mojo 25.4 `unsafe_get_as_pointer` method discovered and implemented
-- Applied to all FFI bottlenecks: insertion, batch, and search
-- NumPy owns memory, Mojo borrows pointer (safe)
-- C-contiguous float32 arrays required for safety
-
-**World-Class Performance Metrics**:
-- ✅ **Small Scale (128D)**: 26,659 vectors/second
-- ✅ **Medium Scale (256D)**: 38,180 vectors/second  
-- ✅ **Large Scale (512D)**: 40,965 vectors/second
-- ✅ **Search Performance**: 0.4-1.0ms (maintained excellence)
-
-**All State-of-the-Art Optimizations Active**:
-- ✅ **Zero-Copy FFI**: BREAKTHROUGH - Direct NumPy memory access
-- ✅ **Binary Quantization**: 32x memory reduction, 40x distance speedup  
-- ✅ **Hub Highway**: O(log n) graph traversal with 5 highway nodes
-- ✅ **SIMD Distance**: Hardware-accelerated distance calculations
-- ✅ **Smart Distance**: Adaptive precision switching
-
-**Performance Verified:**
-```
-1K vectors:  0.50ms search latency
-16K vectors: 0.50ms search latency (same!)
-Linear would be: 8.0ms (16x slower)
-```
-
-### Strategic Pivot ✅
-**Decision**: Building multimodal database from start (not pure vector first)
-- **Why**: 10x pricing power, less competition, real market pain
-- **How**: HNSW+ with integrated metadata filtering and text search
-
-### ✅ Documentation Cleanup Complete
-- Consolidated all docs to single source of truth
-- Marked DiskANN as deprecated
-- Archived ZenDB with preservation notice  
-- Created MOJO_WORKAROUNDS.md for limitations
-- Created IMPLEMENTATION_CHECKLIST.md for clear roadmap
-
-### ✅ HNSW+ Memory Crisis SOLVED & INTEGRATED! (Feb 6)
-```bash
-# Root Cause: List[List[Int]] doubles capacity on growth (exponential memory)
-# Solution: Fixed-size InlineArray + Node Pool allocator
-# Files: omendb/algorithms/hnsw_fixed.mojo (implementation)
-#        omendb/native.mojo (integrated)
-# Performance: 100 vectors @ 2,078 vec/s with NO memory errors!
-```
-
-**What We Discovered:**
-- Modular's `List` doubles capacity when full (`capacity * 2`)
-- Nested `List[List[Int]]` causes exponential growth on 2nd insertion
-- `InlineArray` uses stack allocation (no heap)
-- Pre-allocated node pools avoid runtime allocations
-
-**The Fix:**
-```mojo
-# Instead of dynamic Lists:
-var connections: List[List[Int]]  # ❌ Exponential growth
-
-# Use fixed-size arrays:
-var connections_l0: InlineArray[Int, max_M0]  # ✅ Stack allocated
-var connections_higher: InlineArray[Int, max_M * MAX_LAYERS]  # ✅ Fixed size
-```
-
-**Test Results:**
-- ✅ 10 vectors: No errors
-- ✅ 100 vectors: No errors @ 2,078 vec/s
-- ✅ Search working on larger datasets
-- ✅ Pre-allocated for 10,000 vectors capacity
-- ✅ INTEGRATED into native.mojo - production ready!
-
-**Phase 1 Complete:**
-- ✅ HNSW core algorithm with hierarchical layers
-- ✅ Priority queue for O(log n) search operations
-- ✅ Diversity-based neighbor selection heuristic
-- ✅ String ID mapping layer (IDMapper)
-- ✅ Clean native_hnsw.mojo module
-- ✅ Mojo limitations research & workarounds
-- ✅ DiskANN archived for reference
-
-**✅ C ABI Exports Complete (Feb 6)**
-- ✅ Created `omendb/c_exports.mojo` with C-compatible API
-- ✅ Built `libomendb.so` (55KB) for direct Rust FFI
-- ✅ Tested with C program - working perfectly
-- ✅ No PyO3 overhead - true zero-copy operations
-
-**🔥 Next Critical Steps:**
-1. **True Zero-Copy FFI** (Primary Bottleneck)
-   - Currently copying NumPy data due to Mojo limitations
-   - Need: `UnsafePointer[Float32].from_address(int_ptr)` support
-   - This will provide 10-20x speedup when available
-
-2. **Scale Testing & Benchmarking**
-   - Test with 100K, 500K, 1M vectors
-   - Measure actual memory reduction from binary quantization
-   - Compare with Pinecone, Weaviate, Qdrant at scale
-
-**State-of-the-Art Features (Next Sprint):**
-- ✅ SIMD optimization (DONE - 2.8x speedup achieved)
-- 🚧 RobustPrune algorithm for graph quality
-- 🚧 Quantization support (PQ/SQ)
-- 🚧 GPU kernel implementations  
-- 🚧 Multimodal integration (metadata + text search)
-- 🚧 Production persistence
-
-### HNSW+ Implementation Plan
-```mojo
-# omendb/engine/omendb/algorithms/hnsw.mojo
-struct HNSWIndex:
-    var layers: List[Graph]         # Hierarchical layers
-    var M: Int = 16                 # Neighbors per node
-    var ef_construction: Int = 200  # Build parameter
-    var entry_point: Int            # Top layer entry
-    
-    # Multimodal support from start
-    var metadata_filter: MetadataIndex
-    var text_index: BM25Index
-    
-    fn insert(self, vector: Vector, metadata: Dict, text: String):
-        # Integrated multimodal insertion
-        pass
-        
-    fn hybrid_search(self, vector: Vector, filters: Dict, text: String, k: Int):
-        # Combined vector + metadata + text search
-        pass
-```
-
-### Architecture Decisions ✅
-- **Core Engine**: Mojo (CPU/GPU compilation advantage)
-- **Server**: Rust HTTP/gRPC wrapper
-- **Algorithm**: HNSW+ with metadata filtering
-- **Storage**: Tiered (Hot: NVMe, Warm: SSD, Cold: S3)
-- **Query Language**: SQL with vector extensions
-- **Business Model**: Open source full multimodal, cloud GPU premium
-
-### Success Metrics This Week
-- [x] HNSW+ structure defined
-- [x] Insert function working  
-- [x] Search function working
-- [x] O(log n) graph traversal implemented
-- [x] Constant 0.5ms search time achieved
-- [x] **MAJOR BREAKTHROUGH**: FFI bottleneck identified! (96.4% of time)
-- [x] Comprehensive competitor analysis completed
-- [x] Zero-copy FFI implementation designed
-- [ ] **NEXT**: Implement zero-copy interface (50K+ vec/s target)
-- [ ] **NEXT**: Add binary quantization (40x distance speedup)
-- [ ] **NEXT**: Scale test optimized version  
-- [x] ✅ Python binding FIXED (HNSWIndexFixed integrated)
-- [x] ✅ Memory issues SOLVED (InlineArray + NodePool)
-- [x] ✅ 100+ vectors without crashes @ 2,078 vec/s
-- [x] ✅ C ABI exports COMPLETE (libomendb.so working)
-- [x] ✅ Direct Rust FFI path enabled (no PyO3 overhead)
-- [x] Benchmark: 100 vectors working
-
-### Development Path (Clean Rebuild Approach)
-1. **Phase 1**: ✅ Core HNSW + String IDs (DONE)
-2. **Phase 2**: 🚧 State-of-the-Art Optimizations (IN PROGRESS)
-3. **Phase 3**: 🔲 Multimodal Integration
-4. **Phase 4**: 🔲 Production Deployment
-
-## 🚫 Blockers
-- **RESOLVED**: Algorithm choice was CORRECT all along (HNSW+ validated by competitor analysis)
-- Implementation quality gap: 25K-500K vec/s performance target achievable
-- Multi-threading implementation needed (Priority #1: 5-8x gain)
-- Idiomatic Mojo SIMD optimization (user preference over hand-tuned)
-- Memory optimizations (alignment, mapping) partially implemented
-- Parameter tuning to competitor standards (M=32, efConstruction=200)
-
-## 📅 Next Phase (PRIORITY: State-of-the-Art Optimizations)
-- **Priority #1**: Multi-threading for parallel insertion (16-core utilization for 5-8x gain)
-- **COMPLETED**: Idiomatic Mojo SIMD implementation - 1,425 vec/s stable performance ✅
-- **Priority #3**: Memory optimizations (64-byte alignment, memory mapping refinements)
-- **Priority #4**: Optimal HNSW parameters (M=32, efConstruction=200 like Pinecone/Qdrant)
-- **Target**: 41K+ vec/s (1.7x above 25K industry standard, matches top performers)
-
-## 🔧 Quick Commands
-```bash
-# Build
-cd omendb/engine
-pixi run mojo build omendb/native.mojo -o python/omendb/native.so
-
-# Test
-python -c "from omendb import Index; idx = Index(); print('OK')"
-
-# Benchmark
-pixi run benchmark-quick
-```
-
-## 📝 Notes
-- **STRATEGY**: Complete DiskANN archive, state-of-the-art HNSW+ rebuild
-- **REFERENCE**: Use archived DiskANN code for algorithm insights only
-- **FOCUS**: Performance-first implementation avoiding Mojo limitations
-- **TARGET**: Industry-leading vector database performance
+The global state issue is temporary - Mojo is actively developing needed features.

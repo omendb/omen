@@ -25,11 +25,12 @@ from math import log2
 
 @value
 struct Entry:
-    """Hash map entry containing key-value pair and state."""
+    """Hash map entry with FastDict control byte optimization."""
     var key: String
     var value: Int
     var is_occupied: Bool
     var is_deleted: Bool  # For tombstone marking
+    var control_byte: Int8  # FastDict optimization: Top 7 bits of hash for fast rejection
 
     fn __init__(out self):
         """Initialize empty entry."""
@@ -37,13 +38,15 @@ struct Entry:
         self.value = 0
         self.is_occupied = False
         self.is_deleted = False
+        self.control_byte = 0
 
-    fn __init__(out self, key: String, value: Int):
-        """Initialize entry with key-value pair."""
+    fn __init__(out self, key: String, value: Int, control_byte: Int8 = 0):
+        """Initialize entry with key-value pair and control byte."""
         self.key = key
         self.value = value
         self.is_occupied = True
         self.is_deleted = False
+        self.control_byte = control_byte
 
     fn clear(mut self):
         """Clear entry marking as deleted."""
@@ -51,6 +54,7 @@ struct Entry:
         self.value = 0
         self.is_occupied = False
         self.is_deleted = True
+        self.control_byte = 0
 
     fn is_available(self) -> Bool:
         """Check if entry slot is available for insertion."""
@@ -78,7 +82,7 @@ struct SparseMap(Copyable, Movable):
 
     # Static constants
     alias MIN_CAPACITY = 8
-    alias DEFAULT_LOAD_FACTOR = 0.75
+    alias DEFAULT_LOAD_FACTOR = 0.90  # FastDict optimization: 90% vs typical 75%
 
     fn __init__(out self, initial_capacity: Int = Self.MIN_CAPACITY):
         """
@@ -120,6 +124,8 @@ struct SparseMap(Copyable, Movable):
         self.capacity = existing.capacity
         self.size = existing.size
         self.load_factor_threshold = existing.load_factor_threshold
+        # CRITICAL: Null out the moved-from pointer to prevent double-free
+        existing.entries = UnsafePointer[Entry]()
 
     fn __del__(owned self):
         """Destructor - free allocated memory."""
@@ -151,32 +157,37 @@ struct SparseMap(Copyable, Movable):
             self._resize()
         
         var hash_val = self._hash(key)
+        var control_byte = self._get_control_byte(hash_val)
         var index = hash_val & (self.capacity - 1)  # Fast modulo for power of 2
-        var original_index = index
+        var distance = 0  # For quadratic probing
         
-        # Linear probing to find insertion spot
-        while True:
+        # FastDict optimization: Quadratic probing reduces clustering
+        while distance < self.capacity:
             var entry_ptr = self.entries + index
             var entry = entry_ptr[]
             
             if entry.is_available():
-                # Found empty slot - insert new entry
-                entry_ptr.init_pointee_copy(Entry(key, value))
+                # Found empty slot - insert new entry with control byte
+                entry_ptr.init_pointee_copy(Entry(key, value, control_byte))
                 self.size += 1
                 return True
-            elif entry.key == key:
-                # Update existing key
+            elif entry.is_occupied and entry.control_byte == control_byte and entry.key == key:
+                # FastDict optimization: Control byte fast-reject before string comparison
                 entry_ptr[].value = value
                 return False
             
-            # Continue probing
-            index = (index + 1) & (self.capacity - 1)
+            # FastDict optimization: Quadratic probing
+            distance += 1
+            index = (hash_val + distance * distance) & (self.capacity - 1)
             
-            # Safety check - should never happen with proper load factor
-            if index == original_index:
+            # Safety check  
+            if distance >= self.capacity:
                 # Table is full - force resize and retry
                 self._resize()
                 return self.insert(key, value)
+        
+        # Should never reach here with proper implementation
+        return False
 
     fn get(self, key: String) -> Optional[Int]:
         """
@@ -189,26 +200,27 @@ struct SparseMap(Copyable, Movable):
             Optional[Int] containing value if found, None otherwise
         """
         var hash_val = self._hash(key)
+        var control_byte = self._get_control_byte(hash_val)
         var index = hash_val & (self.capacity - 1)
-        var original_index = index
+        var distance = 0
         
-        # Linear probing to find key
-        while True:
+        # FastDict optimization: Quadratic probing with control byte fast-reject
+        while distance < self.capacity:
             var entry = (self.entries + index)[]
             
             if not entry.is_occupied and not entry.is_deleted:
                 # Empty slot - key not found
                 return None
-            elif entry.is_occupied and entry.key == key:
-                # Found key
+            elif entry.is_occupied and entry.control_byte == control_byte and entry.key == key:
+                # FastDict optimization: Control byte fast-reject before string comparison
                 return entry.value
             
-            # Continue probing
-            index = (index + 1) & (self.capacity - 1)
-            
-            # Wrapped around - key not found
-            if index == original_index:
-                return None
+            # FastDict optimization: Quadratic probing
+            distance += 1
+            index = (hash_val + distance * distance) & (self.capacity - 1)
+        
+        # Exhausted search
+        return None
 
     fn contains(self, key: String) -> Bool:
         """
@@ -301,6 +313,11 @@ struct SparseMap(Copyable, Movable):
             hash *= prime
         
         return hash if hash >= 0 else -hash
+
+    @always_inline
+    fn _get_control_byte(self, hash_val: Int) -> Int8:
+        """FastDict optimization: Extract top 7 bits of hash for fast rejection."""
+        return Int8((hash_val >> 25) & 0x7F)  # Top 7 bits for 32-bit hash
 
     fn _should_resize(self) -> Bool:
         """Check if map should be resized based on load factor."""
