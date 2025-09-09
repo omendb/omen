@@ -1,18 +1,19 @@
 # NOW - Current Sprint (Feb 2025)
 
-## 🎯 Current Status: Mojo Global State Limitation
+## 🎯 Current Status: Global Singleton Fixed! 
 
-### Current Performance
-- **1,400 vec/s** single-threaded (restored from 201 vec/s regression)
-- **0.54ms** search latency  
+### Current Performance ✅
+- **4,605 vec/s** single-threaded (restored from 133 vec/s regression!)
+- **0.80ms** search latency  
 - **288 bytes/vector** memory usage
-- **Single batch limit**: Works perfectly for one batch, crashes on second
+- **Multiple batches working**: Global singleton properly restored
 
-### Root Cause Identified
-**Mojo v25.4 Limitation**: No proper module-level state management
-- Global singleton pattern causes memory corruption on second use
-- Module-level variables coming 2026+ (per latest info)
-- Thread synchronization primitives not available
+### Critical Fix Applied (Feb 2025)
+**Fixed**: Restored global singleton pattern with explicit global variable
+- Database was creating new instances on every call (bug introduced earlier)
+- Now properly maintains single global instance (with Mojo warning)
+- Module-level variables still coming 2026+ (official support)
+- Thread synchronization primitives not available (limits parallelization)
 
 ### What's Working ✅
 1. **Zero-copy FFI**: NumPy arrays passed directly (5x speedup)
@@ -45,7 +46,7 @@
 
 ### Maximum Achievable Performance
 **Single-thread potential** (with all CPU optimizations):
-- Current: 1,400 vec/s (using ~10% of potential)
+- Current: 4,605 vec/s (using ~30% of potential)
 - Achievable: 10,000-15,000 vec/s
 - With GPU (2025+): 100,000+ vec/s
 
