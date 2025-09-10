@@ -197,11 +197,13 @@ struct NodePool(Movable):
 # Fixed-Size Data Structures for Bounded Collections
 # =============================================================================
 
-struct NeighborSet(Movable):
-    """Fixed-capacity collection for (distance, node_id) pairs.
+struct KNNBuffer(Movable):
+    """Fixed-capacity k-nearest neighbor buffer for HNSW search operations.
     
-    Eliminates List overhead for bounded neighbor collections in HNSW search.
-    Uses pre-allocated arrays for predictable performance.
+    Efficiently manages bounded collections of (distance, node_id) pairs with:
+    - Pre-allocated memory for predictable performance
+    - Optimized operations for nearest neighbor search
+    - Dual use: result sets (W) and search queues (candidates)
     """
     var distances: UnsafePointer[Float32]
     var node_ids: UnsafePointer[Int]
@@ -274,6 +276,31 @@ struct NeighborSet(Movable):
             self.node_ids[max_idx] = new_node_id
             return True
         return False
+    
+    fn remove_at(mut self, idx: Int) -> Bool:
+        """Remove item at index by swapping with last element (O(1) operation)."""
+        if idx < 0 or idx >= self.size:
+            return False
+        
+        # Swap with last element and decrease size
+        if idx < self.size - 1:
+            self.distances[idx] = self.distances[self.size - 1]
+            self.node_ids[idx] = self.node_ids[self.size - 1]
+        self.size -= 1
+        return True
+    
+    fn find_min_idx(self) -> Int:
+        """Find index of minimum distance element."""
+        if self.size == 0:
+            return -1
+        
+        var min_idx = 0
+        var min_dist = self.distances[0]
+        for i in range(1, self.size):
+            if self.distances[i] < min_dist:
+                min_idx = i
+                min_dist = self.distances[i]
+        return min_idx
     
     fn sort_by_distance(mut self):
         """Sort by distance (bubble sort - fine for small collections)."""
@@ -1838,10 +1865,10 @@ struct HNSWIndex(Movable):
     ) -> List[Int]:
         """Search for M nearest neighbors at specific layer using beam search with binary quantization."""
         
-        # OPTIMIZED: Fixed-capacity data structures for bounded neighbor collections
+        # OPTIMIZED: Fixed-capacity k-NN buffers for bounded neighbor collections  
         var ef = max(M * 4, 50)  # SAMPLING: Reduced exploration (2x less than exact)
-        var candidates = NeighborSet(ef)  # Fixed capacity based on ef
-        var W = NeighborSet(ef)           # Fixed capacity result set
+        var candidates = KNNBuffer(ef)  # Search queue with fixed capacity
+        var W = KNNBuffer(ef)           # Result set with fixed capacity
         
         # Use version-based visited tracking (no allocation needed!)
         self.visited_version += 1
@@ -1864,22 +1891,16 @@ struct HNSWIndex(Movable):
         var max_samples = ef // 2  # APPROXIMATION: Sample subset of candidates
         
         while candidates.len() > 0 and checked < ef and checked < max_samples:
-            # Get closest unprocessed candidate
-            var min_idx = 0
-            var min_dist = candidates.get_distance(0)
-            for i in range(1, candidates.len()):
-                if candidates.get_distance(i) < min_dist:
-                    min_idx = i
-                    min_dist = candidates.get_distance(i)
+            # Get closest unprocessed candidate using optimized method
+            var min_idx = candidates.find_min_idx()
+            if min_idx < 0:
+                break  # No more candidates
             
             var current_dist = candidates.get_distance(min_idx)
             var current = candidates.get_node_id(min_idx)
             
-            # Remove from candidates (swap with last and "pop")
-            if min_idx < candidates.len() - 1:
-                candidates.distances[min_idx] = candidates.distances[candidates.len() - 1]
-                candidates.node_ids[min_idx] = candidates.node_ids[candidates.len() - 1]
-            candidates.size -= 1
+            # Remove from candidates using O(1) swap-and-pop
+            _ = candidates.remove_at(min_idx)
             
             # Check neighbors at this layer
             var node = self.node_pool.get(current)
@@ -1952,15 +1973,15 @@ struct HNSWIndex(Movable):
         mut self,
         query: UnsafePointer[Float32],
         neighbor_batch: List[Int],
-        mut candidates: NeighborSet,
-        mut W: NeighborSet,
+        mut candidates: KNNBuffer,
+        mut W: KNNBuffer,
         ef: Int
     ):
         """Process a batch of neighbors using vectorized distance computation.
         
         This is the core breakthrough optimization - instead of computing distances
         one-by-one, we compute all distances in the batch simultaneously.
-        Uses fixed-capacity NeighborSet for optimal memory management.
+        Uses fixed-capacity KNNBuffer for optimal memory management.
         """
         var batch_size = len(neighbor_batch)
         if batch_size == 0:
