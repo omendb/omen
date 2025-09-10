@@ -74,11 +74,11 @@
 - Search functionality after recovery
 - Clean, maintainable code (~300 lines)
 
-**🚧 Next Steps**:
-1. **Integrate storage_v2** into main engine
-2. **Add batch writes** for 5,000+ vec/s throughput
-3. **Implement HNSW+** to replace DiskANN
-4. **Add multimodal support** (vectors + text + metadata)
+**🚧 Next Steps** (We already have the code!):
+1. **Wire up compression** - PQ/SQ already implemented, just connect to storage_v2
+2. **Add batch writes** - Reuse patterns from insert_bulk()
+3. **Port mmap properly** - Fix 373x overhead from memory_mapped.mojo
+4. **Complete HNSW+** - Already has binary quantization integrated
 
 ### Workarounds Available
 1. **Single batch mode**: Clear DB between batches
