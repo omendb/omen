@@ -15,8 +15,15 @@ from sys import alignof
 from sys.ffi import external_call
 from sys.intrinsics import sizeof
 from math import ceil
-from ..core.storage import StorageEngine
 # Checksum functionality removed for performance
+
+# StorageEngine trait for compatibility
+trait StorageEngine:
+    fn save_vector(mut self, id: String, vector: List[Float32], metadata: Dict[String, String]) raises -> Bool: ...
+    fn load_vector(self, id: String) raises -> Optional[List[Float32]]: ...
+    fn delete_vector(mut self, id: String) raises -> Bool: ...
+    fn checkpoint(mut self) raises -> Bool: ...
+    fn recover(mut self) raises -> Int: ...
 
 # Memory-mapped file constants  
 alias MMAP_PAGE_SIZE = 4096        # Standard OS page size

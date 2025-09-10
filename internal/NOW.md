@@ -52,23 +52,26 @@
 - Achievable: 10,000-15,000 vec/s
 - With GPU (2025+): 100,000+ vec/s
 
-### Storage Engine Progress (Feb 2025)
+### Storage Engine Status (Feb 2025)
 
-**✅ Phase 1 Complete**: Basic file-based storage
-- Binary file format with 4KB blocks
-- Block allocation with free list
-- Index file for ID → block mapping
-- Thread-safe with BlockingSpinLock
-- Tests passing for write/read operations
+**✅ DISCOVERED**: Advanced memory-mapped storage already exists!
+- Found in `omendb/storage/memory_mapped.mojo`
+- Uses direct `mmap` via `external_call` FFI
+- Hot buffer + async checkpoint architecture
+- WAL-like durability with recovery
+- **Claims**: "50,000x faster than Python FFI"
 
-**🚧 Phase 2 In Progress**: Write-Ahead Logging
-- WAL for crash recovery
-- Atomic transaction support
-- Checkpoint mechanism
+**✅ Testing Results**:
+- Successfully saves/loads vectors
+- Recovery works (1001 vectors recovered)
+- Memory reporting broken (shows 0 bytes)
+- Checkpoint mechanism functional
 
-**📋 Upcoming Phases**:
-- Phase 3: Concurrent read/write optimization
-- Phase 4: Memory mapping via FFI
+**❌ Integration Issues**:
+- Not connected to main VectorStore
+- Memory accounting not working
+- Performance claims unverified
+- Complex but underutilized
 
 ### Workarounds Available
 1. **Single batch mode**: Clear DB between batches
