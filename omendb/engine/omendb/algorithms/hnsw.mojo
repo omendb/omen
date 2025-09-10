@@ -45,7 +45,7 @@ alias max_M0 = M * 2  # Layer 0 has more connections
 alias ef_construction = 200
 alias ef_search = 500  # Much higher for better recall with random vectors
 alias ml = 1.0 / log(2.0)
-alias MAX_LAYERS = 2  # TEMPORARILY REDUCED - Maximum hierarchical layers (was 16)
+alias MAX_LAYERS = 4  # OPTIMAL STABLE - Maximum hierarchical layers (was 16)
 
 # =============================================================================
 # Fixed-Size Node with Pre-allocated Connections
@@ -682,11 +682,12 @@ struct HNSWIndex(Movable):
         # Use null pointers to indicate uninitialized vectors
         for i in range(self.capacity):
             # Create dummy vector with null data pointer
+            # FIXED: Don't free dummy_vec - BinaryQuantizedVector needs the memory
             var dummy_vec = UnsafePointer[Float32].alloc(1)
             dummy_vec[0] = 0.0
             var empty_vec = BinaryQuantizedVector(dummy_vec, 1)
             self.binary_vectors.append(empty_vec)
-            dummy_vec.free()
+            # dummy_vec memory will be cleaned up by BinaryQuantizedVector destructor
         
         # Quantize all existing vectors
         for i in range(self.size):
@@ -738,11 +739,12 @@ struct HNSWIndex(Movable):
             var binary_vec = BinaryQuantizedVector(dest, self.dimension)
             # Ensure we have enough space
             while len(self.binary_vectors) <= new_id:
+                # FIXED: Don't free dummy_vec - BinaryQuantizedVector needs the memory
                 var dummy_vec = UnsafePointer[Float32].alloc(1)
                 dummy_vec[0] = 0.0
                 var empty_vec = BinaryQuantizedVector(dummy_vec, 1)
                 self.binary_vectors.append(empty_vec)
-                dummy_vec.free()
+                # dummy_vec memory will be cleaned up by BinaryQuantizedVector destructor
             self.binary_vectors[new_id] = binary_vec
         
         # First node becomes entry point
@@ -835,12 +837,13 @@ struct HNSWIndex(Movable):
                 var needed = target_capacity - len(self.binary_vectors)
                 for _ in range(needed):
                     # Create empty binary vector without dummy allocation
+                    # FIXED: Don't free zero_vec - BinaryQuantizedVector needs the memory
                     var zero_vec = allocate_vector(self.dimension)
                     for j in range(self.dimension):
                         zero_vec[j] = 0.0
                     var empty_vec = BinaryQuantizedVector(zero_vec, self.dimension)
                     self.binary_vectors.append(empty_vec)
-                    free_vector(zero_vec, self.dimension)
+                    # zero_vec memory will be cleaned up by BinaryQuantizedVector destructor
             
             # Batch create quantized versions
             for i in range(actual_count):
@@ -1065,12 +1068,13 @@ struct HNSWIndex(Movable):
             if len(self.binary_vectors) < target_capacity:
                 var needed = target_capacity - len(self.binary_vectors)
                 for _ in range(needed):
+                    # FIXED: Don't free zero_vec - BinaryQuantizedVector needs the memory
                     var zero_vec = allocate_vector(self.dimension)
                     for j in range(self.dimension):
                         zero_vec[j] = 0.0
                     var empty_vec = BinaryQuantizedVector(zero_vec, self.dimension)
                     self.binary_vectors.append(empty_vec)
-                    free_vector(zero_vec, self.dimension)
+                    # zero_vec memory will be cleaned up by BinaryQuantizedVector destructor
             
             for i in range(actual_count):
                 var node_id = node_ids[i]
@@ -1614,12 +1618,8 @@ struct HNSWIndex(Movable):
                 vector, curr_nearest, 1, lc
             )
         
-        # TEMPORARILY DISABLED: Create binary quantized version for search (reuse if already created)
-        # Use dummy binary quantization that shouldn't cause crashes
-        var dummy_data = UnsafePointer[Float32].alloc(1)
-        dummy_data[0] = 0.0
-        var vector_binary = BinaryQuantizedVector(dummy_data, 1)
-        dummy_data.free()
+        # Create binary quantized version of vector for search
+        var vector_binary = BinaryQuantizedVector(vector, self.dimension)
         
         # Insert at all layers from level to 0
         for lc in range(level, -1, -1):
@@ -1671,12 +1671,8 @@ struct HNSWIndex(Movable):
                 vector, curr_nearest, 1, lc
             )
         
-        # TEMPORARILY DISABLED: Create binary quantized version of the new vector for search
-        # Use dummy binary quantization that shouldn't cause crashes
-        var dummy_data = UnsafePointer[Float32].alloc(1)
-        dummy_data[0] = 0.0
-        var vector_binary = BinaryQuantizedVector(dummy_data, 1)
-        dummy_data.free()
+        # Create binary quantized version of the new vector for search
+        var vector_binary = BinaryQuantizedVector(vector, self.dimension)
         
         # Insert at all layers from level to 0
         for lc in range(level, -1, -1):

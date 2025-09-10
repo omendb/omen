@@ -63,8 +63,8 @@ struct GlobalDatabase(Movable):
             
             # TEMPORARILY DISABLE ALL OPTIMIZATIONS - TEST BASIC FUNCTIONALITY FIRST
             # Enable state-of-the-art optimizations
-            # TEMPORARILY DISABLED: Testing if binary quantization causes memory corruption
-            # self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
+            # DEBUGGING: Re-enabling binary quantization to debug the crash
+            self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
             self.hnsw_index.use_flat_graph = False  # DISABLE Hub Highway optimization
             self.hnsw_index.use_smart_distance = False  # DISABLE VSAG-style adaptive precision
             self.hnsw_index.cache_friendly_layout = False  # DISABLE Better memory access patterns
