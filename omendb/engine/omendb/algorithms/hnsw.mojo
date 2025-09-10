@@ -1728,21 +1728,17 @@ struct HNSWIndex(Movable):
         query_binary: BinaryQuantizedVector
     ) -> List[Int]:
         """Search for M nearest neighbors at specific layer using beam search with binary quantization."""
-        print("[DEBUG] _search_layer_for_M_neighbors: Starting, M =", M, "layer =", layer, "entry =", entry)
         
         var candidates = List[Tuple[Float32, Int]]()  # (distance, node_id)
         var W = List[Tuple[Float32, Int]]()  # Result set
         var visited = List[Bool]()
         
         # Initialize visited array for this search
-        print("[DEBUG] _search_layer_for_M_neighbors: Initializing visited array for capacity", self.capacity)
         for i in range(self.capacity):
             visited.append(False)
         
         # Add entry point - use binary quantization for 40x speedup
-        print("[DEBUG] _search_layer_for_M_neighbors: Computing distance to entry point", entry)
         var entry_dist = self.distance_to_query(query_binary, entry, query)
-        print("[DEBUG] _search_layer_for_M_neighbors: Entry distance =", entry_dist)
         candidates.append((entry_dist, entry))
         W.append((entry_dist, entry))
         visited[entry] = True
@@ -1776,46 +1772,34 @@ struct HNSWIndex(Movable):
             # This was stopping exploration of nodes that might lead to perfect matches
             
             # Check neighbors at this layer
-            print("[DEBUG] _search_layer_for_M_neighbors: Getting node for current =", current)
             var node = self.node_pool.get(current)
             if not node:
-                print("[DEBUG] _search_layer_for_M_neighbors: ERROR - node is null for ID", current)
                 continue
-            print("[DEBUG] _search_layer_for_M_neighbors: Node retrieved successfully")
             
             if layer == 0:
                 # VECTORIZED NEIGHBOR PROCESSING - Major breakthrough optimization
-                print("[DEBUG] _search_layer_for_M_neighbors: Processing layer 0 connections")
                 var num_connections = node[].connections_l0_count
-                print("[DEBUG] _search_layer_for_M_neighbors: Number of connections =", num_connections)
                 var neighbor_batch = List[Int]()
                 
                 # Collect unvisited neighbors in batches
                 for i in range(num_connections):
-                    print("[DEBUG] _search_layer_for_M_neighbors: Processing connection", i, "of", num_connections)
                     var neighbor = node[].connections_l0[i]
-                    print("[DEBUG] _search_layer_for_M_neighbors: Neighbor ID =", neighbor)
                     if neighbor < 0:
-                        print("[DEBUG] _search_layer_for_M_neighbors: Skipping negative neighbor")
                         continue
                     if neighbor >= len(visited):
-                        print("[DEBUG] _search_layer_for_M_neighbors: ERROR - neighbor", neighbor, "out of bounds for visited array of size", len(visited))
                         continue
                     if visited[neighbor]:
                         continue
                     
                     neighbor_batch.append(neighbor)
-                    print("[DEBUG] _search_layer_for_M_neighbors: Added neighbor", neighbor, "to batch")
                     visited[neighbor] = True
                     
                     # Process batch when full or at end
                     if len(neighbor_batch) >= batch_size or i == num_connections - 1:
                         if len(neighbor_batch) > 0:
-                            print("[DEBUG] _search_layer_for_M_neighbors: Processing batch of size", len(neighbor_batch))
                             self._process_neighbor_batch_vectorized(
                                 query, neighbor_batch, candidates, W, ef
                             )
-                            print("[DEBUG] _search_layer_for_M_neighbors: Batch processed successfully")
                             neighbor_batch.clear()
             else:
                 # Process higher layer connections
