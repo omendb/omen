@@ -52,18 +52,23 @@
 - Achievable: 10,000-15,000 vec/s
 - With GPU (2025+): 100,000+ vec/s
 
-### Next Immediate Focus: Custom Storage Engine
+### Storage Engine Progress (Feb 2025)
 
-**Decision**: Build state-of-the-art storage engine in pure Mojo
-- Mojo has all needed primitives (atomics, locks, async, mmap via FFI)
-- Competitors moved away from generic databases to custom engines
-- Performance target: Match/exceed Qdrant's custom storage
+**✅ Phase 1 Complete**: Basic file-based storage
+- Binary file format with 4KB blocks
+- Block allocation with free list
+- Index file for ID → block mapping
+- Thread-safe with BlockingSpinLock
+- Tests passing for write/read operations
 
-**Architecture**:
-1. **WAL**: Append-only log for crash recovery
-2. **Block Storage**: Fixed-size blocks with free bitmask
-3. **Memory Mapping**: Zero-copy access via mmap FFI
-4. **Concurrent Access**: Atomic ops + SpinLocks for thread safety
+**🚧 Phase 2 In Progress**: Write-Ahead Logging
+- WAL for crash recovery
+- Atomic transaction support
+- Checkpoint mechanism
+
+**📋 Upcoming Phases**:
+- Phase 3: Concurrent read/write optimization
+- Phase 4: Memory mapping via FFI
 
 ### Workarounds Available
 1. **Single batch mode**: Clear DB between batches
