@@ -63,7 +63,7 @@ struct GlobalDatabase(Movable):
             
             # TEMPORARILY DISABLE ALL OPTIMIZATIONS - TEST BASIC FUNCTIONALITY FIRST
             # Enable state-of-the-art optimizations
-            # TEMPORARILY DISABLED: Bus error at vector 11+ needs investigation
+            # DISABLED: Binary quantization causes segfault at 5 vectors (works at 2-3)
             # self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
             self.hnsw_index.use_flat_graph = False  # DISABLE Hub Highway optimization
             self.hnsw_index.use_smart_distance = False  # DISABLE VSAG-style adaptive precision
