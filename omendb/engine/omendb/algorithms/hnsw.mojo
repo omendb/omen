@@ -326,6 +326,60 @@ struct KNNBuffer(Movable):
         return self.size
 
 # =============================================================================
+# Fixed-Capacity Arrays for Hot Path Optimizations
+# =============================================================================
+
+struct NeighborBatch(Movable):
+    """Fixed-capacity array for neighbor batching in vectorized processing.
+    
+    Eliminates List[Int] allocation in the critical hot path of distance computation.
+    Optimized for batch_size=32 with O(1) operations.
+    """
+    var nodes: UnsafePointer[Int]
+    var size: Int
+    var capacity: Int
+    
+    fn __init__(out self, capacity: Int):
+        """Pre-allocate fixed capacity array."""
+        self.capacity = capacity
+        self.size = 0
+        self.nodes = UnsafePointer[Int].alloc(capacity)
+    
+    fn __moveinit__(out self, owned existing: Self):
+        """Move constructor."""
+        self.nodes = existing.nodes
+        self.size = existing.size
+        self.capacity = existing.capacity
+        existing.nodes = UnsafePointer[Int]()
+    
+    fn __del__(owned self):
+        """Free allocated memory."""
+        if self.nodes:
+            self.nodes.free()
+    
+    fn append(mut self, node_id: Int) -> Bool:
+        """Add node to batch. Returns false if at capacity."""
+        if self.size >= self.capacity:
+            return False
+        self.nodes[self.size] = node_id
+        self.size += 1
+        return True
+    
+    fn get(self, idx: Int) -> Int:
+        """Get node at index (bounds checked)."""
+        if idx < 0 or idx >= self.size:
+            return -1
+        return self.nodes[idx]
+    
+    fn len(self) -> Int:
+        """Get current size."""
+        return self.size
+    
+    fn clear(mut self):
+        """Reset size to 0 (keeps allocated memory)."""
+        self.size = 0
+
+# =============================================================================
 # Fixed-Memory HNSW Index  
 # =============================================================================
 
@@ -1910,7 +1964,7 @@ struct HNSWIndex(Movable):
             if layer == 0:
                 # VECTORIZED NEIGHBOR PROCESSING - Major breakthrough optimization
                 var num_connections = node[].connections_l0_count
-                var neighbor_batch = List[Int]()
+                var neighbor_batch = NeighborBatch(batch_size)  # Fixed-capacity hot path optimization
                 
                 # Collect unvisited neighbors in batches
                 for i in range(num_connections):
@@ -1922,12 +1976,12 @@ struct HNSWIndex(Movable):
                     if self.visited_buffer[neighbor] == self.visited_version:
                         continue
                     
-                    neighbor_batch.append(neighbor)
+                    _ = neighbor_batch.append(neighbor)
                     self.visited_buffer[neighbor] = self.visited_version
                     
                     # Process batch when full or at end
-                    if len(neighbor_batch) >= batch_size or i == num_connections - 1:
-                        if len(neighbor_batch) > 0:
+                    if neighbor_batch.len() >= batch_size or i == num_connections - 1:
+                        if neighbor_batch.len() > 0:
                             self._process_neighbor_batch_vectorized(
                                 query, neighbor_batch, candidates, W, ef
                             )
@@ -1972,7 +2026,7 @@ struct HNSWIndex(Movable):
     fn _process_neighbor_batch_vectorized(
         mut self,
         query: UnsafePointer[Float32],
-        neighbor_batch: List[Int],
+        neighbor_batch: NeighborBatch,
         mut candidates: KNNBuffer,
         mut W: KNNBuffer,
         ef: Int
@@ -1981,9 +2035,9 @@ struct HNSWIndex(Movable):
         
         This is the core breakthrough optimization - instead of computing distances
         one-by-one, we compute all distances in the batch simultaneously.
-        Uses fixed-capacity KNNBuffer for optimal memory management.
+        Uses fixed-capacity data structures for optimal memory management.
         """
-        var batch_size = len(neighbor_batch)
+        var batch_size = neighbor_batch.len()
         if batch_size == 0:
             return
         
@@ -1991,7 +2045,7 @@ struct HNSWIndex(Movable):
         var neighbor_vectors = UnsafePointer[Float32].alloc(batch_size * self.dimension)
         
         for i in range(batch_size):
-            var neighbor_id = neighbor_batch[i]
+            var neighbor_id = neighbor_batch.get(i)
             var neighbor_vec = self.get_vector(neighbor_id)
             var dest = neighbor_vectors.offset(i * self.dimension)
             memcpy(dest, neighbor_vec, self.dimension * 4)  # Fix: Float32 = 4 bytes
@@ -2001,9 +2055,9 @@ struct HNSWIndex(Movable):
             query, 1, neighbor_vectors, batch_size
         )
         
-        # Process results efficiently using NeighborSet
+        # Process results efficiently using fixed-capacity structures
         for i in range(batch_size):
-            var neighbor_id = neighbor_batch[i]
+            var neighbor_id = neighbor_batch.get(i)
             var dist = distances[i]  # Pre-computed distance
             
             # Add to candidates and W pool
