@@ -20,7 +20,7 @@ alias MS_SYNC = 4  # Synchronous sync
 alias HEADER_SIZE = 256  # Bytes for metadata
 alias PQ_VECTOR_SIZE = 32  # Bytes per PQ32 vector
 
-struct SimpleMMapStorage:
+struct SimpleMMapStorage(Copyable, Movable):
     """Simplified mmap storage for testing."""
     
     var path: String
@@ -43,6 +43,29 @@ struct SimpleMMapStorage:
         
         # Open or create file
         self._open_file()
+    
+    fn __copyinit__(out self, existing: Self):
+        """Copy constructor."""
+        self.path = existing.path
+        self.fd = existing.fd
+        self.ptr = existing.ptr  # Share pointer
+        self.file_size = existing.file_size
+        self.num_vectors = existing.num_vectors
+        self.dimension = existing.dimension
+        self.is_open = existing.is_open
+    
+    fn __moveinit__(out self, owned existing: Self):
+        """Move constructor."""
+        self.path = existing.path^
+        self.fd = existing.fd
+        self.ptr = existing.ptr
+        self.file_size = existing.file_size
+        self.num_vectors = existing.num_vectors
+        self.dimension = existing.dimension
+        self.is_open = existing.is_open
+        # Clear source
+        existing.fd = -1
+        existing.ptr = UnsafePointer[UInt8]()
     
     fn _open_file(mut self) raises:
         """Open or create memory-mapped file."""

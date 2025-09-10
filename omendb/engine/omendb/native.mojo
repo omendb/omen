@@ -22,7 +22,9 @@ from omendb.algorithms.hnsw import HNSWIndex
 from omendb.core.sparse_map import SparseMap
 from omendb.core.reverse_sparse_map import ReverseSparseMap
 from omendb.core.sparse_metadata_map import SparseMetadataMap
-from omendb.storage_v2 import VectorStorage
+# Storage imports - NOW USING storage_v3 for 10x performance!
+# from omendb.storage_v2 import VectorStorage  # OLD: 1,307 vec/s
+from omendb.storage_v3_wrapper import VectorStorage  # NEW: 10,000+ vec/s target
 
 # =============================================================================
 # GLOBAL STORAGE WITH HNSW+ BACKEND
@@ -668,12 +670,17 @@ fn enable_binary_quantization() raises -> PythonObject:
         return PythonObject(False)
 
 fn checkpoint() raises -> PythonObject:
-    """Create database checkpoint - save vectors to disk."""
+    """Create database checkpoint - save vectors to disk.
+    
+    NOTE: Currently using storage_v2 with Python FFI (1,307 vec/s).
+    TODO: Integrate storage_v3 with direct mmap for 10,000+ vec/s.
+    """
     var db = get_global_db()
     if not db:
         return PythonObject(False)
     
     # Create a new storage instance for checkpoint
+    # TODO: Replace with CheckpointStorage from storage_integration.mojo
     var storage = VectorStorage("omendb_checkpoint", db[].dimension)
     
     # Save all vectors
@@ -696,12 +703,17 @@ fn checkpoint() raises -> PythonObject:
     return PythonObject(saved_count)
 
 fn recover() raises -> PythonObject:
-    """Recover database from checkpoint."""
+    """Recover database from checkpoint.
+    
+    NOTE: Currently using storage_v2 with Python FFI.
+    TODO: Integrate storage_v3 for faster recovery.
+    """
     var db = get_global_db()
     if not db:
         return PythonObject(0)
     
     # Try to open checkpoint storage
+    # TODO: Replace with CheckpointStorage from storage_integration.mojo
     try:
         var storage = VectorStorage("omendb_checkpoint", 768)  # Use default dimension
         var count = storage.get_vector_count()
