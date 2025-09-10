@@ -1,6 +1,7 @@
 # Mojo Patterns & Best Practices
 
 *Consolidated patterns for high-performance Mojo development*
+*Updated: Feb 2025 - Mojo v25.5 with v25.6 preview*
 
 ## Critical Type Conversions
 
@@ -78,7 +79,57 @@ self.nodes = UnsafePointer[Node].alloc(self.capacity)
 ### Import Rules
 - Every directory needs `__init__.mojo` with re-exports
 - Use relative imports (`.module` or `..parent.module`)
-- No module-level variables allowed
+- No module-level variables allowed (still not supported as of v25.5)
+- Threading primitives not available yet (no mutexes/locks)
+
+## New in Mojo v25.5 (Current Release)
+
+### Parametric Aliases - Simplify Type Definitions
+```mojo
+# ❌ OLD - Repetitive type patterns
+var a: SIMD[DType.float32, 1]
+var b: SIMD[DType.float32, 1]
+
+# ✅ NEW - Use parametric aliases
+alias Scalar[DT: DType] = SIMD[1, DT]
+alias Float32 = Scalar[DType.float32]
+var a: Float32
+var b: Float32
+```
+
+### Default Trait Methods - Reduce Boilerplate
+```mojo
+# Traits can now have default implementations
+trait Comparable:
+    fn __eq__(self, other: Self) -> Bool: ...
+    fn __ne__(self, other: Self) -> Bool:
+        return not self.__eq__(other)  # Default implementation
+```
+
+### SIMD Improvements
+```mojo
+# __bool__ now works with SIMD vectors
+if my_simd_vector:
+    # Evaluates to True if any element is non-zero
+    process()
+```
+
+## Coming in v25.6 (Preview)
+
+### Trait Unions - Better Type Constraints
+```mojo
+# FUTURE - Not available yet
+alias CopyableAndMovable = Copyable & Movable
+struct MyStruct[T: CopyableAndMovable]: ...
+```
+
+### requires Keyword - Compile-Time Validation
+```mojo
+# FUTURE - Not available yet
+struct HNSW[dim: Int, capacity: Int]
+  requires dim > 0, "dimension must be positive"
+  requires capacity.is_power_of_two(), "capacity must be power of 2"
+```
 
 ## Performance Critical Patterns
 
@@ -156,6 +207,17 @@ var edges: UnsafePointer[UInt32]  # CSR format
 var offsets: List[Int]
 ```
 
+### Convention Changes (v25.5+)
+```mojo
+# ❌ OLD - Using owned in __del__
+fn __del__(owned self):
+    self.data.free()
+
+# ✅ NEW - Using deinit convention
+fn __del__(deinit self):
+    self.data.free()
+```
+
 ## Debugging Techniques
 
 ### Enable Sanitizers
@@ -203,6 +265,24 @@ echo "@docs.modular.com/llms-mojo.txt" >> .cursor/context
 - Full SIMD → Compiler bugs
 - Module splitting → Import limitations
 - Generic collections → Limited support
+
+## Critical Limitations (As of v25.5)
+
+### Still Not Available
+1. **Module-level variables** - Global singleton pattern unreliable
+2. **Threading primitives** - No mutexes, locks, or thread-safe collections
+3. **Relative imports in builds** - Complex build configurations needed
+4. **Full generic support** - Limited generic collection types
+
+### Workarounds
+```mojo
+# Global singleton workaround
+var __global_db: UnsafePointer[Database]  # __ prefix suppresses warning
+
+# Threading workaround
+# Use single-threaded operations only
+# Or use process-based parallelism
+```
 
 ## Quick Command Sequences
 
