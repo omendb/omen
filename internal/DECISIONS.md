@@ -795,6 +795,39 @@ Need persistence for OmenDB. Evaluated SQLite, Apache Arrow, and custom implemen
 
 ---
 
+## 2025-02-09 | CRITICAL: STORAGE NOT PRODUCTION READY
+
+### Context
+Deep testing revealed the "sophisticated" mmap storage is fundamentally broken.
+
+### Critical Issues
+- **373x storage overhead**: 100 vectors use 112MB instead of 300KB
+- **Pre-allocated files**: Always 64MB minimum even for 1 vector
+- **Memory reporting broken**: Always shows 64 bytes
+- **No dynamic growth**: Files don't grow, just pre-allocated
+- **Would need TBs**: 100K vectors would require terabytes
+
+### Evidence
+```bash
+ls -lah test_reality.*
+# 100 vectors (expected 300KB):
+-rw-r--r--  32M test_reality.graph
+-rw-r--r--  16M test_reality.meta  
+-rw-r--r--  64M test_reality.vectors
+# Total: 112MB (373x overhead!)
+```
+
+### Decision
+**DO NOT USE IN PRODUCTION** - Need complete storage rewrite
+
+### Consequences
+- ❌ Current implementation unusable for real workloads
+- ❌ Need to fix or replace before any production use
+- ✅ At least we discovered this before deployment
+- ✅ Have clear requirements for proper implementation
+
+---
+
 ## 2025-02-09 | STORAGE IMPLEMENTATION REALITY CHECK
 
 ### Context
