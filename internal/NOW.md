@@ -54,24 +54,23 @@
 
 ### Storage Engine Status (Feb 2025)
 
-**✅ DISCOVERED**: Advanced memory-mapped storage already exists!
-- Found in `omendb/storage/memory_mapped.mojo`
-- Uses direct `mmap` via `external_call` FFI
-- Hot buffer + async checkpoint architecture
-- WAL-like durability with recovery
-- **Claims**: "50,000x faster than Python FFI"
+**✅ INTEGRATED**: Memory-mapped storage connected to GlobalDatabase!
+- Found sophisticated implementation in `omendb/storage/memory_mapped.mojo`
+- Created `PersistentGlobalDatabase` integration layer
+- Persistence and recovery working end-to-end
+- Automatic checkpointing every 100 operations
 
-**✅ Testing Results**:
-- Successfully saves/loads vectors
-- Recovery works (1001 vectors recovered)
-- Memory reporting broken (shows 0 bytes)
-- Checkpoint mechanism functional
+**✅ Working Features**:
+- Save/load vectors with persistence
+- Recovery works (tested with 10-1000 vectors)
+- Search functionality after recovery
+- Checkpoint mechanism (async capable)
 
-**❌ Integration Issues**:
-- Not connected to main VectorStore
-- Memory accounting not working
-- Performance claims unverified
-- Complex but underutilized
+**🚧 Remaining Issues**:
+- Memory reporting shows 0 bytes (accounting bug)
+- Performance unverified (claims 50,000x faster)
+- Not yet replacing basic storage in production
+- Quantization still missing
 
 ### Workarounds Available
 1. **Single batch mode**: Clear DB between batches
