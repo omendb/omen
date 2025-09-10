@@ -2293,6 +2293,27 @@ struct HNSWIndex(Movable):
         
         return results
 
+    fn clear(mut self):
+        """Clear all data and reset index to empty state."""
+        # Reset size to 0 (effectively makes all nodes inaccessible)
+        self.size = 0
+        
+        # Clear node pool - this will reset all nodes
+        # Note: We don't deallocate memory, just mark as unused
+        self.node_pool = NodePool(self.capacity)
+        
+        # Clear hub nodes list
+        self.hub_nodes = List[Int]()
+        
+        # Clear binary quantization vectors if they exist
+        self.binary_vectors = List[BinaryQuantizedVector]()
+        
+        # Reset search state
+        self.visited_version = 1
+        
+        # Note: We keep the allocated vectors memory and other buffers
+        # This avoids deallocation/reallocation overhead
+
 # =============================================================================
 # Export Functions
 # =============================================================================

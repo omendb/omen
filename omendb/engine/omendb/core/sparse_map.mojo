@@ -287,6 +287,13 @@ struct SparseMap(Copyable, Movable):
             return 0.0
         return Float32(self.size) / Float32(self.capacity)
 
+    fn clear(mut self):
+        """Clear all entries from the map."""
+        # Mark all entries as empty/deleted
+        for i in range(self.capacity):
+            (self.entries + i)[].clear()
+        self.size = 0
+
     # ========================================
     # Private Helper Methods
     # ========================================

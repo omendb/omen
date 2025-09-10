@@ -173,14 +173,19 @@ struct GlobalDatabase(Movable):
     
     fn clear(mut self):
         """Clear all data and reset to uninitialized state."""
-        # IMPORTANT: Don't create new instances - that causes memory corruption!
-        # For now, just reset the initialized flag to prevent usage
-        # TODO: Implement proper clear() methods on each data structure
+        if not self.initialized:
+            return  # Already clear
+            
+        # Clear all data structures properly
+        _ = self.hnsw_index.clear()
+        _ = self.id_mapper.clear() 
+        _ = self.reverse_id_mapper.clear()
+        _ = self.metadata_storage.clear()
+        
+        # Reset state
         self.initialized = False
         self.dimension = 0
         self.next_numeric_id = 0
-        # Note: Not clearing the actual data structures to avoid memory issues
-        # The next initialize() will create fresh instances
 
 # Instance-based database management - fixes memory corruption
 # Each Python DB() gets its own database instance
