@@ -68,7 +68,7 @@ struct HNSWNode(Copyable, Movable):
     var connections_l0_count: Int
     
     # Higher layers have fewer connections
-    var connections_higher: InlineArray[Int, max_M * MAX_LAYERS]
+    var connections_higher: InlineArray[Int, max_M0 * MAX_LAYERS]  # Use max_M0 for proper layer 0 sizing
     var connections_count: InlineArray[Int, MAX_LAYERS]
     
     fn __init__(out self, id: Int, level: Int):
@@ -82,7 +82,7 @@ struct HNSWNode(Copyable, Movable):
         self.connections_l0_count = 0
         
         # Initialize higher layer connections
-        self.connections_higher = InlineArray[Int, max_M * MAX_LAYERS](fill=-1)
+        self.connections_higher = InlineArray[Int, max_M0 * MAX_LAYERS](fill=-1)
         self.connections_count = InlineArray[Int, MAX_LAYERS](fill=0)
     
     @always_inline
@@ -98,12 +98,13 @@ struct HNSWNode(Copyable, Movable):
             if layer >= MAX_LAYERS:
                 return False
             var count = self.connections_count[layer]
-            if count >= max_M:
+            var max_connections = max_M  # Higher layers use max_M
+            if count >= max_connections:
                 return False
             
-            # Store in flattened array: layer * max_M + index
-            var idx = layer * max_M + count
-            if idx >= max_M * MAX_LAYERS:
+            # Store in flattened array: layer * max_M0 + index (use max_M0 for consistent indexing)
+            var idx = layer * max_M0 + count
+            if idx >= max_M0 * MAX_LAYERS:
                 return False  # Safety check - prevent buffer overflow
             self.connections_higher[idx] = neighbor
             self.connections_count[layer] = count + 1
@@ -122,7 +123,7 @@ struct HNSWNode(Copyable, Movable):
         if layer > 0 and layer < MAX_LAYERS:
             var count = self.connections_count[layer]
             for i in range(count):
-                var idx = layer * max_M + i
+                var idx = layer * max_M0 + i  # Use max_M0 for consistent indexing
                 result.append(self.connections_higher[idx])
         return result
     
@@ -379,7 +380,7 @@ struct HNSWIndex(Movable):
                             for layer in range(old_node[].level):
                                 new_node[].connections_count[layer] = old_node[].connections_count[layer]
                                 for j in range(old_node[].connections_count[layer]):
-                                    new_node[].connections_higher[layer * max_M + j] = old_node[].connections_higher[layer * max_M + j]
+                                    new_node[].connections_higher[layer * max_M0 + j] = old_node[].connections_higher[layer * max_M0 + j]
         
         # Replace node pool
         self.node_pool = new_node_pool^
@@ -1287,8 +1288,8 @@ struct HNSWIndex(Movable):
             # Higher layer connections  
             if from_node_ref.connections_count[layer] < max_M:
                 var count = from_node_ref.connections_count[layer]
-                var total_idx = layer * max_M + count
-                if total_idx < max_M * MAX_LAYERS:
+                var total_idx = layer * max_M0 + count  # Use max_M0 for consistent indexing
+                if total_idx < max_M0 * MAX_LAYERS:
                     from_node_ref.connections_higher[total_idx] = to_node
                     from_node_ref.connections_count[layer] += 1
     
@@ -2022,7 +2023,7 @@ struct HNSWIndex(Movable):
             var node_vector = self.get_vector(node_id)
             
             for i in range(num_connections):
-                var idx = layer * max_M + i
+                var idx = layer * max_M0 + i  # Use max_M0 for consistent indexing
                 var neighbor = node[].connections_higher[idx]
                 if neighbor >= 0:
                     old_connections.append(neighbor)
@@ -2061,7 +2062,7 @@ struct HNSWIndex(Movable):
             # Update higher layer connections with selected neighbors
             node[].connections_count[layer] = len(selected)
             for i in range(len(selected)):
-                var idx = layer * max_M + i
+                var idx = layer * max_M0 + i  # Use max_M0 for consistent indexing
                 node[].connections_higher[idx] = selected[i]
     
     fn _remove_reverse_connection(mut self, from_node: Int, to_node: Int, layer: Int):

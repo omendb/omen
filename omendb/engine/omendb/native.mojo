@@ -351,27 +351,32 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 if db_ptr[].initialize(dimension):
                     pass  # Database initialized
             
-            # OPTIMIZATION: Use bulk insert for 5-10x speedup (stable version)
-            # TODO: Test insert_bulk_wip() thoroughly before switching
-            # Use HNSW bulk insert (FIXED: memory corruption resolved)
-            var bulk_numeric_ids = db_ptr[].hnsw_index.insert_bulk(vectors_ptr, num_vectors)
-            
-            # Process successful bulk insertions
-            for i in range(len(bulk_numeric_ids)):
-                var numeric_id = bulk_numeric_ids[i]
+            # TEMPORARY FIX: Use individual inserts instead of bulk (bulk has resize issues)
+            # TODO: Fix insert_bulk resize() function and switch back for performance
+            # Process each vector individually (slower but stable)
+            for i in range(num_vectors):
+                var id_str = String(vector_ids[i])
+                
+                # Get vector pointer for this specific vector
+                var vector_ptr = vectors_ptr.offset(i * dimension)
+                
+                # Use individual insert (we know this works)
+                var numeric_id = db_ptr[].hnsw_index.insert(vector_ptr)
                 
                 if numeric_id >= 0:
-                    var id_str = String(vector_ids[i])
                     _ = db_ptr[].id_mapper.insert(id_str, numeric_id)
                     _ = db_ptr[].reverse_id_mapper.insert(numeric_id, id_str)
                     
                     if i < len(metadata_list):
-                        # Use empty metadata for batch operations (can process later if needed)
+                        # Use empty metadata for now
                         var empty_metadata = Metadata()
                         _ = db_ptr[].metadata_storage.set(id_str, empty_metadata)
                     
                     results.append(id_str)
                     db_ptr[].next_numeric_id = max(db_ptr[].next_numeric_id, numeric_id + 1)
+                else:
+                    # Individual insert failed - continue with remaining vectors
+                    print("Individual insert failed for vector", i)
             
             # vectors_ptr points to NumPy's managed memory - attempting to free() causes 
             # "Attempt to free invalid pointer" crash. NumPy handles deallocation.
@@ -403,11 +408,12 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 for j in range(dimension):
                     contiguous_vectors[i * dimension + j] = batch_vectors[i][j]
             
-            var bulk_numeric_ids = db_ptr[].hnsw_index.insert_bulk(contiguous_vectors, num_vectors)
-            
-            # Process successful bulk insertions
-            for i in range(len(bulk_numeric_ids)):
-                var numeric_id = bulk_numeric_ids[i]
+            # TEMPORARY FIX: Use individual inserts instead of insert_bulk() 
+            # insert_bulk() crashes due to resize() NodePool migration issues
+            for i in range(num_vectors):
+                var vector_ptr = contiguous_vectors + (i * dimension)
+                var numeric_id = db_ptr[].hnsw_index.insert(vector_ptr)
+                
                 if numeric_id >= 0:
                     var id_str = String(vector_ids[i])
                     _ = db_ptr[].id_mapper.insert(id_str, numeric_id)
