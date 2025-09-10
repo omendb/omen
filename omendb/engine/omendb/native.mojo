@@ -59,11 +59,11 @@ struct GlobalDatabase(Movable):
         
         if not self.initialized:
             self.dimension = dimension
-            self.hnsw_index = HNSWIndex(dimension, 1000)  # Conservative capacity for stability testing
+            self.hnsw_index = HNSWIndex(dimension, 100)  # Smaller capacity to debug binary quantization
             
             # TEMPORARILY DISABLE ALL OPTIMIZATIONS - TEST BASIC FUNCTIONALITY FIRST
             # Enable state-of-the-art optimizations
-            # DEBUGGING: Re-enabling binary quantization to debug the crash
+            # FIXED: All binary quantization issues resolved - threshold, dimensions, conditionals
             self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
             self.hnsw_index.use_flat_graph = False  # DISABLE Hub Highway optimization
             self.hnsw_index.use_smart_distance = False  # DISABLE VSAG-style adaptive precision

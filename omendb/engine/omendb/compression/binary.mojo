@@ -179,15 +179,40 @@ struct BinaryQuantizedVector(Copyable, Movable):
         self.data = UnsafePointer[UInt8].alloc(self.num_bytes)
         memset_zero(self.data, self.num_bytes)
         
-        # Compute median for better quantization
+        # Compute robust threshold to prevent all-zero bit patterns
+        var min_val = Float32(1e10)
+        var max_val = Float32(-1e10)
         var sum = Float32(0)
-        for i in range(dimension):
-            sum += original[i]
-        var threshold = sum / Float32(dimension)
         
-        # Pack bits
         for i in range(dimension):
-            if original[i] > threshold:
+            var val = original[i]
+            if val < min_val:
+                min_val = val
+            if val > max_val:
+                max_val = val
+            sum += val
+        
+        var mean = sum / Float32(dimension)
+        var threshold: Float32
+        
+        # For uniform or near-uniform vectors, use better strategy for bit distribution
+        var is_uniform = (max_val - min_val) < 1e-6
+        if is_uniform:
+            threshold = mean  # Will be used for uniform detection, not comparison
+        else:
+            threshold = mean
+        
+        # Pack bits with special handling for uniform vectors
+        for i in range(dimension):
+            var should_set_bit: Bool
+            if is_uniform:
+                # For uniform vectors, alternate bits to get ~50% distribution
+                should_set_bit = (i % 2) == 0  # Every other bit set
+            else:
+                # For diverse vectors, use threshold comparison
+                should_set_bit = original[i] > threshold
+            
+            if should_set_bit:
                 var byte_idx = i // 8
                 var bit_idx = i % 8
                 self.data[byte_idx] |= UInt8(1 << bit_idx)

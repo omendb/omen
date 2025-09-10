@@ -679,13 +679,13 @@ struct HNSWIndex(Movable):
         self.binary_vectors.reserve(self.capacity)
         
         # Pre-fill with empty vectors to maintain index alignment
-        # Use null pointers to indicate uninitialized vectors
+        # CRITICAL FIX: Dummy vectors must have correct dimension to avoid segfault in hamming_distance
         for i in range(self.capacity):
-            # Create dummy vector with null data pointer
-            # FIXED: Don't free dummy_vec - BinaryQuantizedVector needs the memory
-            var dummy_vec = UnsafePointer[Float32].alloc(1)
-            dummy_vec[0] = 0.0
-            var empty_vec = BinaryQuantizedVector(dummy_vec, 1)
+            # Create dummy vector with CORRECT dimension (not 1!)
+            var dummy_vec = UnsafePointer[Float32].alloc(self.dimension)
+            for j in range(self.dimension):
+                dummy_vec[j] = 0.0
+            var empty_vec = BinaryQuantizedVector(dummy_vec, self.dimension)  # Use real dimension!
             self.binary_vectors.append(empty_vec)
             # dummy_vec memory will be cleaned up by BinaryQuantizedVector destructor
         
@@ -739,10 +739,11 @@ struct HNSWIndex(Movable):
             var binary_vec = BinaryQuantizedVector(dest, self.dimension)
             # Ensure we have enough space
             while len(self.binary_vectors) <= new_id:
-                # FIXED: Don't free dummy_vec - BinaryQuantizedVector needs the memory
-                var dummy_vec = UnsafePointer[Float32].alloc(1)
-                dummy_vec[0] = 0.0
-                var empty_vec = BinaryQuantizedVector(dummy_vec, 1)
+                # FIXED: Dummy vectors must have correct dimension to avoid segfault
+                var dummy_vec = UnsafePointer[Float32].alloc(self.dimension)
+                for j in range(self.dimension):
+                    dummy_vec[j] = 0.0
+                var empty_vec = BinaryQuantizedVector(dummy_vec, self.dimension)
                 self.binary_vectors.append(empty_vec)
                 # dummy_vec memory will be cleaned up by BinaryQuantizedVector destructor
             self.binary_vectors[new_id] = binary_vec
@@ -1618,8 +1619,16 @@ struct HNSWIndex(Movable):
                 vector, curr_nearest, 1, lc
             )
         
-        # Create binary quantized version of vector for search
-        var vector_binary = BinaryQuantizedVector(vector, self.dimension)
+        # FIXED: Only create binary vector when binary quantization is enabled
+        var vector_binary: BinaryQuantizedVector
+        if self.use_binary_quantization:
+            vector_binary = BinaryQuantizedVector(vector, self.dimension)  # Real binary vector
+        else:
+            # Create dummy with CORRECT dimension - even though not used, prevents segfaults
+            var dummy_ptr = UnsafePointer[Float32].alloc(self.dimension)
+            for j in range(self.dimension):
+                dummy_ptr[j] = 0.0
+            vector_binary = BinaryQuantizedVector(dummy_ptr, self.dimension)
         
         # Insert at all layers from level to 0
         for lc in range(level, -1, -1):
@@ -1671,8 +1680,16 @@ struct HNSWIndex(Movable):
                 vector, curr_nearest, 1, lc
             )
         
-        # Create binary quantized version of the new vector for search
-        var vector_binary = BinaryQuantizedVector(vector, self.dimension)
+        # FIXED: Only create binary vector when binary quantization is enabled
+        var vector_binary: BinaryQuantizedVector
+        if self.use_binary_quantization:
+            vector_binary = BinaryQuantizedVector(vector, self.dimension)  # Real binary vector
+        else:
+            # Create dummy with CORRECT dimension - even though not used, prevents segfaults
+            var dummy_ptr = UnsafePointer[Float32].alloc(self.dimension)
+            for j in range(self.dimension):
+                dummy_ptr[j] = 0.0
+            vector_binary = BinaryQuantizedVector(dummy_ptr, self.dimension)
         
         # Insert at all layers from level to 0
         for lc in range(level, -1, -1):
@@ -1711,16 +1728,21 @@ struct HNSWIndex(Movable):
         query_binary: BinaryQuantizedVector
     ) -> List[Int]:
         """Search for M nearest neighbors at specific layer using beam search with binary quantization."""
+        print("[DEBUG] _search_layer_for_M_neighbors: Starting, M =", M, "layer =", layer, "entry =", entry)
+        
         var candidates = List[Tuple[Float32, Int]]()  # (distance, node_id)
         var W = List[Tuple[Float32, Int]]()  # Result set
         var visited = List[Bool]()
         
         # Initialize visited array for this search
+        print("[DEBUG] _search_layer_for_M_neighbors: Initializing visited array for capacity", self.capacity)
         for i in range(self.capacity):
             visited.append(False)
         
         # Add entry point - use binary quantization for 40x speedup
+        print("[DEBUG] _search_layer_for_M_neighbors: Computing distance to entry point", entry)
         var entry_dist = self.distance_to_query(query_binary, entry, query)
+        print("[DEBUG] _search_layer_for_M_neighbors: Entry distance =", entry_dist)
         candidates.append((entry_dist, entry))
         W.append((entry_dist, entry))
         visited[entry] = True
@@ -1754,28 +1776,46 @@ struct HNSWIndex(Movable):
             # This was stopping exploration of nodes that might lead to perfect matches
             
             # Check neighbors at this layer
+            print("[DEBUG] _search_layer_for_M_neighbors: Getting node for current =", current)
             var node = self.node_pool.get(current)
+            if not node:
+                print("[DEBUG] _search_layer_for_M_neighbors: ERROR - node is null for ID", current)
+                continue
+            print("[DEBUG] _search_layer_for_M_neighbors: Node retrieved successfully")
             
             if layer == 0:
                 # VECTORIZED NEIGHBOR PROCESSING - Major breakthrough optimization
+                print("[DEBUG] _search_layer_for_M_neighbors: Processing layer 0 connections")
                 var num_connections = node[].connections_l0_count
+                print("[DEBUG] _search_layer_for_M_neighbors: Number of connections =", num_connections)
                 var neighbor_batch = List[Int]()
                 
                 # Collect unvisited neighbors in batches
                 for i in range(num_connections):
+                    print("[DEBUG] _search_layer_for_M_neighbors: Processing connection", i, "of", num_connections)
                     var neighbor = node[].connections_l0[i]
-                    if neighbor < 0 or visited[neighbor]:
+                    print("[DEBUG] _search_layer_for_M_neighbors: Neighbor ID =", neighbor)
+                    if neighbor < 0:
+                        print("[DEBUG] _search_layer_for_M_neighbors: Skipping negative neighbor")
+                        continue
+                    if neighbor >= len(visited):
+                        print("[DEBUG] _search_layer_for_M_neighbors: ERROR - neighbor", neighbor, "out of bounds for visited array of size", len(visited))
+                        continue
+                    if visited[neighbor]:
                         continue
                     
                     neighbor_batch.append(neighbor)
+                    print("[DEBUG] _search_layer_for_M_neighbors: Added neighbor", neighbor, "to batch")
                     visited[neighbor] = True
                     
                     # Process batch when full or at end
                     if len(neighbor_batch) >= batch_size or i == num_connections - 1:
                         if len(neighbor_batch) > 0:
+                            print("[DEBUG] _search_layer_for_M_neighbors: Processing batch of size", len(neighbor_batch))
                             self._process_neighbor_batch_vectorized(
                                 query, neighbor_batch, candidates, W, ef
                             )
+                            print("[DEBUG] _search_layer_for_M_neighbors: Batch processed successfully")
                             neighbor_batch.clear()
             else:
                 # Process higher layer connections
@@ -2128,9 +2168,16 @@ struct HNSWIndex(Movable):
             return results
 
         # Binary quantize query for 40x speedup if enabled
+        # FIXED: Initialize with correct dimension to prevent segfaults
         var query_binary: BinaryQuantizedVector
         if self.use_binary_quantization:
-            query_binary = BinaryQuantizedVector(query, self.dimension)
+            query_binary = BinaryQuantizedVector(query, self.dimension)  # Real binary vector
+        else:
+            # Create dummy with correct dimension
+            var dummy_ptr = UnsafePointer[Float32].alloc(self.dimension)
+            for j in range(self.dimension):
+                dummy_ptr[j] = 0.0
+            query_binary = BinaryQuantizedVector(dummy_ptr, self.dimension)
 
         # HUB HIGHWAY OPTIMIZATION (2025 breakthrough) - Re-enabled after accuracy fix
         if self.use_flat_graph and len(self.hub_nodes) > 0:
