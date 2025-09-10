@@ -241,9 +241,10 @@ struct OptimizedStorage(Copyable, Movable):
                 # Process SIMD chunks
                 vectorize[simd_copy, SIMD_WIDTH](self.dimension)
         
-        # Process all batches in parallel
+        # Process all batches sequentially (parallel causes segfault in Mojo v25.4)
         var num_batches = (count + BATCH_SIZE - 1) // BATCH_SIZE
-        parallelize[process_batch](num_batches)
+        for batch_idx in range(num_batches):
+            process_batch(batch_idx)
         
         # Update metadata
         self.num_vectors += count
@@ -283,8 +284,9 @@ struct OptimizedStorage(Copyable, Movable):
             
             vectorize[simd_load, SIMD_WIDTH](self.dimension)
         
-        # Load all vectors in parallel
-        parallelize[load_vector](count)
+        # Load all vectors sequentially (parallel causes segfault in Mojo v25.4)
+        for i in range(count):
+            load_vector(i)
         
         return result
     
