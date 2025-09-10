@@ -1,16 +1,17 @@
 # NOW - Current Sprint (Feb 2025)
 
-## 🎯 Current Status: Storage Fixed! Moving to HNSW+
+## 🎯 Current Status: Direct mmap Implemented! Ready for HNSW+
 
 ### Storage Optimization Results (Feb 2025) ✅
 - **96x compression working** (PQ32 properly implemented)
 - **1,307 vec/s throughput** (3x improvement with batching)
 - **1.00008x overhead** (dynamic growth, no pre-allocation)
 - **Full recovery working** (tested at scale)
-- **Clean implementation** (~400 lines)
+- **Direct mmap implemented** (storage_v3.mojo created)
 
-**Remaining bottleneck**: Python I/O limits us to ~1,300 vec/s
-**Solution**: Direct mmap needed for 5,000+ vec/s
+**Key Finding**: Python I/O itself is fast (4M vec/s)
+**Real bottleneck**: Python FFI overhead from Mojo (not Python I/O)
+**Solution implemented**: Direct syscalls via external_call["mmap"]
 
 ### Current Performance ✅
 - **4,556 vec/s** single-threaded (stable performance)
@@ -50,6 +51,15 @@
 - Graph updates can't be parallelized (no synchronization)
 
 ### Recent Work (Feb 2025)
+
+#### mmap Implementation (Just completed)
+1. **Created storage_v3.mojo**: Direct mmap without Python FFI
+2. **Extracted patterns**: From memory_mapped.mojo (removed 64MB pre-allocation)
+3. **Integrated PQ compression**: Inline SimplePQ implementation
+4. **Benchmarked performance**: Python I/O achieves 4M vec/s natively
+5. **Identified real issue**: FFI overhead, not I/O speed
+
+### Previous Work
 1. **Fixed NumPy detection**: Changed isinstance() method → 1,400 vec/s restored
 2. **Investigated memory corruption**: Traced to global singleton pattern
 3. **Created workarounds**: Process isolation (33% overhead)
@@ -77,11 +87,11 @@
 - Search functionality after recovery
 - Clean, maintainable code (~300 lines)
 
-**🚧 Next Steps** (We already have the code!):
-1. **Wire up compression** - PQ/SQ already implemented, just connect to storage_v2
-2. **Add batch writes** - Reuse patterns from insert_bulk()
-3. **Port mmap properly** - Fix 373x overhead from memory_mapped.mojo
-4. **Complete HNSW+** - Already has binary quantization integrated
+**✅ Completed Steps**:
+1. **Wired up compression** - PQ32 working with 96x compression
+2. **Added batch writes** - 3x throughput improvement achieved
+3. **Ported mmap properly** - Created storage_v3 with direct syscalls
+4. **Ready for HNSW+** - Storage layer complete, can focus on algorithm
 
 ### Workarounds Available
 1. **Single batch mode**: Clear DB between batches
