@@ -61,12 +61,13 @@ struct GlobalDatabase(Movable):
             self.dimension = dimension
             self.hnsw_index = HNSWIndex(dimension, 10000)  # Start with reasonable capacity for testing
             
+            # TEMPORARILY DISABLE ALL OPTIMIZATIONS - TEST BASIC FUNCTIONALITY FIRST
             # Enable state-of-the-art optimizations
             # TEMPORARILY DISABLED: Testing if binary quantization causes memory corruption
             # self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
-            self.hnsw_index.use_flat_graph = True  # Hub Highway optimization
-            self.hnsw_index.use_smart_distance = True  # VSAG-style adaptive precision
-            self.hnsw_index.cache_friendly_layout = True  # Better memory access patterns
+            self.hnsw_index.use_flat_graph = False  # DISABLE Hub Highway optimization
+            self.hnsw_index.use_smart_distance = False  # DISABLE VSAG-style adaptive precision
+            self.hnsw_index.cache_friendly_layout = False  # DISABLE Better memory access patterns
             
             # All optimizations enabled by default
             

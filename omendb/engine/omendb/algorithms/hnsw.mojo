@@ -260,13 +260,15 @@ struct HNSWIndex(Movable):
         self.hub_threshold = 0.5  # Lower threshold for hub detection
         self.use_flat_graph = True  # Enable by default for high-D vectors
         
+        # TEMPORARILY DISABLED: Pre-initialize hub nodes 
         # CRITICAL FIX: Pre-initialize some hub nodes for immediate benefit
         # Research shows 5-10% of nodes naturally become hubs
         # We'll designate entry points as initial hubs
-        if capacity > 10:
-            # Designate first few nodes as hub candidates
-            for i in range(min(5, capacity // 20)):
-                self.hub_nodes.append(i)
+        # DISABLED FOR DEBUGGING: This might be causing crashes
+        # if capacity > 10:
+        #     # Designate first few nodes as hub candidates
+        #     for i in range(min(5, capacity // 20)):
+        #         self.hub_nodes.append(i)
         
         # VSAG-style optimizations
         self.use_smart_distance = True  # Adaptive precision switching
