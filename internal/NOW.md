@@ -52,14 +52,18 @@
 - Achievable: 10,000-15,000 vec/s
 - With GPU (2025+): 100,000+ vec/s
 
-### Next Practical Steps
-1. **Immediate**: Use server mode for production (handles state properly)
-2. **Short-term**: Optimize single-thread performance further
-   - Implement prefetching when available
-   - Cache-aligned data structures
-   - Memory layout optimization (SoA vs AoS)
-3. **Medium-term**: Wait for Mojo improvements (Q1-Q2 2025)
-4. **Long-term**: GPU support when available (Q3 2025)
+### Next Immediate Focus: Custom Storage Engine
+
+**Decision**: Build state-of-the-art storage engine in pure Mojo
+- Mojo has all needed primitives (atomics, locks, async, mmap via FFI)
+- Competitors moved away from generic databases to custom engines
+- Performance target: Match/exceed Qdrant's custom storage
+
+**Architecture**:
+1. **WAL**: Append-only log for crash recovery
+2. **Block Storage**: Fixed-size blocks with free bitmask
+3. **Memory Mapping**: Zero-copy access via mmap FFI
+4. **Concurrent Access**: Atomic ops + SpinLocks for thread safety
 
 ### Workarounds Available
 1. **Single batch mode**: Clear DB between batches

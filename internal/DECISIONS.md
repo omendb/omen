@@ -742,6 +742,59 @@ When Mojo v26.x releases with static data support
 
 ---
 
+## 2025-02-09 | Custom Storage Engine Over External Databases
+
+### Context
+Need persistence for OmenDB. Evaluated SQLite, Apache Arrow, and custom implementation options.
+
+### Research Findings
+- **Qdrant**: Abandoned RocksDB → built custom "Gridstore" due to latency spikes
+- **Weaviate**: Custom LSM-tree gave 100%+ performance improvement
+- **Chroma**: Uses ClickHouse OLAP database
+- **Milvus**: Distributed with etcd + object storage
+
+### Options Evaluated
+1. **SQLite + Arrow**
+   - ❌ SQLite bottlenecks at ~1M records
+   - ❌ Arrow memory-hungry, append-only
+   - ❌ Complex 3-system architecture
+   
+2. **Existing storage (RocksDB/LevelDB)**
+   - ❌ Qdrant proved compaction causes latency spikes
+   - ❌ General-purpose = not optimized for vectors
+   
+3. **Custom Mojo Engine**
+   - ✅ Zero FFI overhead
+   - ✅ SIMD-optimized operations
+   - ✅ Full control over performance
+   - ❌ More implementation work
+
+### Decision
+**Build custom storage engine in pure Mojo**
+
+### Architecture
+```
+- WAL for crash recovery (append-only log)
+- Fixed-size block allocation with free bitmask
+- Memory-mapped vectors via mmap FFI
+- Concurrent access with Atomic ops + SpinLocks
+```
+
+### Rationale
+- Competitors proved custom engines necessary for state-of-the-art
+- Mojo has all primitives (atomics, locks, async, mmap)
+- Avoid FFI overhead of external databases
+- Full control over optimizations
+
+### Consequences
+- ✅ State-of-the-art performance potential
+- ✅ Zero-copy access patterns
+- ✅ Thread-safe concurrent operations
+- ❌ More complex than using SQLite
+- ❌ Need to implement WAL ourselves
+
+---
+
 ## 2025-02-09 | STAY WITH MOJO DESPITE GLOBAL STATE LIMITATIONS
 
 ### Context
