@@ -22,9 +22,10 @@ from omendb.algorithms.hnsw import HNSWIndex
 from omendb.core.sparse_map import SparseMap
 from omendb.core.reverse_sparse_map import ReverseSparseMap
 from omendb.core.sparse_metadata_map import SparseMetadataMap
-# Storage imports - NOW USING storage_v3 for 10x performance!
+# Storage imports - Direct mmap storage for 10x performance!
 # from omendb.storage_v2 import VectorStorage  # OLD: 1,307 vec/s
-from omendb.storage_v3_wrapper import VectorStorage  # NEW: 10,000+ vec/s target
+# from omendb.storage_v3_wrapper import VectorStorage  # WRAPPER: 2,776 vec/s
+from omendb.storage_direct import DirectStorage as VectorStorage  # DIRECT: 10,000+ vec/s target
 
 # =============================================================================
 # GLOBAL STORAGE WITH HNSW+ BACKEND
