@@ -711,15 +711,12 @@ struct HNSWIndex(Movable):
         return self.vectors.offset(idx * self.dimension)
     
     fn insert(mut self, vector: UnsafePointer[Float32]) -> Int:
-        """Insert vector into index with dynamic growth."""
-        # Check if we need to grow (80% capacity threshold)
-        if self.size >= Int(self.capacity * 0.8):
-            # Calculate new capacity with 1.5x growth factor
-            var new_capacity = Int(self.capacity * 1.5)
-            # Ensure minimum growth of 1000 vectors
-            if new_capacity < self.capacity + 1000:
-                new_capacity = self.capacity + 1000
-            self.resize(new_capacity)
+        """Insert vector into index with static capacity (resize disabled for stability)."""
+        # TEMPORARY: Disable resize to avoid complex NodePool migration bugs
+        # Check capacity limit
+        if self.size >= self.capacity:
+            print("HNSW capacity limit reached:", self.capacity)
+            return -1  # Capacity exhausted
         
         # Allocate node from pool
         var level = self.get_random_level()

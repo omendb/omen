@@ -42,10 +42,12 @@ struct GlobalDatabase(Movable):
     var next_numeric_id: Int
     
     fn __init__(out self):
-        self.hnsw_index = HNSWIndex(128, 5000)  # Dynamic growth: start small, grow as needed
+        # DON'T create HNSWIndex here - wait for initialize() with correct dimension
+        # This prevents double allocation and memory corruption
+        self.hnsw_index = HNSWIndex(32, 1)  # Minimal placeholder (32 divisible by PQ requirements), will be replaced
         self.id_mapper = SparseMap()
         self.reverse_id_mapper = ReverseSparseMap()
-        self.metadata_storage = SparseMetadataMap(5000)  # Large capacity for production
+        self.metadata_storage = SparseMetadataMap(50000)  # Large capacity for production
         self.dimension = 0
         self.initialized = False
         self.next_numeric_id = 0
@@ -57,7 +59,7 @@ struct GlobalDatabase(Movable):
         
         if not self.initialized:
             self.dimension = dimension
-            self.hnsw_index = HNSWIndex(dimension, 50000)  # FIXED: Memory corruption resolved
+            self.hnsw_index = HNSWIndex(dimension, 10000)  # Start with reasonable capacity for testing
             
             # Enable state-of-the-art optimizations
             # TEMPORARILY DISABLED: Testing if binary quantization causes memory corruption
