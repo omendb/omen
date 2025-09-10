@@ -45,7 +45,7 @@ alias max_M0 = M * 2  # Layer 0 has more connections
 alias ef_construction = 200
 alias ef_search = 500  # Much higher for better recall with random vectors
 alias ml = 1.0 / log(2.0)
-alias MAX_LAYERS = 16  # Maximum hierarchical layers
+alias MAX_LAYERS = 2  # TEMPORARILY REDUCED - Maximum hierarchical layers (was 16)
 
 # =============================================================================
 # Fixed-Size Node with Pre-allocated Connections
@@ -1614,8 +1614,12 @@ struct HNSWIndex(Movable):
                 vector, curr_nearest, 1, lc
             )
         
-        # Create binary quantized version for search (reuse if already created)
-        var vector_binary = BinaryQuantizedVector(vector, self.dimension)
+        # TEMPORARILY DISABLED: Create binary quantized version for search (reuse if already created)
+        # Use dummy binary quantization that shouldn't cause crashes
+        var dummy_data = UnsafePointer[Float32].alloc(1)
+        dummy_data[0] = 0.0
+        var vector_binary = BinaryQuantizedVector(dummy_data, 1)
+        dummy_data.free()
         
         # Insert at all layers from level to 0
         for lc in range(level, -1, -1):
@@ -1667,8 +1671,12 @@ struct HNSWIndex(Movable):
                 vector, curr_nearest, 1, lc
             )
         
-        # Create binary quantized version of the new vector for search
-        var vector_binary = BinaryQuantizedVector(vector, self.dimension)
+        # TEMPORARILY DISABLED: Create binary quantized version of the new vector for search
+        # Use dummy binary quantization that shouldn't cause crashes
+        var dummy_data = UnsafePointer[Float32].alloc(1)
+        dummy_data[0] = 0.0
+        var vector_binary = BinaryQuantizedVector(dummy_data, 1)
+        dummy_data.free()
         
         # Insert at all layers from level to 0
         for lc in range(level, -1, -1):

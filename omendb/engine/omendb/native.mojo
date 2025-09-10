@@ -59,7 +59,7 @@ struct GlobalDatabase(Movable):
         
         if not self.initialized:
             self.dimension = dimension
-            self.hnsw_index = HNSWIndex(dimension, 10000)  # Start with reasonable capacity for testing
+            self.hnsw_index = HNSWIndex(dimension, 1000)  # Conservative capacity for stability testing
             
             # TEMPORARILY DISABLE ALL OPTIMIZATIONS - TEST BASIC FUNCTIONALITY FIRST
             # Enable state-of-the-art optimizations
