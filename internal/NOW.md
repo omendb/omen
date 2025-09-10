@@ -2,12 +2,15 @@
 
 ## 🎯 Current Status: Storage Fixed! Moving to HNSW+
 
-### Storage V2 Success ✅
-- **1.00008x overhead** (was 373x in broken implementation!)
-- **Accurate memory reporting** (was always 64 bytes)
-- **Full recovery working** (10K vectors tested)
-- **~300 lines** of clean code (was 1,168 lines)
-- **440 vec/s throughput** (needs batching for 5,000+ vec/s)
+### Storage Optimization Results (Feb 2025) ✅
+- **96x compression working** (PQ32 properly implemented)
+- **1,307 vec/s throughput** (3x improvement with batching)
+- **1.00008x overhead** (dynamic growth, no pre-allocation)
+- **Full recovery working** (tested at scale)
+- **Clean implementation** (~400 lines)
+
+**Remaining bottleneck**: Python I/O limits us to ~1,300 vec/s
+**Solution**: Direct mmap needed for 5,000+ vec/s
 
 ### Current Performance ✅
 - **4,556 vec/s** single-threaded (stable performance)
