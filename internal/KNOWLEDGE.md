@@ -637,10 +637,26 @@ Rewrote in ~300 lines with:
 - **Recovery**: 41K vec/s
 - **Scale**: Works well up to 100K vectors
 
-### Optimization Roadmap
-1. **Batch writes**: 5x speedup (group 1000 vectors)
-2. **Direct mmap**: 10x speedup (bypass Python)
-3. **Compression**: 4-8x reduction (PQ/SQ from DiskANN)
+### Optimization Findings (Feb 2025)
+1. **Batch writes**: Only 1.02x speedup (Python I/O still bottleneck)
+2. **PQ Compression**: Works but needs re-compression after training
+3. **Real bottleneck**: Python FFI overhead, need direct mmap
+
+### What Actually Works
+- Storage V2: 1.00008x overhead (perfect!)
+- Recovery: 41K vec/s (excellent)
+- Compression: PQ code exists and works
+- Throughput: Stuck at ~440 vec/s due to Python I/O
+
+### Next Priority
+**Must implement direct mmap** to bypass Python:
+```mojo
+# Current bottleneck:
+self.data_file.write(bytes)  # Python FFI overhead
+
+# Solution from memory_mapped.mojo:
+external_call["mmap"](...)  # Direct system call
+```
 
 ### Key Pattern
 ```mojo
