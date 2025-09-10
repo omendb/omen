@@ -65,9 +65,9 @@ struct GlobalDatabase(Movable):
             # Enable state-of-the-art optimizations
             # DISABLED: Binary quantization causes segfault at 5 vectors (works at 2-3)
             # self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
-            self.hnsw_index.use_flat_graph = False  # DISABLE Hub Highway optimization
-            self.hnsw_index.use_smart_distance = False  # DISABLE VSAG-style adaptive precision
-            self.hnsw_index.cache_friendly_layout = False  # DISABLE Better memory access patterns
+            self.hnsw_index.use_flat_graph = True   # ENABLE Hub Highway optimization
+            self.hnsw_index.use_smart_distance = True   # ENABLE VSAG-style adaptive precision
+            self.hnsw_index.cache_friendly_layout = True   # ENABLE Better memory access patterns
             
             # All optimizations enabled by default
             
