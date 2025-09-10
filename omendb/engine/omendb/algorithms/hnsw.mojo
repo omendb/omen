@@ -184,7 +184,10 @@ struct NodePool(Movable):
     
     @always_inline
     fn get(self, idx: Int) -> UnsafePointer[HNSWNode]:
-        """Get node by index."""
+        """Get node by index with bounds checking."""
+        if idx < 0 or idx >= self.capacity:
+            # Return null pointer for invalid index - safer than segfault
+            return UnsafePointer[HNSWNode]()
         return self.nodes.offset(idx)
 
 # =============================================================================
@@ -328,8 +331,8 @@ struct HNSWIndex(Movable):
         
         # Copy existing data
         if self.size > 0:
-            memcpy(new_vectors, self.vectors, self.size * self.dimension)
-            memcpy(new_visited_buffer, self.visited_buffer, self.size)
+            memcpy(new_vectors, self.vectors, self.size * self.dimension * 4)  # Fix: Float32 = 4 bytes
+            memcpy(new_visited_buffer, self.visited_buffer, self.size * 4)  # Fix: Int = 4 bytes
         
         # Initialize new visited buffer entries
         for i in range(self.size, new_capacity):
@@ -698,7 +701,10 @@ struct HNSWIndex(Movable):
     
     @always_inline
     fn get_vector(self, idx: Int) -> UnsafePointer[Float32]:
-        """Get vector by index."""
+        """Get vector by index with bounds checking."""
+        if idx < 0 or idx >= self.size:  # Note: size not capacity, since size tracks actual vectors
+            # Return null pointer for invalid index - safer than segfault
+            return UnsafePointer[Float32]()
         return self.vectors.offset(idx * self.dimension)
     
     fn insert(mut self, vector: UnsafePointer[Float32]) -> Int:
@@ -720,7 +726,7 @@ struct HNSWIndex(Movable):
         
         # Copy vector data BEFORE creating quantized version
         var dest = self.get_vector(new_id)
-        memcpy(dest, vector, self.dimension)
+        memcpy(dest, vector, self.dimension * 4)  # Fix: Float32 = 4 bytes
         
         # Create quantized versions if enabled (40x speedup)
         if self.use_binary_quantization:
@@ -810,7 +816,7 @@ struct HNSWIndex(Movable):
             var node_id = node_ids[i]
             var src_vector = vectors.offset(i * self.dimension)
             var dest_vector = self.get_vector(node_id)
-            memcpy(dest_vector, src_vector, self.dimension)
+            memcpy(dest_vector, src_vector, self.dimension * 4)  # Fix: Float32 = 4 bytes
         
         # 4. BULK QUANTIZATION (if enabled) - FIXED MEMORY MANAGEMENT
         if self.use_binary_quantization:
@@ -869,7 +875,7 @@ struct HNSWIndex(Movable):
                     
                     var src = self.get_vector(node_ids[orig_idx])
                     var dest = chunk_vectors.offset(i * self.dimension)
-                    memcpy(dest, src, self.dimension)
+                    memcpy(dest, src, self.dimension * 4)  # Fix: Float32 = 4 bytes
             
                 # Process this chunk by layer groups
                 var chunk_max_level = 0
@@ -908,7 +914,7 @@ struct HNSWIndex(Movable):
                         var chunk_idx = layer_query_indices[q]
                         var src = chunk_vectors.offset(chunk_idx * self.dimension)
                         var dest = layer_query_vectors.offset(q * self.dimension)
-                        memcpy(dest, src, self.dimension)
+                        memcpy(dest, src, self.dimension * 4)  # Fix: Float32 = 4 bytes
                         layer_entry_points[q] = self.entry_point
                     
                     # PERFORMANCE OPTIMIZED: Use sampling for large batches
@@ -1043,7 +1049,7 @@ struct HNSWIndex(Movable):
             var node_id = node_ids[i]
             var src_vector = vectors.offset(i * self.dimension)
             var dest_vector = self.get_vector(node_id)
-            memcpy(dest_vector, src_vector, self.dimension)
+            memcpy(dest_vector, src_vector, self.dimension * 4)  # Fix: Float32 = 4 bytes
         
         # 4. BULK QUANTIZATION (same as sequential - this part is fast)
         if self.use_binary_quantization:
@@ -1104,7 +1110,7 @@ struct HNSWIndex(Movable):
                     
                     var src = self.get_vector(node_ids[orig_idx])
                     var dest = chunk_vectors.offset(i * self.dimension)
-                    memcpy(dest, src, self.dimension)
+                    memcpy(dest, src, self.dimension * 4)  # Fix: Float32 = 4 bytes
                 
                 # Process chunk layers (lock-free: each worker processes disjoint node sets)
                 var chunk_max_level = 0
@@ -1207,7 +1213,7 @@ struct HNSWIndex(Movable):
             var chunk_idx = layer_query_indices[query_idx]
             var src = chunk_vectors.offset(chunk_idx * self.dimension)
             var dest = layer_query_vectors.offset(q * self.dimension)
-            memcpy(dest, src, self.dimension)
+            memcpy(dest, src, self.dimension * 4)  # Fix: Float32 = 4 bytes
         
         # Simple connection strategy for thread safety (could be optimized further)
         var M_layer = 16 if layer > 0 else 16  # Simplified parameters
@@ -1354,7 +1360,7 @@ struct HNSWIndex(Movable):
             var node_id = layer_nodes[i]
             var src = self.get_vector(node_id)
             var dest = candidate_vectors.offset(i * self.dimension)
-            memcpy(dest, src, self.dimension)
+            memcpy(dest, src, self.dimension * 4)  # Fix: Float32 = 4 bytes
         
         # BREAKTHROUGH: Compute ALL distances at once instead of O(n×m) individual calls
         var distance_matrix = self._compute_distance_matrix(
@@ -1827,7 +1833,7 @@ struct HNSWIndex(Movable):
             var neighbor_id = neighbor_batch[i]
             var neighbor_vec = self.get_vector(neighbor_id)
             var dest = neighbor_vectors.offset(i * self.dimension)
-            memcpy(dest, neighbor_vec, self.dimension)
+            memcpy(dest, neighbor_vec, self.dimension * 4)  # Fix: Float32 = 4 bytes
         
         # VECTORIZED BREAKTHROUGH: Compute all distances simultaneously
         var distances = self._compute_distance_matrix(

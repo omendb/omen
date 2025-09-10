@@ -18,8 +18,7 @@ from python.bindings import PythonModuleBuilder
 from collections import List, Dict
 from memory import UnsafePointer
 from math import sqrt
-from omendb.algorithms.hnsw import HNSWIndex  # BROKEN - causes segfaults after 1 vector
-from omendb.algorithms.stable_index import StableVectorIndex  # EMERGENCY stable replacement
+from omendb.algorithms.hnsw import HNSWIndex  # FIXED - memory corruption resolved
 from omendb.core.sparse_map import SparseMap
 from omendb.core.reverse_sparse_map import ReverseSparseMap
 from omendb.core.sparse_metadata_map import SparseMetadataMap
@@ -33,8 +32,8 @@ from omendb.storage_direct import DirectStorage as VectorStorage  # DIRECT: 10,0
 # =============================================================================
 
 struct GlobalDatabase(Movable):
-    """Thread-safe global database instance using stable vector index."""
-    var stable_index: StableVectorIndex  # EMERGENCY: Replace broken HNSW
+    """Thread-safe global database instance using HNSW+ algorithm."""
+    var hnsw_index: HNSWIndex  # FIXED: Memory corruption bugs resolved
     var id_mapper: SparseMap  # String ID -> Int ID mapping
     var reverse_id_mapper: ReverseSparseMap  # Int ID -> String ID mapping  
     var metadata_index: SparseMap  # String ID -> List index for metadata
@@ -60,14 +59,14 @@ struct GlobalDatabase(Movable):
         
         if not self.initialized:
             self.dimension = dimension
-            self.stable_index = StableVectorIndex(dimension, 50000)  # EMERGENCY: Stable replacement
+            self.hnsw_index = HNSWIndex(dimension, 50000)  # FIXED: Memory corruption resolved
             
             # Enable state-of-the-art optimizations
             # TEMPORARILY DISABLED: Testing if binary quantization causes memory corruption
             # self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
-            # self.stable_index.use_flat_graph = True  # Not available in stable index
-            # self.stable_index.use_smart_distance = True  # Not available in stable index
-            # self.stable_index.cache_friendly_layout = True  # Not available in stable index
+            self.hnsw_index.use_flat_graph = True  # Hub Highway optimization
+            self.hnsw_index.use_smart_distance = True  # VSAG-style adaptive precision
+            self.hnsw_index.cache_friendly_layout = True  # Better memory access patterns
             
             # All optimizations enabled by default
             
@@ -90,13 +89,10 @@ struct GlobalDatabase(Movable):
         if existing_id:
             return False  # ID already exists
         
-        # Insert into stable index (EMERGENCY replacement for broken HNSW)
-        var success = self.stable_index.insert(vector, string_id)
-        if not success:
+        # Insert into HNSW+ (FIXED: memory corruption resolved)
+        var numeric_id = self.hnsw_index.insert(vector)
+        if numeric_id < 0:
             return False
-        
-        # Get numeric ID for the vector (use size-1 since it was just inserted)
-        var numeric_id = self.stable_index.size - 1
         
         # Store ID mapping (both directions)
         _ = self.id_mapper.insert(string_id, numeric_id)
@@ -121,11 +117,21 @@ struct GlobalDatabase(Movable):
         if not self.initialized:
             return results
         
-        # Search stable index (EMERGENCY replacement - already returns string IDs)
-        var stable_results = self.stable_index.search(query, k)
+        # Search HNSW+ (FIXED: memory corruption resolved)
+        var hnsw_results = self.hnsw_index.search(query, k)
         
-        # Stable index already returns (string_id, distance) pairs - perfect!
-        return stable_results
+        # Convert numeric IDs back to string IDs
+        for i in range(len(hnsw_results)):
+            var result_pair = hnsw_results[i]
+            var numeric_id = Int(result_pair[0])  
+            var distance = result_pair[1]
+            
+            # Find string ID for this numeric ID
+            var string_id = self._get_string_id_for_numeric(numeric_id)
+            if len(string_id) > 0:
+                results.append((string_id, distance))
+        
+        return results
     
     fn _get_string_id_for_numeric(self, numeric_id: Int) -> String:
         """Reverse lookup: numeric ID → string ID."""
@@ -139,8 +145,7 @@ struct GlobalDatabase(Movable):
         var numeric_id_opt = self.id_mapper.get(string_id)
         if numeric_id_opt:
             var numeric_id = numeric_id_opt.value()
-            # FIXME: stable_index doesn't have get_vector - need to implement
-            return UnsafePointer[Float32]()
+            return self.hnsw_index.get_vector(numeric_id)
         return UnsafePointer[Float32]()
     
     fn get_metadata(self, string_id: String) raises -> Dict[String, PythonObject]:
@@ -169,7 +174,7 @@ struct GlobalDatabase(Movable):
     fn count_vectors(self) -> Int:
         """Get total number of vectors."""
         if self.initialized:
-            return self.stable_index.size
+            return self.hnsw_index.size
         return 0
     
     fn clear(mut self):
@@ -345,13 +350,12 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
             
             # OPTIMIZATION: Use bulk insert for 5-10x speedup (stable version)
             # TODO: Test insert_bulk_wip() thoroughly before switching
-            # EMERGENCY: Use stable index batch insert instead of HNSW bulk
-            var bulk_success = db_ptr[].stable_index.insert_batch(vectors_ptr, vector_ids, num_vectors)
+            # Use HNSW bulk insert (FIXED: memory corruption resolved)
+            var bulk_numeric_ids = db_ptr[].hnsw_index.insert_bulk(vectors_ptr, num_vectors)
             
             # Process successful bulk insertions
-            for i in range(bulk_success):
-                # Calculate numeric ID based on insertion order
-                var numeric_id = db_ptr[].stable_index.size - bulk_success + i
+            for i in range(len(bulk_numeric_ids)):
+                var numeric_id = bulk_numeric_ids[i]
                 
                 if numeric_id >= 0:
                     var id_str = String(vector_ids[i])

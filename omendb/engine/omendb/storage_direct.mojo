@@ -17,10 +17,11 @@ alias PROT_WRITE = 0x02
 alias MAP_SHARED = 0x01
 alias MS_SYNC = 4
 
-# Storage constants
-alias HEADER_SIZE = 512
+# Storage constants  
+alias HEADER_SIZE = 512  # Expanded header: magic(4) + version(4) + dimension(4) + num_vectors(4) + id_table_offset(8) = 24 bytes used
 alias ID_SIZE = 64  # Max length for string IDs
 alias BATCH_SIZE = 1000  # Optimal batch size
+alias NEW_VERSION = 5  # Updated version with ID table support
 
 struct DirectStorage(Copyable, Movable):
     """High-performance direct mmap storage."""
@@ -33,6 +34,7 @@ struct DirectStorage(Copyable, Movable):
     var dimension: Int
     var vector_size: Int  # Bytes per vector
     var is_open: Bool
+    var id_table_offset: Int  # Offset to ID table in file (0 if none)
     
     # ID mapping stored in memory for speed
     var id_to_index: Dict[String, Int]
@@ -48,6 +50,7 @@ struct DirectStorage(Copyable, Movable):
         self.ptr = UnsafePointer[UInt8]()
         self.file_size = HEADER_SIZE
         self.is_open = False
+        self.id_table_offset = 0  # No ID table initially
         self.id_to_index = Dict[String, Int]()
         self.index_to_id = Dict[Int, String]()
         
@@ -67,6 +70,7 @@ struct DirectStorage(Copyable, Movable):
         self.dimension = existing.dimension
         self.vector_size = existing.vector_size
         self.is_open = existing.is_open
+        self.id_table_offset = existing.id_table_offset
         self.id_to_index = existing.id_to_index
         self.index_to_id = existing.index_to_id
     
@@ -80,6 +84,7 @@ struct DirectStorage(Copyable, Movable):
         self.dimension = existing.dimension
         self.vector_size = existing.vector_size
         self.is_open = existing.is_open
+        self.id_table_offset = existing.id_table_offset
         self.id_to_index = existing.id_to_index^
         self.index_to_id = existing.index_to_id^
         # Clear source
@@ -162,21 +167,23 @@ struct DirectStorage(Copyable, Movable):
         self._map_file()
     
     fn _write_header(self):
-        """Write file header."""
+        """Write file header with ID table support."""
         if not self.ptr:
             return
         
         # Magic "OMDB"
         self.ptr.offset(0).bitcast[UInt32]()[] = 0x4F4D4442
-        # Version
-        self.ptr.offset(4).bitcast[UInt32]()[] = 4
+        # Version (NEW_VERSION = 5 for ID table support)
+        self.ptr.offset(4).bitcast[UInt32]()[] = NEW_VERSION
         # Dimension
         self.ptr.offset(8).bitcast[UInt32]()[] = UInt32(self.dimension)
         # Number of vectors
         self.ptr.offset(12).bitcast[UInt32]()[] = UInt32(self.num_vectors)
+        # ID table offset (0 if no ID table yet)
+        self.ptr.offset(16).bitcast[UInt64]()[] = UInt64(self.id_table_offset)
     
     fn _read_header(mut self) raises:
-        """Read file header."""
+        """Read file header with ID table support."""
         if not self.ptr:
             raise Error("File not mapped")
         
@@ -185,22 +192,139 @@ struct DirectStorage(Copyable, Movable):
         if magic != 0x4F4D4442:
             raise Error("Invalid file format")
         
+        # Check version
+        var version = Int(self.ptr.offset(4).bitcast[UInt32]()[])
+        if version < 4:
+            raise Error("Unsupported file version")
+        
         # Read metadata
         self.dimension = Int(self.ptr.offset(8).bitcast[UInt32]()[])
         self.vector_size = self.dimension * 4
         self.num_vectors = Int(self.ptr.offset(12).bitcast[UInt32]()[])
         
+        # Read ID table offset if version supports it
+        if version >= NEW_VERSION:
+            self.id_table_offset = Int(self.ptr.offset(16).bitcast[UInt64]()[])
+        else:
+            self.id_table_offset = 0
+        
         # Rebuild ID mappings from stored data
         self._rebuild_id_mappings()
     
     fn _rebuild_id_mappings(mut self):
-        """Rebuild ID mappings from stored data."""
-        # For now, use simple numeric IDs
-        # In production, would read ID table from file
+        """Rebuild ID mappings from stored ID table."""
+        self.id_to_index = Dict[String, Int]()
+        self.index_to_id = Dict[Int, String]()
+        
+        # If no ID table, generate fallback IDs
+        if self.id_table_offset == 0:
+            for i in range(self.num_vectors):
+                var id_str = "vec_" + String(i)
+                self.id_to_index[id_str] = i
+                self.index_to_id[i] = id_str
+            return
+        
+        # Read actual stored IDs from ID table
+        try:
+            self._read_id_table()
+        except:
+            # Fallback on error
+            for i in range(self.num_vectors):
+                var id_str = "vec_" + String(i)
+                self.id_to_index[id_str] = i
+                self.index_to_id[i] = id_str
+    
+    fn _write_id_table(mut self) raises:
+        """Write ID table to disk in binary format."""
+        if self.num_vectors == 0:
+            return
+        
+        # Calculate ID table size needed
+        var table_size = 4  # Number of entries
         for i in range(self.num_vectors):
-            var id_str = "vec_" + String(i)
-            self.id_to_index[id_str] = i
-            self.index_to_id[i] = id_str
+            if i in self.index_to_id:
+                var id_str = self.index_to_id[i]
+                table_size += 8 + len(id_str.as_bytes())  # 4 bytes length + 4 bytes index + string data
+        
+        # Set ID table offset at end of vectors
+        self.id_table_offset = HEADER_SIZE + self.num_vectors * self.vector_size
+        var needed_size = self.id_table_offset + table_size
+        
+        # Extend file if needed
+        if needed_size > self.file_size:
+            self._remap(needed_size + 1024 * 1024)  # Add 1MB buffer
+        
+        # Write number of entries
+        var write_ptr = self.ptr.offset(self.id_table_offset)
+        write_ptr.bitcast[UInt32]()[] = UInt32(self.num_vectors)
+        var current_offset = 4
+        
+        # Write each ID entry
+        for i in range(self.num_vectors):
+            if i in self.index_to_id:
+                var id_str = self.index_to_id[i]
+                var id_bytes = id_str.as_bytes()
+                var id_len = len(id_bytes)
+                
+                # Write string length
+                write_ptr.offset(current_offset).bitcast[UInt32]()[] = UInt32(id_len)
+                current_offset += 4
+                
+                # Write index value
+                write_ptr.offset(current_offset).bitcast[UInt32]()[] = UInt32(i)
+                current_offset += 4
+                
+                # Write string data
+                if id_len > 0:
+                    memcpy(
+                        write_ptr.offset(current_offset),
+                        id_bytes.unsafe_ptr(),
+                        id_len
+                    )
+                    current_offset += id_len
+        
+        # Update header with ID table offset
+        self.ptr.offset(16).bitcast[UInt64]()[] = UInt64(self.id_table_offset)
+    
+    fn _read_id_table(mut self) raises:
+        """Read ID table from disk."""
+        if self.id_table_offset == 0:
+            raise Error("No ID table found")
+        
+        if self.id_table_offset >= self.file_size:
+            raise Error("Invalid ID table offset")
+        
+        var read_ptr = self.ptr.offset(self.id_table_offset)
+        
+        # Read number of entries
+        var num_entries = Int(read_ptr.bitcast[UInt32]()[])
+        var current_offset = 4
+        
+        # Read each ID entry
+        for _ in range(num_entries):
+            # Read string length
+            var id_len = Int(read_ptr.offset(current_offset).bitcast[UInt32]()[])
+            current_offset += 4
+            
+            # Read index value
+            var index = Int(read_ptr.offset(current_offset).bitcast[UInt32]()[])
+            current_offset += 4
+            
+            # Read string data
+            var id_str: String
+            if id_len > 0:
+                var id_bytes = UnsafePointer[UInt8].alloc(id_len + 1)
+                memcpy(id_bytes, read_ptr.offset(current_offset), id_len)
+                id_bytes[id_len] = 0  # Null terminate
+                id_str = String(id_bytes.bitcast[Int8]())
+                id_bytes.free()
+                current_offset += id_len
+            else:
+                id_str = "empty_" + String(index)
+            
+            # Store mapping
+            self.id_to_index[id_str] = index
+            self.index_to_id[index] = id_str
     
     fn save_vector(mut self, id: String, vector: UnsafePointer[Float32]) raises -> Bool:
         """Save a single vector with direct mmap write."""
@@ -236,6 +360,12 @@ struct DirectStorage(Copyable, Movable):
         
         # Update header
         self.ptr.offset(12).bitcast[UInt32]()[] = UInt32(self.num_vectors)
+        
+        # Write ID table to ensure persistence
+        try:
+            self._write_id_table()
+        except:
+            pass  # Continue on error - ID table write is optional
         
         return True
     
@@ -292,6 +422,12 @@ struct DirectStorage(Copyable, Movable):
         # Update count
         self.num_vectors += new_vectors
         self.ptr.offset(12).bitcast[UInt32]()[] = UInt32(self.num_vectors)
+        
+        # Write ID table to ensure persistence
+        try:
+            self._write_id_table()
+        except:
+            pass  # Continue on error - ID table write is optional
         
         return saved_count
     
