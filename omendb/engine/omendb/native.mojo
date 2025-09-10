@@ -683,10 +683,11 @@ fn checkpoint() raises -> PythonObject:
         var string_id_opt = db[].reverse_id_mapper.get(i)
         if string_id_opt:
             var string_id = string_id_opt.value()
-            # Get vector from HNSW index
-            var vector = db[].hnsw_index.get_vector(i)
-            if vector:
-                var success = storage.save_vector(string_id, vector)
+            # Get vector pointer from HNSW index
+            # Vectors are stored at offset idx * dimension in the vectors array
+            if i < db[].hnsw_index.size:
+                var vector_ptr = db[].hnsw_index.vectors.offset(i * db[].dimension)
+                var success = storage.save_vector(string_id, vector_ptr)
                 if success:
                     saved_count += 1
     
