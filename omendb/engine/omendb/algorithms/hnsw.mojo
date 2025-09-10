@@ -717,28 +717,21 @@ struct HNSWIndex(Movable):
     
     fn insert(mut self, vector: UnsafePointer[Float32]) -> Int:
         """Insert vector into index with static capacity (resize disabled for stability)."""
-        print("[DEBUG] insert() called, size:", self.size, "capacity:", self.capacity)
-        # TEMPORARY: Disable resize to avoid complex NodePool migration bugs
         # Check capacity limit
         if self.size >= self.capacity:
-            print("HNSW capacity limit reached:", self.capacity)
             return -1  # Capacity exhausted
         
         # Allocate node from pool
         var level = self.get_random_level()
-        print("[DEBUG] Allocating node with level:", level)
         var new_id = self.node_pool.allocate(level)
-        print("[DEBUG] Allocated node ID:", new_id)
         if new_id < 0:
             return -1  # Pool exhausted
         
         # Copy vector data BEFORE creating quantized version
         var dest = self.get_vector(new_id)
-        print("[DEBUG] Got dest pointer, copying vector data")
         if not dest:
             return -1  # get_vector returned null - invalid index
         memcpy(dest, vector, self.dimension * 4)  # Fix: Float32 = 4 bytes
-        print("[DEBUG] Vector data copied")
         
         # Create quantized versions if enabled (40x speedup)
         if self.use_binary_quantization:
@@ -757,15 +750,12 @@ struct HNSWIndex(Movable):
         
         # First node becomes entry point
         if self.size == 0:
-            print("[DEBUG] First node, setting as entry point")
             self.entry_point = new_id
             self.size = 1
             return new_id
         
         # Find nearest neighbors at each layer
-        print("[DEBUG] Calling _insert_node for new_id:", new_id)
         self._insert_node(new_id, level, dest)  # Use copied vector
-        print("[DEBUG] _insert_node completed")
         
         # Update entry point if this node has higher level
         var entry_level = self.node_pool.get(self.entry_point)[].level
@@ -1671,7 +1661,6 @@ struct HNSWIndex(Movable):
     
     fn _insert_node(mut self, new_id: Int, level: Int, vector: UnsafePointer[Float32]):
         """Insert node into graph structure with proper M-neighbor connectivity."""
-        print("[DEBUG] _insert_node START - new_id:", new_id, "level:", level)
         # Increment version instead of clearing (O(1) vs O(n)!)
         self.visited_version += 1
         if self.visited_version > 1000000000:  # Prevent overflow
@@ -1682,26 +1671,18 @@ struct HNSWIndex(Movable):
         
         # Search for neighbors starting from entry point
         var curr_nearest = self.entry_point
-        print("[DEBUG] Entry point:", self.entry_point)
         
         # Search from top layer to target layer
-        print("[DEBUG] Getting entry point vector")
         var entry_vec = self.get_vector(self.entry_point)
-        print("[DEBUG] Computing distance")
         var curr_dist = self.distance(vector, entry_vec)
-        print("[DEBUG] Distance computed:", curr_dist)
         
-        print("[DEBUG] Getting entry point level")
         var entry_node = self.node_pool.get(self.entry_point)
         var entry_level = entry_node[].level
-        print("[DEBUG] Entry level:", entry_level, "target level:", level)
         
         for lc in range(entry_level, level, -1):
-            print("[DEBUG] Searching layer:", lc)
             curr_nearest = self._search_layer_simple(
                 vector, curr_nearest, 1, lc
             )
-            print("[DEBUG] Layer search complete")
         
         # FIXED: Only create binary vector when binary quantization is enabled
         var vector_binary: BinaryQuantizedVector
@@ -1716,17 +1697,13 @@ struct HNSWIndex(Movable):
         
         # Insert at all layers from level to 0
         for lc in range(level, -1, -1):
-            print("[DEBUG] Processing layer:", lc)
             # Find M nearest neighbors at this layer
             var M_layer = max_M if lc > 0 else max_M0
-            print("[DEBUG] M_layer:", M_layer)
             
             # CRITICAL FIX: Find M neighbors, not just 1
-            print("[DEBUG] Calling _search_layer_for_M_neighbors")
             var neighbors = self._search_layer_for_M_neighbors(
                 vector, curr_nearest, M_layer, lc, vector_binary
             )
-            print("[DEBUG] Found", len(neighbors), "neighbors")
             
             # Connect to all M neighbors found
             var new_node = self.node_pool.get(new_id)
@@ -1755,14 +1732,16 @@ struct HNSWIndex(Movable):
         query_binary: BinaryQuantizedVector
     ) -> List[Int]:
         """Search for M nearest neighbors at specific layer using beam search with binary quantization."""
-        print("[DEBUG] _search_layer_for_M_neighbors: entry=", entry, "M=", M, "layer=", layer)
+        # Removed debug output for cleaner testing
         
-        var candidates = List[Tuple[Float32, Int]]()  # (distance, node_id)
-        var W = List[Tuple[Float32, Int]]()  # Result set
+        # FIXED: Replace tuple-based approach with parallel arrays to eliminate memory corruption
+        var candidate_distances = List[Float32]()  # Distances
+        var candidate_node_ids = List[Int]()       # Corresponding node IDs
+        var W_distances = List[Float32]()          # Result distances
+        var W_node_ids = List[Int]()               # Result node IDs
         
         # Use version-based visited tracking (no allocation needed!)
         self.visited_version += 1
-        print("[DEBUG] visited_version:", self.visited_version)
         if self.visited_version > 1000000000:  # Prevent overflow
             self.visited_version = 1
             # Only reset on overflow (very rare)
@@ -1770,18 +1749,13 @@ struct HNSWIndex(Movable):
                 self.visited_buffer[i] = 0
         
         # Add entry point - use binary quantization for 40x speedup
-        print("[DEBUG] Computing distance for entry:", entry)
-        print("[DEBUG] visited_size:", self.visited_size)
         var entry_dist = self.distance_to_query(query_binary, entry, query)
-        print("[DEBUG] Entry distance computed:", entry_dist)
-        candidates.append((entry_dist, entry))
-        print("[DEBUG] Adding to W: dist=", entry_dist, "node=", entry)
-        W.append((entry_dist, entry))
+        candidate_distances.append(entry_dist)
+        candidate_node_ids.append(entry)
+        W_distances.append(entry_dist)
+        W_node_ids.append(entry)
         if entry < self.visited_size:
-            print("[DEBUG] Marking entry as visited")
             self.visited_buffer[entry] = self.visited_version  # Mark as visited
-        else:
-            print("[DEBUG] WARNING: entry", entry, "out of bounds for visited_buffer size", self.visited_size)
         
         # APPROXIMATE GRAPH CONSTRUCTION - Sampling-based breakthrough optimization
         # Adaptive exploration: less thorough during bulk, exact when needed
@@ -1790,75 +1764,54 @@ struct HNSWIndex(Movable):
         var batch_size = 32  # Process candidates in vectorized batches
         var max_samples = ef // 2  # APPROXIMATION: Sample subset of candidates
         
-        print("[DEBUG] Starting search loop, ef:", ef, "max_samples:", max_samples)
-        while len(candidates) > 0 and checked < ef and checked < max_samples:
-            print("[DEBUG] Loop iteration, candidates:", len(candidates), "checked:", checked)
+        while len(candidate_distances) > 0 and checked < ef and checked < max_samples:
             # Get closest unprocessed candidate
             var min_idx = 0
-            var min_dist = candidates[0][0]
-            for i in range(1, len(candidates)):
-                if candidates[i][0] < min_dist:
+            var min_dist = candidate_distances[0]
+            for i in range(1, len(candidate_distances)):
+                if candidate_distances[i] < min_dist:
                     min_idx = i
-                    min_dist = candidates[i][0]
+                    min_dist = candidate_distances[i]
             
-            var current_pair = candidates[min_idx]
-            var current_dist = current_pair[0]
-            var current = current_pair[1]
-            print("[DEBUG] Processing node:", current, "dist:", current_dist)
+            var current_dist = candidate_distances[min_idx]
+            var current = candidate_node_ids[min_idx]
             
             # Remove from candidates (swap with last and pop)
-            candidates[min_idx] = candidates[len(candidates) - 1]
-            _ = candidates.pop()
-            
-            # Removed early termination - was preventing discovery of exact matches
-            # Previous condition: if current_dist > furthest_dist: break
-            # This was stopping exploration of nodes that might lead to perfect matches
+            candidate_distances[min_idx] = candidate_distances[len(candidate_distances) - 1]
+            candidate_node_ids[min_idx] = candidate_node_ids[len(candidate_node_ids) - 1]
+            _ = candidate_distances.pop()
+            _ = candidate_node_ids.pop()
             
             # Check neighbors at this layer
-            print("[DEBUG] Getting node from pool for current:", current)
             var node = self.node_pool.get(current)
             if not node:
-                print("[DEBUG] Node is null!")
                 continue
-            print("[DEBUG] Got valid node")
             
             if layer == 0:
-                print("[DEBUG] Processing layer 0")
                 # VECTORIZED NEIGHBOR PROCESSING - Major breakthrough optimization
                 var num_connections = node[].connections_l0_count
-                print("[DEBUG] Node has", num_connections, "connections at layer 0")
                 var neighbor_batch = List[Int]()
                 
                 # Collect unvisited neighbors in batches
                 for i in range(num_connections):
-                    print("[DEBUG] Checking connection", i)
                     var neighbor = node[].connections_l0[i]
-                    print("[DEBUG] Neighbor:", neighbor)
                     if neighbor < 0:
-                        print("[DEBUG] Skipping negative neighbor")
                         continue
                     if neighbor >= self.visited_size:
-                        print("[DEBUG] Skipping out-of-bounds neighbor")
                         continue
                     if self.visited_buffer[neighbor] == self.visited_version:
-                        print("[DEBUG] Skipping already visited neighbor")
                         continue
                     
-                    print("[DEBUG] Adding neighbor to batch")
                     neighbor_batch.append(neighbor)
                     self.visited_buffer[neighbor] = self.visited_version
                     
                     # Process batch when full or at end
                     if len(neighbor_batch) >= batch_size or i == num_connections - 1:
-                        print("[DEBUG] Batch processing check, batch size:", len(neighbor_batch))
                         if len(neighbor_batch) > 0:
-                            print("[DEBUG] Processing neighbor batch")
                             self._process_neighbor_batch_vectorized(
-                                query, neighbor_batch, candidates, W, ef
+                                query, neighbor_batch, candidate_distances, candidate_node_ids, W_distances, W_node_ids, ef
                             )
                             neighbor_batch.clear()
-                            print("[DEBUG] Batch processed")
-                print("[DEBUG] Done with layer 0 connections")
             else:
                 # Process higher layer connections
                 if layer <= node[].level and layer > 0:
@@ -1876,52 +1829,56 @@ struct HNSWIndex(Movable):
                         var dist = self.distance_to_query(query_binary, neighbor, query)
                         
                         # Add to candidates and larger W pool
-                        if len(W) < ef:
-                            candidates.append((dist, neighbor))
-                            W.append((dist, neighbor))
+                        if len(W_distances) < ef:
+                            candidate_distances.append(dist)
+                            candidate_node_ids.append(neighbor)
+                            W_distances.append(dist)
+                            W_node_ids.append(neighbor)
                         else:
                             # Replace furthest in W if this is closer
                             var max_idx = 0
-                            var max_dist = W[0][0]
-                            for j in range(1, len(W)):
-                                if W[j][0] > max_dist:
+                            var max_dist = W_distances[0]
+                            for j in range(1, len(W_distances)):
+                                if W_distances[j] > max_dist:
                                     max_idx = j
-                                    max_dist = W[j][0]
+                                    max_dist = W_distances[j]
                             if dist < max_dist:
-                                W[max_idx] = (dist, neighbor)
-                                candidates.append((dist, neighbor))
+                                W_distances[max_idx] = dist
+                                W_node_ids[max_idx] = neighbor
+                                candidate_distances.append(dist)
+                                candidate_node_ids.append(neighbor)
             
             checked += 1
-            print("[DEBUG] Incremented checked to:", checked)
         
-        # Sort W by distance
-        print("[DEBUG] Sorting W, size:", len(W))
-        print("[DEBUG] W contents before sort:")
-        for i in range(len(W)):
-            print("[DEBUG]   W[", i, "] = (", W[i][0], ",", W[i][1], ")")
-        for i in range(len(W)):
-            for j in range(len(W) - 1 - i):
-                if W[j][0] > W[j+1][0]:
-                    var temp = W[j]
-                    W[j] = W[j+1]
-                    W[j+1] = temp
-        print("[DEBUG] Sorting complete")
-        print("[DEBUG] W contents after sort:")
-        for i in range(len(W)):
-            print("[DEBUG]   W[", i, "] = (", W[i][0], ",", W[i][1], ")")
+        # Sort W by distance using parallel arrays
+        # Bubble sort parallel arrays by distance
+        for i in range(len(W_distances)):
+            for j in range(len(W_distances) - 1 - i):
+                if W_distances[j] > W_distances[j+1]:
+                    # Swap distances
+                    var temp_dist = W_distances[j]
+                    W_distances[j] = W_distances[j+1]
+                    W_distances[j+1] = temp_dist
+                    # Swap corresponding node IDs
+                    var temp_node = W_node_ids[j]
+                    W_node_ids[j] = W_node_ids[j+1]
+                    W_node_ids[j+1] = temp_node
         
-        # Return best M candidates using heuristic selection
-        print("[DEBUG] Calling _select_neighbors_heuristic, M:", M, "W size:", len(W))
-        var selected = self._select_neighbors_heuristic(query, W, M)
-        print("[DEBUG] Selected", len(selected), "neighbors")
-        return selected
+        # Return best M candidates using simplified selection
+        var result = List[Int]()
+        var max_candidates = min(M, len(W_distances))
+        for i in range(max_candidates):
+            result.append(W_node_ids[i])
+        return result
     
     fn _process_neighbor_batch_vectorized(
         mut self,
         query: UnsafePointer[Float32],
         neighbor_batch: List[Int],
-        mut candidates: List[Tuple[Float32, Int]], 
-        mut W: List[Tuple[Float32, Int]],
+        mut candidate_distances: List[Float32],
+        mut candidate_node_ids: List[Int],
+        mut W_distances: List[Float32],
+        mut W_node_ids: List[Int],
         ef: Int
     ):
         """Process a batch of neighbors using vectorized distance computation.
@@ -1953,21 +1910,25 @@ struct HNSWIndex(Movable):
             var dist = distances[i]  # Pre-computed distance
             
             # Add to candidates and W pool
-            if len(W) < ef:
-                candidates.append((dist, neighbor_id))
-                W.append((dist, neighbor_id))
+            if len(W_distances) < ef:
+                candidate_distances.append(dist)
+                candidate_node_ids.append(neighbor_id)
+                W_distances.append(dist)
+                W_node_ids.append(neighbor_id)
             else:
                 # Replace furthest in W if this is closer
                 var max_idx = 0
-                var max_dist = W[0][0]
-                for j in range(1, len(W)):
-                    if W[j][0] > max_dist:
+                var max_dist = W_distances[0]
+                for j in range(1, len(W_distances)):
+                    if W_distances[j] > max_dist:
                         max_idx = j
-                        max_dist = W[j][0]
+                        max_dist = W_distances[j]
                 
                 if dist < max_dist:
-                    W[max_idx] = (dist, neighbor_id)
-                    candidates.append((dist, neighbor_id))
+                    W_distances[max_idx] = dist
+                    W_node_ids[max_idx] = neighbor_id
+                    candidate_distances.append(dist)
+                    candidate_node_ids.append(neighbor_id)
         
         # Clean up
         neighbor_vectors.free()
