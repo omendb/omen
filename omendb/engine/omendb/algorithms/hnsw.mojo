@@ -103,6 +103,8 @@ struct HNSWNode(Copyable, Movable):
             
             # Store in flattened array: layer * max_M + index
             var idx = layer * max_M + count
+            if idx >= max_M * MAX_LAYERS:
+                return False  # Safety check - prevent buffer overflow
             self.connections_higher[idx] = neighbor
             self.connections_count[layer] = count + 1
             return True
@@ -702,7 +704,7 @@ struct HNSWIndex(Movable):
     @always_inline
     fn get_vector(self, idx: Int) -> UnsafePointer[Float32]:
         """Get vector by index with bounds checking."""
-        if idx < 0 or idx >= self.size:  # Note: size not capacity, since size tracks actual vectors
+        if idx < 0 or idx >= self.capacity:  # Fix: check capacity not size for valid vector slots
             # Return null pointer for invalid index - safer than segfault
             return UnsafePointer[Float32]()
         return self.vectors.offset(idx * self.dimension)
@@ -726,6 +728,8 @@ struct HNSWIndex(Movable):
         
         # Copy vector data BEFORE creating quantized version
         var dest = self.get_vector(new_id)
+        if not dest:
+            return -1  # get_vector returned null - invalid index
         memcpy(dest, vector, self.dimension * 4)  # Fix: Float32 = 4 bytes
         
         # Create quantized versions if enabled (40x speedup)
@@ -784,11 +788,15 @@ struct HNSWIndex(Movable):
         var needed_capacity = self.size + n_vectors
         var optimal_capacity = Int(needed_capacity * 2.0)  # 2x buffer for future growth
         
-        # Only resize if we actually need more capacity
+        # TEMPORARILY DISABLE RESIZE - complex resize has memory issues
+        # Only resize if we actually need more capacity  
         if needed_capacity > self.capacity:
-            # Single aggressive resize - much faster than multiple small ones
-            self.resize(optimal_capacity)
-            print("HNSW bulk pre-allocation:", self.capacity, "-> ", optimal_capacity, "for", n_vectors, "vectors")
+            print("⚠️  BULK INSERT: Need more capacity but resize disabled")
+            print("   Current capacity:", self.capacity, "Need:", needed_capacity)
+            # TODO: Fix resize() function memory management issues
+            # self.resize(optimal_capacity)
+            # For now, return partial results if we hit capacity
+            return results  # Empty list - will cause bulk insert to fail gracefully
         
         # 2. BULK NODE ALLOCATION
         var start_id = self.size

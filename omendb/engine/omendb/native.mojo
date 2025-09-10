@@ -814,7 +814,7 @@ fn PyInit_native() -> PythonObject:
         # module.def_function[get_metadata]("get_metadata")
         
         # Statistics and info
-        # module.def_function[get_stats]("get_stats")
+        module.def_function[get_stats]("get_stats")
         module.def_function[get_memory_stats]("get_memory_stats")
         module.def_function[count]("count")
         
