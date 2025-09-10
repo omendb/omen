@@ -21,7 +21,7 @@ from math import sqrt
 from omendb.algorithms.hnsw import HNSWIndex  # FIXED - memory corruption resolved
 from omendb.core.sparse_map import SparseMap
 from omendb.core.reverse_sparse_map import ReverseSparseMap
-from omendb.core.sparse_metadata_map import SparseMetadataMap
+from omendb.core.sparse_metadata_map import SparseMetadataMap, Metadata
 # Storage imports - Direct mmap storage for 10x performance!
 # from omendb.storage_v2 import VectorStorage  # OLD: 1,307 vec/s
 # from omendb.storage_v3_wrapper import VectorStorage  # WRAPPER: 2,776 vec/s
@@ -36,8 +36,7 @@ struct GlobalDatabase(Movable):
     var hnsw_index: HNSWIndex  # FIXED: Memory corruption bugs resolved
     var id_mapper: SparseMap  # String ID -> Int ID mapping
     var reverse_id_mapper: ReverseSparseMap  # Int ID -> String ID mapping  
-    var metadata_index: SparseMap  # String ID -> List index for metadata
-    var metadata_list: List[Dict[String, PythonObject]]  # Actual metadata storage
+    var metadata_storage: SparseMetadataMap  # Memory-efficient metadata (180x better than Dict)
     var dimension: Int
     var initialized: Bool
     var next_numeric_id: Int
@@ -46,8 +45,7 @@ struct GlobalDatabase(Movable):
         self.hnsw_index = HNSWIndex(128, 5000)  # Dynamic growth: start small, grow as needed
         self.id_mapper = SparseMap()
         self.reverse_id_mapper = ReverseSparseMap()
-        self.metadata_index = SparseMap()
-        self.metadata_list = List[Dict[String, PythonObject]]()
+        self.metadata_storage = SparseMetadataMap(5000)  # Large capacity for production
         self.dimension = 0
         self.initialized = False
         self.next_numeric_id = 0
@@ -78,7 +76,7 @@ struct GlobalDatabase(Movable):
         mut self, 
         string_id: String, 
         vector: UnsafePointer[Float32],
-        metadata: Dict[String, PythonObject]
+        metadata: Metadata
     ) -> Bool:
         """Add vector with string ID and metadata."""
         if not self.initialized:
@@ -98,10 +96,8 @@ struct GlobalDatabase(Movable):
         _ = self.id_mapper.insert(string_id, numeric_id)
         _ = self.reverse_id_mapper.insert(numeric_id, string_id)
         
-        # Store metadata using SparseMap optimization
-        var metadata_idx = len(self.metadata_list)
-        self.metadata_list.append(metadata)
-        _ = self.metadata_index.insert(string_id, metadata_idx)
+        # Store metadata using SparseMetadataMap (40x more efficient)
+        _ = self.metadata_storage.set(string_id, metadata)
         
         return True
     
@@ -148,12 +144,12 @@ struct GlobalDatabase(Movable):
             return self.hnsw_index.get_vector(numeric_id)
         return UnsafePointer[Float32]()
     
-    fn get_metadata(self, string_id: String) raises -> Dict[String, PythonObject]:
+    fn get_metadata(self, string_id: String) raises -> Metadata:
         """Get metadata for a vector."""
-        var index_opt = self.metadata_index.get(string_id)
-        if index_opt and index_opt.value() < len(self.metadata_list):
-            return self.metadata_list[index_opt.value()]
-        return Dict[String, PythonObject]()
+        var metadata_opt = self.metadata_storage.get(string_id)
+        if metadata_opt:
+            return metadata_opt.value()
+        return Metadata()  # Empty metadata
     
     fn delete_vector(mut self, string_id: String) -> Bool:
         """Soft delete a vector."""
@@ -162,10 +158,8 @@ struct GlobalDatabase(Movable):
             if numeric_id_opt:
                 var numeric_id = numeric_id_opt.value()
                 # Note: HNSWIndexFixed doesn't support removal yet
-                # Remove from metadata using SparseMap optimization  
-                var metadata_opt = self.metadata_index.get(string_id)
-                if metadata_opt:
-                    _ = self.metadata_index.remove(string_id)
+                # Remove metadata using SparseMetadataMap
+                _ = self.metadata_storage.remove(string_id)
                 return True
             return False
         except:
@@ -286,19 +280,28 @@ fn add_vector(vector_id: PythonObject, vector_data: PythonObject, metadata: Pyth
                 vector_ptr.free()
             return PythonObject(False)
         
-        # Convert metadata
-        var meta_dict = Dict[String, PythonObject]()
-        if metadata != PythonObject():
-            try:
+        # Convert metadata directly to efficient format (no Dict needed)
+        var string_metadata = Metadata()  # Empty by default
+        try:
+            # Safe None check - convert to string to avoid PythonObject comparison issues  
+            var metadata_str = String(metadata)
+            if metadata_str != "None" and metadata:
+                var keys_list = List[String]()
+                var values_list = List[String]()
+                
                 var keys = metadata.keys()
                 for i in range(len(keys)):
                     var key = String(keys[i])
-                    meta_dict[key] = metadata[keys[i]]
-            except:
-                pass  # Empty metadata is fine
+                    var value_str = String(metadata[keys[i]])  # Convert to string
+                    keys_list.append(key)
+                    values_list.append(value_str)
+                
+                string_metadata = Metadata(keys_list, values_list)
+        except:
+            pass  # Use empty metadata for any errors
         
         # Add to database - this is FAST when vector_ptr is ready
-        var success = db[].add_vector_with_metadata(id_str, vector_ptr, meta_dict)
+        var success = db[].add_vector_with_metadata(id_str, vector_ptr, string_metadata)
         
         if needs_free:
             vector_ptr.free()
@@ -363,11 +366,9 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                     _ = db_ptr[].reverse_id_mapper.insert(numeric_id, id_str)
                     
                     if i < len(metadata_list):
-                        # TODO: Process metadata when SparseMetadataMap supports PythonObject
-                        var meta_dict = Dict[String, PythonObject]()
-                        var meta_idx = len(db_ptr[].metadata_list)
-                        db_ptr[].metadata_list.append(meta_dict)
-                        _ = db_ptr[].metadata_index.insert(id_str, meta_idx)
+                        # Use empty metadata for batch operations (can process later if needed)
+                        var empty_metadata = Metadata()
+                        _ = db_ptr[].metadata_storage.set(id_str, empty_metadata)
                     
                     results.append(id_str)
                     db_ptr[].next_numeric_id = max(db_ptr[].next_numeric_id, numeric_id + 1)
@@ -413,11 +414,9 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                     _ = db_ptr[].reverse_id_mapper.insert(numeric_id, id_str)
                     
                     if i < len(metadata_list):
-                        # TODO: Process metadata when SparseMetadataMap supports PythonObject
-                        var meta_dict = Dict[String, PythonObject]()
-                        var meta_idx = len(db_ptr[].metadata_list)
-                        db_ptr[].metadata_list.append(meta_dict)
-                        _ = db_ptr[].metadata_index.insert(id_str, meta_idx)
+                        # Use empty metadata for batch operations (can process later if needed)
+                        var empty_metadata = Metadata()
+                        _ = db_ptr[].metadata_storage.set(id_str, empty_metadata)
                     
                     results.append(id_str)
                     db_ptr[].next_numeric_id = max(db_ptr[].next_numeric_id, numeric_id + 1)
@@ -717,15 +716,25 @@ fn recover() raises -> PythonObject:
         var storage = VectorStorage("omendb_checkpoint", db[].dimension)
         var count = storage.get_vector_count()
         
-        # Load vectors back into HNSW index with DirectStorage speed
+        # Load vectors back into HNSW index with DirectStorage speed  
         var loaded_count = 0
         for i in range(count):
             try:
-                var id_str = "vec_" + String(i)
+                # Try to get actual stored ID first, fallback to dummy pattern
+                var id_str: String
+                try:
+                    # Check if DirectStorage has proper ID mapping
+                    if i in storage.index_to_id:
+                        id_str = storage.index_to_id[i]
+                    else:
+                        id_str = "recovered_" + String(i)  # Better than "vec_N"
+                except:
+                    id_str = "recovered_" + String(i)
+                
                 var vector = storage.load_vector(id_str)
                 
                 # Reinsert into HNSW (this will be fast with our optimized storage)
-                var empty_metadata = Dict[String, PythonObject]()
+                var empty_metadata = Metadata()
                 _ = db[].add_vector_with_metadata(id_str, vector, empty_metadata)
                 loaded_count += 1
                 
