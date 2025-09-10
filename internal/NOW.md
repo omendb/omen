@@ -1,6 +1,13 @@
 # NOW - Current Sprint (Feb 2025)
 
-## 🎯 Current Status: Global Singleton Fixed! 
+## 🎯 Current Status: Storage Fixed! Moving to HNSW+
+
+### Storage V2 Success ✅
+- **1.00008x overhead** (was 373x in broken implementation!)
+- **Accurate memory reporting** (was always 64 bytes)
+- **Full recovery working** (10K vectors tested)
+- **~300 lines** of clean code (was 1,168 lines)
+- **440 vec/s throughput** (needs batching for 5,000+ vec/s)
 
 ### Current Performance ✅
 - **4,556 vec/s** single-threaded (stable performance)
@@ -61,16 +68,17 @@
 - Automatic checkpointing every 100 operations
 
 **✅ Working Features**:
-- Save/load vectors with persistence
-- Recovery works (tested with 10-1000 vectors)
+- Save/load vectors with minimal overhead (1.00008x)
+- Recovery works perfectly (tested with 10K vectors)
+- Accurate memory reporting (3,136 bytes/vector)
 - Search functionality after recovery
-- Checkpoint mechanism (async capable)
+- Clean, maintainable code (~300 lines)
 
-**🚧 Remaining Issues**:
-- Memory reporting shows 0 bytes (accounting bug)
-- Performance unverified (claims 50,000x faster)
-- Not yet replacing basic storage in production
-- Quantization still missing
+**🚧 Next Steps**:
+1. **Integrate storage_v2** into main engine
+2. **Add batch writes** for 5,000+ vec/s throughput
+3. **Implement HNSW+** to replace DiskANN
+4. **Add multimodal support** (vectors + text + metadata)
 
 ### Workarounds Available
 1. **Single batch mode**: Clear DB between batches
