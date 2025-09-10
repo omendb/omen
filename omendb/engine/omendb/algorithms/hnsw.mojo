@@ -1962,11 +1962,10 @@ struct HNSWIndex(Movable):
                 continue
             
             if layer == 0:
-                # VECTORIZED NEIGHBOR PROCESSING - Major breakthrough optimization
+                # SIMPLIFIED LAYER 0 PROCESSING - Disable NeighborBatch to debug memory corruption
                 var num_connections = node[].connections_l0_count
-                var neighbor_batch = NeighborBatch(batch_size)  # Fixed-capacity hot path optimization
                 
-                # Collect unvisited neighbors in batches
+                # Process neighbors one-by-one like higher layers (stable approach)
                 for i in range(num_connections):
                     var neighbor = node[].connections_l0[i]
                     if neighbor < 0:
@@ -1976,16 +1975,17 @@ struct HNSWIndex(Movable):
                     if self.visited_buffer[neighbor] == self.visited_version:
                         continue
                     
-                    _ = neighbor_batch.append(neighbor)
                     self.visited_buffer[neighbor] = self.visited_version
+                    var dist = self.distance_to_query(query_binary, neighbor, query)
                     
-                    # Process batch when full or at end
-                    if neighbor_batch.len() >= batch_size or i == num_connections - 1:
-                        if neighbor_batch.len() > 0:
-                            self._process_neighbor_batch_vectorized(
-                                query, neighbor_batch, candidates, W, ef
-                            )
-                            neighbor_batch.clear()
+                    # Add to candidates and larger W pool
+                    if W.len() < ef:
+                        _ = candidates.add(dist, neighbor)
+                        _ = W.add(dist, neighbor)
+                    else:
+                        # Replace furthest in W if this is closer
+                        if W.replace_furthest(dist, neighbor):
+                            _ = candidates.add(dist, neighbor)
             else:
                 # Process higher layer connections
                 if layer <= node[].level and layer > 0:
