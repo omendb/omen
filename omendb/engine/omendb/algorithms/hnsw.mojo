@@ -960,15 +960,13 @@ struct HNSWIndex(Movable):
         var needed_capacity = self.size + n_vectors
         var optimal_capacity = Int(needed_capacity * 2.0)  # 2x buffer for future growth
         
-        # TEMPORARILY DISABLE RESIZE - complex resize has memory issues
+        # ENABLE RESIZE - fix the segfault at 1,500 vectors
         # Only resize if we actually need more capacity  
         if needed_capacity > self.capacity:
-            print("⚠️  BULK INSERT: Need more capacity but resize disabled")
+            print("🔧 BULK INSERT: Auto-resizing capacity")
             print("   Current capacity:", self.capacity, "Need:", needed_capacity)
-            # TODO: Fix resize() function memory management issues
-            # self.resize(optimal_capacity)
-            # For now, return partial results if we hit capacity
-            return results  # Empty list - will cause bulk insert to fail gracefully
+            self.resize(optimal_capacity)
+            print("✅ Resized to:", self.capacity)
         
         # 2. BULK NODE ALLOCATION
         var start_id = self.size
@@ -1173,6 +1171,9 @@ struct HNSWIndex(Movable):
         if self.use_flat_graph:
             for i in range(actual_count):
                 self._update_hubs_during_insertion(node_ids[i])
+        
+        # 9. CRITICAL: Update index size to reflect inserted vectors
+        self.size += actual_count
         
         return results
     
