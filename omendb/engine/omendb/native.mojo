@@ -282,6 +282,32 @@ fn add_vector(vector_id: PythonObject, vector_data: PythonObject, metadata: Pyth
                 vector_ptr[i] = vector_list[i]
             needs_free = True
         
+        # CRITICAL VALIDATION: Input validation for bulletproof operation
+        if dimension == 0:
+            if needs_free:
+                vector_ptr.free()
+            return PythonObject(False)  # Reject empty vectors
+        
+        # Validate for infinite/NaN values (critical for data integrity)
+        for i in range(dimension):
+            var val = vector_ptr[i]
+            # NaN check: NaN != NaN
+            if val != val:
+                if needs_free:
+                    vector_ptr.free()
+                return PythonObject(False)  # Reject NaN values
+            # Proper infinity check: compare with Float32 max value
+            if val > Float32(3.4028234663852886e+38) or val < Float32(-3.4028234663852886e+38):
+                if needs_free:
+                    vector_ptr.free()
+                return PythonObject(False)  # Reject infinite values
+        
+        # Validate dimension consistency with existing database
+        if db[].initialized and db[].dimension != dimension:
+            if needs_free:
+                vector_ptr.free()
+            return PythonObject(False)  # Reject dimension mismatch
+        
         # Initialize database if needed  
         if not db[].initialize(dimension):
             if needs_free:
@@ -351,6 +377,37 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
             var ctypes = vectors_f32.ctypes
             var data_ptr = ctypes.data
             vectors_ptr = data_ptr.unsafe_get_as_pointer[DType.float32]()
+            
+            # CRITICAL VALIDATION: Input validation for NumPy fast path
+            if dimension == 0:
+                print("❌ VALIDATION: Empty vectors rejected in NumPy fast path")
+                return python.list()  # Return empty list
+            
+            # Validate for NaN/infinite values in the contiguous array
+            var validation_count = 0
+            for i in range(num_vectors * dimension):
+                var val = vectors_ptr[i]
+                validation_count += 1
+                
+                # More robust NaN check: multiple methods  
+                var is_nan = not (val >= 0.0 or val < 0.0)  # NaN is neither >= 0 nor < 0
+                var is_inf_pos = val > Float32(3.4028234663852886e+38)
+                var is_inf_neg = val < Float32(-3.4028234663852886e+38)
+                var is_inf = is_inf_pos or is_inf_neg
+                
+                
+                
+                if is_nan:
+                    print("❌ VALIDATION: NaN detected in NumPy array at position", i, "value:", val)
+                    return python.list()  # Return empty list
+                if is_inf:
+                    print("❌ VALIDATION: Infinite value detected in NumPy array at position", i, "value:", val)
+                    return python.list()  # Return empty list
+            
+            # Validate dimension consistency with existing database
+            if db_ptr[].initialized and db_ptr[].dimension != dimension:
+                print("❌ VALIDATION: Dimension mismatch in NumPy array - expected", db_ptr[].dimension, "got", dimension)
+                return python.list()  # Return empty list
             
             # Zero-copy mode active (silent now that it's working)
             
@@ -435,12 +492,29 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 var py_vector = vectors[i]
                 var vector_size = Int(len(py_vector))
                 
-                # Initialize DB on first vector
+                # CRITICAL VALIDATION: Same validation as add_vector() for bulletproof operation
+                if vector_size == 0:
+                    print("❌ VALIDATION: Rejecting empty vector at index", i)
+                    continue  # Skip empty vectors in batch
+                
+                # Initialize DB on first vector, but validate dimension consistency for all
                 if i == 0:
-                    dimension = vector_size
-                    if not db_ptr[].initialized:
+                    if db_ptr[].initialized:
+                        # Database already initialized - validate against existing dimension
+                        dimension = db_ptr[].dimension
+                        if vector_size != dimension:
+                            print("❌ VALIDATION: First vector dimension mismatch - expected", dimension, "got", vector_size)
+                            continue
+                    else:
+                        # Database not initialized - use this vector's dimension
+                        dimension = vector_size
                         if db_ptr[].initialize(dimension):
                             pass  # Database initialized
+                else:
+                    # Subsequent vectors must match first vector's dimension
+                    if vector_size != dimension:
+                        print("❌ VALIDATION: Dimension mismatch at index", i, "expected", dimension, "got", vector_size)
+                        continue  # Skip mismatched vectors in batch
                 
                 # BREAKTHROUGH: Zero-copy NumPy detection like add_vector()
                 var is_numpy = python.hasattr(py_vector, "ctypes")
@@ -468,6 +542,28 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                     for j in range(vector_size):
                         vector_data[j] = Float32(Float64(py_vector[j]))
                     needs_free = True
+                
+                # CRITICAL VALIDATION: Check for NaN/infinite values
+                var has_invalid_values = False
+                for j in range(vector_size):
+                    var val = vector_data[j]
+                    
+                    
+                    # Better NaN check: NaN is neither >= 0 nor < 0
+                    if not (val >= 0.0 or val < 0.0):
+                        print("❌ VALIDATION: NaN detected at index", i, "dimension", j)
+                        has_invalid_values = True
+                        break
+                    # Proper infinity check: compare with Float32 max value
+                    if val > Float32(3.4028234663852886e+38) or val < Float32(-3.4028234663852886e+38):
+                        print("❌ VALIDATION: Infinite value detected at index", i, "dimension", j)
+                        has_invalid_values = True
+                        break
+                
+                if has_invalid_values:
+                    if needs_free:
+                        vector_data.free()
+                    continue  # Skip invalid vectors in batch
                 
                 # Insert directly into HNSW
                 var numeric_id = db_ptr[].hnsw_index.insert(vector_data)
