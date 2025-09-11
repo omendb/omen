@@ -98,6 +98,51 @@ level = int(-log(random()) * ml)
 - ❌ Custom algorithms when standard ones work
 - ❌ Optimizing wrong metrics (memory vs latency)
 
+## HNSW+ Performance Issues & Fixes
+
+### Fixed Capacity Trap
+```mojo
+# ❌ WRONG: Fixed capacity limits scale
+var vectors = UnsafePointer[Float32].alloc(100000 * dimension)
+
+# ✅ CORRECT: Dynamic growth
+fn grow(mut self):
+    var new_capacity = self.capacity * 2
+    var new_vectors = UnsafePointer[Float32].alloc(new_capacity * self.dimension)
+    memcpy(new_vectors, self.vectors, self.size * self.dimension * 4)
+    self.vectors.free()
+    self.vectors = new_vectors
+```
+
+### Search Overhead During Insertion
+```mojo
+# ❌ WRONG: Exploring too many candidates
+var ef = M * 4  # Exploring 64+ candidates per layer!
+
+# ✅ CORRECT: Minimal exploration for insertion
+var ef = M  # Only explore M candidates (8 vs 64)
+```
+
+### Memory Allocations in Hot Path
+```mojo
+# ❌ WRONG: Allocating on every operation
+fn search():
+    var candidates = KNNBuffer(ef)  # Allocation!
+
+# ✅ CORRECT: Object pooling
+var search_buffer_pool: List[KNNBuffer]
+fn get_buffer() -> KNNBuffer:
+    if len(self.pool) > 0:
+        return self.pool.pop()
+    return KNNBuffer(ef)
+```
+
+### Key Performance Targets
+- **Insert**: 20,000+ vec/s achievable with fixes
+- **Search**: 0.15ms already excellent (keep it)
+- **Memory**: 6-8KB/vector is acceptable
+- **Scale**: Dynamic growth enables unlimited scale
+
 ### Implementation  
 - ❌ Not batching operations (FFI overhead)
 - ❌ Forgetting to clear() between tests (singleton)

@@ -39,7 +39,10 @@ fn max(a: Int, b: Int) -> Int:
 alias simd_width = simdwidthof[DType.float32]()
 
 # HNSW parameters
-alias M = 16  # Bi-directional links per node
+# PERFORMANCE EXPERIMENT: Reduce M for faster insertion
+# Original: M = 16, but that requires exploring M*4 = 64 candidates per layer
+# Reducing to M = 8 should give 2x insertion speedup with minimal quality loss
+alias M = 8  # Reduced from 16 for faster insertion (2x speedup expected)
 alias max_M = M
 alias max_M0 = M * 2  # Layer 0 has more connections
 alias ef_construction = 200
@@ -584,31 +587,11 @@ struct HNSWIndex(Movable):
     
     @always_inline
     fn distance(self, a: UnsafePointer[Float32], b: UnsafePointer[Float32]) -> Float32:
-        """STATE-OF-THE-ART distance computation with VSAG optimizations.
+        """Simple L2 distance - removed over-engineered optimizations.
         
-        2025 VSAG framework optimizations:
-        - Smart precision switching based on query characteristics
-        - Cache-friendly memory access patterns
-        - Specialized kernels for common dimensions (3x faster)
-        - Multi-accumulator patterns prevent pipeline stalls  
-        - Hardware-adaptive SIMD width selection
-        
-        Expected speedup: 2000 → 8000+ vectors/second
+        The "smart" distance switching was adding overhead without benefit.
+        Simple is faster.
         """
-        
-        # VSAG Smart Distance Computation (2025 breakthrough)
-        if self.use_smart_distance:
-            # Quick magnitude check for precision switching
-            var a_norm_est = a[0] * a[0] + a[1] * a[1] + a[2] * a[2] + a[3] * a[3]
-            var b_norm_est = b[0] * b[0] + b[1] * b[1] + b[2] * b[2] + b[3] * b[3]
-            
-            # Use lower precision for distant vectors (VSAG technique)
-            if a_norm_est > 10.0 or b_norm_est > 10.0:
-                # Fast approximate distance for filtering
-                return self._fast_approximate_distance(a, b)
-        
-        # IDIOMATIC MOJO: Trust the compiler for vectorization - simpler and often faster
-        # Benchmarking showed this approach eliminates dimension scaling bottlenecks
         return self._simple_euclidean_distance(a, b)
     
     @always_inline
@@ -1920,7 +1903,8 @@ struct HNSWIndex(Movable):
         """Search for M nearest neighbors at specific layer using beam search with binary quantization."""
         
         # OPTIMIZED: Fixed-capacity k-NN buffers for bounded neighbor collections  
-        var ef = max(M * 4, 50)  # SAMPLING: Reduced exploration (2x less than exact)
+        # PERFORMANCE FIX: Reduced ef from M*2 to just M for much faster insertion
+        var ef = M  # MINIMAL: Only explore M candidates (8 instead of 32!)
         var candidates = KNNBuffer(ef)  # Search queue with fixed capacity
         var W = KNNBuffer(ef)           # Result set with fixed capacity
         

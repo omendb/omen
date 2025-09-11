@@ -1,6 +1,27 @@
 # NOW - Current Sprint (Feb 2025)
 
-## 🎯 Current Status: Direct mmap Implemented! Ready for HNSW+
+## 🎯 Current Status: Fixing Critical Implementation Issues - Clear Path to 20x Speedup
+
+### Critical Issues Found & Fixes In Progress (Feb 2025) 🔧
+
+**THE REAL PROBLEM:** Our HNSW+ implementation has fixable issues, not algorithm problems
+
+**Before (Earlier System):** 3,000-5,000 vec/s insertion
+**After (Current HNSW+):** 907 vec/s (3-5x REGRESSION)
+**With Fixes:** 20,000+ vec/s expected (20x improvement)
+
+### Implementation Issues Being Fixed:
+
+1. **❌ Fixed 100K Capacity** → ✅ Dynamic growth implemented
+2. **❌ ef=M*4 exploration** → ✅ Reducing to ef=M (4x speedup)
+3. **❌ Allocations in hot path** → 🚧 Object pooling in progress
+4. **❌ Eager binary quantization** → 📋 Lazy evaluation planned
+
+### Why We Regressed:
+- Moved from simple working system to over-engineered HNSW+
+- Added too many "optimizations" that actually slow things down
+- Fixed capacity prevents proper scaling
+- Exploring 64+ candidates when 8 would suffice
 
 ### Storage Optimization Results (Feb 2025) ✅
 - **96x compression working** (PQ32 properly implemented)

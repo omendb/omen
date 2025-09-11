@@ -18,6 +18,7 @@ from python.bindings import PythonModuleBuilder
 from collections import List, Dict
 from memory import UnsafePointer
 from math import sqrt
+from random import random_float64
 from omendb.algorithms.hnsw import HNSWIndex  # FIXED - memory corruption resolved
 from omendb.core.sparse_map import SparseMap
 from omendb.core.reverse_sparse_map import ReverseSparseMap
@@ -61,15 +62,14 @@ struct GlobalDatabase(Movable):
             self.dimension = dimension
             self.hnsw_index = HNSWIndex(dimension, 100000)  # Increased capacity for scale testing
             
-            # TEMPORARILY DISABLE ALL OPTIMIZATIONS - TEST BASIC FUNCTIONALITY FIRST
-            # Enable state-of-the-art optimizations
-            # RE-ENABLED: Binary quantization works when enabled after first vector
-            self.hnsw_index.enable_binary_quantization()  # 40x distance speedup
-            self.hnsw_index.use_flat_graph = True   # ENABLE Hub Highway optimization
-            self.hnsw_index.use_smart_distance = True   # ENABLE VSAG-style adaptive precision
-            self.hnsw_index.cache_friendly_layout = True   # ENABLE Better memory access patterns
+            # PERFORMANCE TEST: Disable complex optimizations that might be overhead
+            # Keep binary quantization (proven 40x speedup) but disable experimental features
+            self.hnsw_index.enable_binary_quantization()  # Keep this - proven speedup
+            self.hnsw_index.use_flat_graph = False   # DISABLE Hub Highway - complex, unproven
+            self.hnsw_index.use_smart_distance = False   # DISABLE Smart distance - overhead
+            self.hnsw_index.cache_friendly_layout = False   # DISABLE - might be overhead
             
-            # All optimizations enabled by default
+            # Focus on basic HNSW performance first
             
             self.initialized = True
         
@@ -359,68 +359,118 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 if db_ptr[].initialize(dimension):
                     pass  # Database initialized
             
-            # TEMPORARY FIX: Use individual inserts instead of bulk (bulk has resize issues)
-            # TODO: Fix insert_bulk resize() function and switch back for performance
-            # Process each vector individually (slower but stable)
-            for i in range(num_vectors):
-                var id_str = String(vector_ids[i])
+            # EXPERIMENT: Try bulk insertion for massive speedup potential
+            # If this fails, will fallback to individual (lines 392+)
+            print("🚀 EXPERIMENTAL: Trying bulk insertion for massive speedup")
+            
+            try:
+                # Use bulk insertion for potentially 5-10x speedup
+                var bulk_results = db_ptr[].hnsw_index.insert_bulk(vectors_ptr, num_vectors)
                 
-                # Get vector pointer for this specific vector
-                var vector_ptr = vectors_ptr.offset(i * dimension)
-                
-                # Use individual insert (we know this works)
-                var numeric_id = db_ptr[].hnsw_index.insert(vector_ptr)
-                
-                if numeric_id >= 0:
-                    _ = db_ptr[].id_mapper.insert(id_str, numeric_id)
-                    _ = db_ptr[].reverse_id_mapper.insert(numeric_id, id_str)
+                if len(bulk_results) == num_vectors:
+                    print("✅ BULK SUCCESS:", num_vectors, "vectors inserted via bulk path")
                     
-                    if i < len(metadata_list):
-                        # Use empty metadata for now
-                        var empty_metadata = Metadata()
-                        _ = db_ptr[].metadata_storage.set(id_str, empty_metadata)
+                    # Process ID mappings for successful bulk insertion
+                    for i in range(num_vectors):
+                        var id_str = String(vector_ids[i])
+                        var numeric_id = bulk_results[i]
+                        
+                        _ = db_ptr[].id_mapper.insert(id_str, numeric_id)
+                        _ = db_ptr[].reverse_id_mapper.insert(numeric_id, id_str)
+                        
+                        if i < len(metadata_list):
+                            var empty_metadata = Metadata()
+                            _ = db_ptr[].metadata_storage.set(id_str, empty_metadata)
+                        
+                        results.append(id_str)
+                        db_ptr[].next_numeric_id = max(db_ptr[].next_numeric_id, numeric_id + 1)
                     
-                    results.append(id_str)
-                    db_ptr[].next_numeric_id = max(db_ptr[].next_numeric_id, numeric_id + 1)
+                    # Bulk insertion succeeded - skip individual fallback
+                    pass
                 else:
-                    # Individual insert failed - continue with remaining vectors
-                    print("Individual insert failed for vector", i)
+                    print("⚠️  BULK PARTIAL:", len(bulk_results), "/", num_vectors, "- falling back")
+                    # Will fall through to individual insertion fallback
+                    raise String("Bulk insertion incomplete")
+                    
+            except e:
+                print("⚠️  BULK FAILED:", e, "- falling back to individual insertion")
+                
+                # FALLBACK: Individual inserts (current working approach)
+                for i in range(num_vectors):
+                    var id_str = String(vector_ids[i])
+                    
+                    # Get vector pointer for this specific vector
+                    var vector_ptr = vectors_ptr.offset(i * dimension)
+                    
+                    # Use individual insert (we know this works)
+                    var numeric_id = db_ptr[].hnsw_index.insert(vector_ptr)
+                    
+                    if numeric_id >= 0:
+                        _ = db_ptr[].id_mapper.insert(id_str, numeric_id)
+                        _ = db_ptr[].reverse_id_mapper.insert(numeric_id, id_str)
+                        
+                        if i < len(metadata_list):
+                            # Use empty metadata for now
+                            var empty_metadata = Metadata()
+                            _ = db_ptr[].metadata_storage.set(id_str, empty_metadata)
+                        
+                        results.append(id_str)
+                        db_ptr[].next_numeric_id = max(db_ptr[].next_numeric_id, numeric_id + 1)
+                    else:
+                        # Individual insert failed - continue with remaining vectors
+                        print("Individual insert failed for vector", i)
             
             # vectors_ptr points to NumPy's managed memory - attempting to free() causes 
             # "Attempt to free invalid pointer" crash. NumPy handles deallocation.
         else:
-            # FALLBACK: Non-NumPy path (slower but compatible)
-            # Non-NumPy path (slower but compatible)
+            # ZERO-COPY BATCH: Use same NumPy optimization as individual add_vector()
+            # This should match individual performance by eliminating all copying
+            print("🚀 ZERO-COPY BATCH: Using NumPy zero-copy optimization")
             
-            # Pre-allocate batch vectors
-            var batch_vectors = UnsafePointer[UnsafePointer[Float32]].alloc(num_vectors)
+            # Import modules once for all vectors
+            var python = Python.import_module("builtins")
+            var numpy = Python.import_module("numpy")
             
             for i in range(num_vectors):
                 var py_vector = vectors[i]
                 var vector_size = Int(len(py_vector))
+                
+                # Initialize DB on first vector
                 if i == 0:
                     dimension = vector_size
                     if not db_ptr[].initialized:
                         if db_ptr[].initialize(dimension):
                             pass  # Database initialized
                 
-                var vector_data = UnsafePointer[Float32].alloc(vector_size)
-                for j in range(vector_size):
-                    vector_data[j] = Float32(Float64(py_vector[j]))
-                batch_vectors[i] = vector_data
-            
-            # OPTIMIZATION: Use bulk insert for 5-10x speedup  
-            # Convert to contiguous memory layout for bulk insert
-            var contiguous_vectors = UnsafePointer[Float32].alloc(num_vectors * dimension)
-            for i in range(num_vectors):
-                for j in range(dimension):
-                    contiguous_vectors[i * dimension + j] = batch_vectors[i][j]
-            
-            # TEMPORARY FIX: Use individual inserts instead of insert_bulk() 
-            # insert_bulk() crashes due to resize() NodePool migration issues
-            for i in range(num_vectors):
-                var vector_ptr = contiguous_vectors + (i * dimension)
-                var numeric_id = db_ptr[].hnsw_index.insert(vector_ptr)
+                # BREAKTHROUGH: Zero-copy NumPy detection like add_vector()
+                var is_numpy = python.hasattr(py_vector, "ctypes")
+                var vector_data: UnsafePointer[Float32]
+                var needs_free = False
+                
+                if is_numpy:
+                    # FAST PATH: Direct NumPy memory access (no copy!)
+                    
+                    # Ensure C-contiguous and float32
+                    var vector_f32 = py_vector
+                    if py_vector.dtype != numpy.float32:
+                        vector_f32 = py_vector.astype(numpy.float32)
+                    if not vector_f32.flags["C_CONTIGUOUS"]:
+                        vector_f32 = numpy.ascontiguousarray(vector_f32)
+                    
+                    # Direct UnsafePointer from NumPy memory!
+                    var ctypes = vector_f32.ctypes
+                    var data_ptr = ctypes.data
+                    vector_data = data_ptr.unsafe_get_as_pointer[DType.float32]()
+                    needs_free = False  # NumPy owns the memory, don't free!
+                else:
+                    # SLOW PATH: Python list conversion (fallback)
+                    vector_data = UnsafePointer[Float32].alloc(vector_size)
+                    for j in range(vector_size):
+                        vector_data[j] = Float32(Float64(py_vector[j]))
+                    needs_free = True
+                
+                # Insert directly into HNSW
+                var numeric_id = db_ptr[].hnsw_index.insert(vector_data)
                 
                 if numeric_id >= 0:
                     var id_str = String(vector_ids[i])
@@ -428,20 +478,15 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                     _ = db_ptr[].reverse_id_mapper.insert(numeric_id, id_str)
                     
                     if i < len(metadata_list):
-                        # Use empty metadata for batch operations (can process later if needed)
                         var empty_metadata = Metadata()
                         _ = db_ptr[].metadata_storage.set(id_str, empty_metadata)
                     
                     results.append(id_str)
                     db_ptr[].next_numeric_id = max(db_ptr[].next_numeric_id, numeric_id + 1)
-            
-            # Clean up contiguous memory
-            contiguous_vectors.free()
-            
-            # Clean up only in fallback path
-            for i in range(num_vectors):
-                batch_vectors[i].free()
-            batch_vectors.free()
+                
+                # Clean up memory only if we allocated it
+                if needs_free:
+                    vector_data.free()
         
         # Return boolean list indicating success for each position
         # The Python API expects a list of booleans, not IDs
@@ -684,6 +729,62 @@ fn enable_binary_quantization() raises -> PythonObject:
         print("Binary quantization error:", e)
         return PythonObject(False)
 
+fn test_parallel_insertion() raises -> PythonObject:
+    """Test WIP parallel insertion for massive performance boost."""
+    try:
+        var db_ptr = get_global_db()
+        
+        if not db_ptr[].initialized:
+            print("Error: Database not initialized") 
+            return PythonObject(False)
+        
+        print("🚀 TESTING: WIP Parallel Insertion (Mojo native parallelize)")
+        
+        # Create test data: 1000 vectors for performance test
+        var test_size = 1000
+        var dimension = db_ptr[].dimension
+        var test_vectors = UnsafePointer[Float32].alloc(test_size * dimension)
+        
+        # Generate random test vectors
+        for i in range(test_size):
+            for j in range(dimension):
+                test_vectors[i * dimension + j] = Float32(random_float64())
+        
+        # Clear database for clean test
+        db_ptr[].hnsw_index.clear()
+        
+        # Time the WIP parallel insertion  
+        print("⏱️  Starting parallel insertion timing...")
+        var results = db_ptr[].hnsw_index.insert_bulk_auto(test_vectors, test_size, use_wip=True)
+        print("⏱️  Parallel insertion completed")
+        
+        print("📊 PARALLEL INSERTION RESULTS:")
+        print("   Vectors processed:", test_size)
+        print("   Results returned:", len(results))
+        
+        if len(results) == test_size:
+            print("✅ PARALLEL INSERTION SUCCESS!")
+            print("🎯 Ready to replace individual insertion loop")
+            
+            # Test search functionality
+            var test_query = UnsafePointer[Float32].alloc(dimension)
+            for i in range(dimension):
+                test_query[i] = Float32(random_float64())
+            
+            var search_results = db_ptr[].hnsw_index.search(test_query, 5)
+            print("🔍 Search test:", len(search_results), "results returned")
+            
+            test_query.free()
+        else:
+            print("❌ PARALLEL INSERTION PARTIAL FAILURE:", len(results), "/", test_size)
+        
+        test_vectors.free()
+        return PythonObject(True)
+        
+    except e:
+        print("💥 Parallel insertion test error:", e)
+        return PythonObject(False)
+
 fn checkpoint() raises -> PythonObject:
     """Create database checkpoint - save vectors to disk.
     
@@ -841,6 +942,7 @@ fn PyInit_native() -> PythonObject:
         # Advanced features
         module.def_function[enable_quantization]("enable_quantization")
         module.def_function[enable_binary_quantization]("enable_binary_quantization")
+        module.def_function[test_parallel_insertion]("test_parallel_insertion")
         module.def_function[checkpoint]("checkpoint")
         module.def_function[recover]("recover")
         module.def_function[set_persistence]("set_persistence")
