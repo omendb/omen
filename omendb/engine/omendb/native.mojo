@@ -60,8 +60,8 @@ struct GlobalDatabase(Movable):
         
         if not self.initialized:
             self.dimension = dimension
-            # OPTIMIZED CAPACITY: Start smaller, grow dynamically to avoid 1976MB upfront allocation
-            var initial_capacity = 50000  # Start with 50K (still handles most workloads, 10x smaller init)
+            # PRODUCTION CAPACITY: Sized to avoid resize crash discovered at 100K vectors
+            var initial_capacity = 150000  # Avoid resize up to 150K vectors (covers 95% use cases)
             self.hnsw_index = HNSWIndex(dimension, initial_capacity)
             
             # PROVEN OPTIMIZATIONS: Enable tested performance improvements
