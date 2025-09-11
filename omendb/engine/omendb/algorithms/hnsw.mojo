@@ -39,13 +39,13 @@ fn max(a: Int, b: Int) -> Int:
 alias simd_width = simdwidthof[DType.float32]()
 
 # HNSW parameters
-# PERFORMANCE EXPERIMENT: Reduce M for faster insertion
-# Original: M = 16, but that requires exploring M*4 = 64 candidates per layer
-# Reducing to M = 8 should give 2x insertion speedup with minimal quality loss
-alias M = 8  # Reduced from 16 for faster insertion (2x speedup expected)
+# CRITICAL: Quality-focused parameters restored after catastrophic recall failure
+# Testing showed 0% Recall@1 with M=8, ef_construction=150
+# Industry standard: M=16, ef_construction=200 for good quality
+alias M = 16  # RESTORED: Industry standard for quality (was reduced to 8)
 alias max_M = M
 alias max_M0 = M * 2  # Layer 0 has more connections
-alias ef_construction = 150  # OPTIMIZED: Reduced from 200 for +20% build speed, minimal quality loss
+alias ef_construction = 200  # RESTORED: Quality-focused value (was reduced to 150)
 alias ef_search = 500  # Much higher for better recall with random vectors
 alias ml = 1.0 / log(2.0)
 alias MAX_LAYERS = 4  # OPTIMAL STABLE - Maximum hierarchical layers (was 16)
@@ -1169,8 +1169,8 @@ struct HNSWIndex(Movable):
             for i in range(actual_count):
                 self._update_hubs_during_insertion(node_ids[i])
         
-        # 9. CRITICAL: Update index size to reflect inserted vectors
-        self.size += actual_count
+        # 9. FIX: Size was already updated in line 1148, don't double-count
+        # self.size += actual_count  # REMOVED - was causing double counting
         
         return results
     
@@ -1666,8 +1666,7 @@ struct HNSWIndex(Movable):
         """
         var sub_batch_size = sub_end - sub_start
         
-        # CONNECTION CACHING: Pre-compute entry points for efficiency
-        var cached_entry_point = self.entry_point
+        # FIX: Better entry point selection for bulk insertion into existing graph
         var M_layer = max_M if layer > 0 else max_M0
         
         # Process each node in the sub-batch with enhanced search scope
@@ -1677,13 +1676,18 @@ struct HNSWIndex(Movable):
             var vector = self.get_vector(node_id)
             var node_level = chunk_levels[chunk_idx]
             
-            # COMPETITIVE PERFORMANCE: Enhanced search scope vs individual fallback
-            var enhanced_search = min(ef_construction // 2, 100)  # 2x larger than individual
+            # FIX: Always use the main entry point for stability
+            # Using recently added nodes as entry points can cause issues
+            # if they're not fully connected yet
+            var search_entry = self.entry_point
             
-            # Fast neighbor search with enhanced scope
+            # FIX: Use proper number of candidates for good connectivity
+            var search_M = M_layer  # Search for at least M candidates to connect to
+            
+            # Fast neighbor search with proper scope
             var dummy_binary = BinaryQuantizedVector(vector, self.dimension)
-            var candidate_ids = self._search_layer_for_M_neighbors(vector, cached_entry_point, 
-                                                                  enhanced_search, layer, dummy_binary)
+            var candidate_ids = self._search_layer_for_M_neighbors(vector, search_entry, 
+                                                                  search_M, layer, dummy_binary)
             
             # Connect to best candidates
             var connections_needed = min(M_layer, len(candidate_ids))
@@ -1710,18 +1714,19 @@ struct HNSWIndex(Movable):
         var candidates = List[Int]()
         candidates.append(self.entry_point)
         
-        # COMPETITIVE PERFORMANCE: Balanced search scope for quality vs speed
-        var max_search = min(ef_construction // 3, 75)  # Increased from //4 for better quality
+        # FIX: Improved connectivity - sample more nodes for better graph structure
+        var max_search = min(ef_construction, 100)  # Increased from //3 for better connectivity
         
-        # Find a few good candidates quickly
+        # Find good candidates with better sampling
         for _ in range(max_search):
             var best_candidate = -1
             var best_distance = Float32(1e9)
             
-            # Check a limited number of existing nodes
-            var sample_size = min(self.size, 20)  # Sample only 20 nodes
-            for i in range(0, sample_size, max(1, self.size // sample_size)):
-                if i < self.node_pool.capacity:
+            # FIX: Sample more nodes for better connectivity
+            var sample_size = min(self.size, max(100, self.size // 10))  # Sample at least 100 nodes or 10% of graph
+            var step = max(1, self.size // sample_size)
+            for i in range(0, self.size, step):
+                if i < self.node_pool.capacity and i < sample_size:
                     var candidate_vector = self.get_vector(i)
                     var dist = self.distance(vector, candidate_vector)
                     if dist < best_distance:
@@ -1900,9 +1905,9 @@ struct HNSWIndex(Movable):
     ) -> List[Int]:
         """Search for M nearest neighbors at specific layer using beam search with binary quantization."""
         
-        # OPTIMIZED: Fixed-capacity k-NN buffers for bounded neighbor collections  
-        # PERFORMANCE FIX: Reduced ef from M*2 to just M for much faster insertion
-        var ef = M  # MINIMAL: Only explore M candidates (8 instead of 32!)
+        # FIX: Use proper ef value for good recall - was incorrectly reduced to just M
+        # Industry standard is ef_construction for insertion, not M
+        var ef = ef_construction  # FIX: Use proper value (200 instead of 16) for quality
         var candidates = KNNBuffer(ef)  # Search queue with fixed capacity
         var W = KNNBuffer(ef)           # Result set with fixed capacity
         
@@ -1921,12 +1926,12 @@ struct HNSWIndex(Movable):
         if entry < self.visited_size:
             self.visited_buffer[entry] = self.visited_version  # Mark as visited
         
-        # APPROXIMATE GRAPH CONSTRUCTION - Sampling-based breakthrough optimization
+        # FIX: Remove artificial limits that hurt recall
         var checked = 0
         var batch_size = 32  # Process candidates in vectorized batches
-        var max_samples = ef // 2  # APPROXIMATION: Sample subset of candidates
+        # FIX: Don't limit to ef//2 - explore all candidates for better quality
         
-        while candidates.len() > 0 and checked < ef and checked < max_samples:
+        while candidates.len() > 0 and checked < ef:
             # Get closest unprocessed candidate using optimized method
             var min_idx = candidates.find_min_idx()
             if min_idx < 0:
@@ -2405,9 +2410,9 @@ struct HNSWIndex(Movable):
         w.append(entry_candidate)
         self.visited_buffer[curr_nearest] = self.visited_version
 
-        # Beam search at layer 0 with much larger exploration
-        var search_ef = max(ef_search, k * 8)  # Much larger exploration
-        var num_to_check = search_ef  # Don't limit by database size - explore fully
+        # FIX: Use proper ef_search value for good recall
+        var search_ef = max(ef_search, k * 10)  # Ensure adequate exploration (500 or k*10, whichever is larger)
+        var num_to_check = search_ef  # Explore fully for quality
         var checked = 0
 
         while len(candidates) > 0 and checked < num_to_check:
