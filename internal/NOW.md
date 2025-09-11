@@ -1,21 +1,34 @@
 # NOW - Current Sprint (Feb 2025)
 
-## 🎯 Current Status: Fixing Critical Implementation Issues - Clear Path to 20x Speedup
+## 🎯 Current Status: HNSW Quality Crisis - Systematic Debugging in Progress
 
-### Critical Issues Found & Fixes In Progress (Feb 2025) 🔧
+### Critical Quality Issues Found (Feb 2025) 🚨
 
-**THE REAL PROBLEM:** Our HNSW+ implementation has fixable issues, not algorithm problems
+**THE REAL PROBLEM:** HNSW has catastrophic recall failure at scale
 
-**Before (Earlier System):** 3,000-5,000 vec/s insertion
-**After (Current HNSW+):** 907 vec/s (3-5x REGRESSION)
-**With Fixes:** 20,000+ vec/s expected (20x improvement)
+**Quality Results:**
+- **100 vectors:** 70% Recall@1 (improved from 0%)
+- **500 vectors:** 15% Recall@1
+- **1000 vectors:** 10% Recall@1  
+- **2000+ vectors:** 0% Recall@1 (complete failure)
 
-### Implementation Issues Being Fixed:
+**Root Cause Identified:** Bulk insertion doesn't navigate graph hierarchy properly
 
-1. **❌ Fixed 100K Capacity** → ✅ Dynamic growth implemented
-2. **❌ ef=M*4 exploration** → ✅ Reducing to ef=M (4x speedup)
-3. **❌ Allocations in hot path** → 🚧 Object pooling in progress
-4. **❌ Eager binary quantization** → 📋 Lazy evaluation planned
+### Bugs Fixed Today (Partial Improvement):
+
+1. **✅ Graph connectivity** → Increased sampling from 20 to 100+ nodes
+2. **✅ Search parameters** → Fixed ef to use ef_construction (200) not M (16)
+3. **✅ Candidate limits** → Removed artificial ef//2 restriction
+4. **✅ Size counting** → Fixed double counting bug in bulk insert
+
+### Critical Issue Remaining:
+
+**Bulk insertion broken for existing graphs:**
+- Individual insertion: Navigates hierarchy properly (100% recall)
+- Bulk insertion: Doesn't navigate, creates disconnected clusters
+- Mixed mode: Bulk nodes can't reach individual nodes (30% recall)
+
+**Required Fix:** Complete refactor of bulk insertion to navigate hierarchy
 
 ### Why We Regressed:
 - Moved from simple working system to over-engineered HNSW+
