@@ -16,3 +16,6 @@
 [submodule "external/benchmarks/ann-benchmarks"]
 	path = external/benchmarks/ann-benchmarks
 	url = https://github.com/erikbern/ann-benchmarks.git
+[submodule "external/agent-contexts"]
+	path = external/agent-contexts
+	url = https://github.com/nijaru/agent-contexts.git
