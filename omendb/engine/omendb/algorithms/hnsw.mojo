@@ -470,7 +470,9 @@ struct HNSWIndex(Movable):
         self.use_product_quantization = False
         
         # Pre-allocate visited buffer with version tracking
-        self.visited_size = capacity
+        # CRITICAL FIX: Start visited_size at 0, not capacity!
+        # It should track actual nodes added, not max capacity
+        self.visited_size = 0
         self.visited_buffer = UnsafePointer[Int].alloc(capacity)
         # Initialize all to version 0 (never visited)
         for i in range(capacity):
@@ -1969,13 +1971,17 @@ struct HNSWIndex(Movable):
 
     fn _insert_node(mut self, new_id: Int, level: Int, vector: UnsafePointer[Float32]):
         """Insert node into graph structure with proper M-neighbor connectivity."""
-        
+
         # CRITICAL FIX: Update visited_size to include new_id with bounds checking
         # Individual insertion creates high IDs that exceed visited_size bounds
         # Without this fix, neighbor search skips new nodes entirely
         # SAFETY: Only update visited_size within allocated buffer capacity
         if new_id >= self.visited_size and new_id < self.capacity:
             self.visited_size = new_id + 1
+
+        # DEBUG: Help diagnose connection issues
+        if self.size == 500:  # Size is 500 when inserting 501st node
+            print("DEBUG: Inserting node", new_id, "at level", level, "entry_point=", self.entry_point, "size=", self.size)
         
         # Increment version instead of clearing (O(1) vs O(n)!)
         self.visited_version += 1
@@ -2020,17 +2026,33 @@ struct HNSWIndex(Movable):
             var neighbors = self._search_layer_for_M_neighbors(
                 vector, curr_nearest, M_layer, lc, vector_binary
             )
-            
+
+            # DEBUG: Check neighbor finding
+            if self.size == 500 and lc == 0:  # Size is 500 when inserting 501st
+                print("  DEBUG: Found", len(neighbors), "neighbors at layer 0")
+                if len(neighbors) > 0:
+                    print("    First few:", neighbors[0] if len(neighbors) > 0 else -1,
+                          neighbors[1] if len(neighbors) > 1 else -1,
+                          neighbors[2] if len(neighbors) > 2 else -1)
+
             # Connect to all M neighbors found
             var new_node = self.node_pool.get(new_id)
             for i in range(len(neighbors)):
                 var neighbor_id = neighbors[i]
                 # Add connection from new node to neighbor
-                var _ = new_node[].add_connection(lc, neighbor_id)
+                var success = new_node[].add_connection(lc, neighbor_id)
+
+                # DEBUG: Check if connections are being made
+                if self.size == 500 and lc == 0 and i < 3:
+                    print("    Connecting to", neighbor_id, "- success:", success)
                 
                 # Add reverse connection (bidirectional)
                 var neighbor_node = self.node_pool.get(neighbor_id)
-                var _ = neighbor_node[].add_connection(lc, new_id)
+                var reverse_success = neighbor_node[].add_connection(lc, new_id)
+
+                # DEBUG: Check reverse connections
+                if self.size == 500 and lc == 0 and i < 3:
+                    print("    Reverse from", neighbor_id, "- success:", reverse_success)
                 
                 # Prune neighbor's connections if needed (maintain M limit)
                 self._prune_connections(neighbor_id, lc, M_layer)
