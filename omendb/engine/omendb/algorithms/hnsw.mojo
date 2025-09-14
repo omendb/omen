@@ -1979,9 +1979,7 @@ struct HNSWIndex(Movable):
         if new_id >= self.visited_size and new_id < self.capacity:
             self.visited_size = new_id + 1
 
-        # DEBUG: Help diagnose connection issues
-        if self.size == 500:  # Size is 500 when inserting 501st node
-            print("DEBUG: Inserting node", new_id, "at level", level, "entry_point=", self.entry_point, "size=", self.size)
+        # Production-ready insertion without debug output
         
         # Increment version instead of clearing (O(1) vs O(n)!)
         self.visited_version += 1
@@ -2027,13 +2025,7 @@ struct HNSWIndex(Movable):
                 vector, curr_nearest, M_layer, lc, vector_binary
             )
 
-            # DEBUG: Check neighbor finding
-            if self.size == 500 and lc == 0:  # Size is 500 when inserting 501st
-                print("  DEBUG: Found", len(neighbors), "neighbors at layer 0")
-                if len(neighbors) > 0:
-                    print("    First few:", neighbors[0] if len(neighbors) > 0 else -1,
-                          neighbors[1] if len(neighbors) > 1 else -1,
-                          neighbors[2] if len(neighbors) > 2 else -1)
+            # Neighbor search completed
 
             # Connect to all M neighbors found
             var new_node = self.node_pool.get(new_id)
@@ -2041,10 +2033,6 @@ struct HNSWIndex(Movable):
                 var neighbor_id = neighbors[i]
                 # Add connection from new node to neighbor
                 var success = new_node[].add_connection(lc, neighbor_id)
-
-                # DEBUG: Check if connections are being made
-                if self.size == 500 and lc == 0 and i < 3:
-                    print("    Connecting to", neighbor_id, "- success:", success)
                 
                 # Add reverse connection (bidirectional)
                 var neighbor_node = self.node_pool.get(neighbor_id)
@@ -2062,9 +2050,7 @@ struct HNSWIndex(Movable):
                         # Try again after pruning
                         reverse_success = neighbor_node[].add_connection(lc, new_id)
 
-                # DEBUG: Check reverse connections
-                if self.size == 500 and lc == 0 and i < 3:
-                    print("    Reverse from", neighbor_id, "- success:", reverse_success, "(after pruning if needed)")
+                # Bidirectional connection established
 
                 # Regular pruning (in case we added without failure)
                 if reverse_success:
