@@ -1883,9 +1883,14 @@ struct HNSWIndex(Movable):
     
     fn _insert_node_bulk(mut self, new_id: Int, level: Int, vector: UnsafePointer[Float32]):
         """Optimized node insertion for bulk operations.
-        
+
         Similar to _insert_node but optimized for batch processing.
         """
+        # CRITICAL FIX: Update visited_size to include new_id with bounds checking
+        # This was missing from bulk insertion causing search failures
+        if new_id >= self.visited_size and new_id < self.capacity:
+            self.visited_size = new_id + 1
+
         # Increment version for visited tracking (O(1) operation)
         self.visited_version += 1
         if self.visited_version > 1000000000:  # Prevent overflow
@@ -1914,14 +1919,16 @@ struct HNSWIndex(Movable):
             curr_nearest = self._search_layer_simple(
                 vector, curr_nearest, 1, lc
             )
-        
+
         # FIXED: Only create binary vector when binary quantization is enabled
         var vector_binary: BinaryQuantizedVector
+        var dummy_ptr = UnsafePointer[Float32]()  # Initialize to empty pointer
         if self.use_binary_quantization:
             vector_binary = BinaryQuantizedVector(vector, self.dimension)  # Real binary vector
         else:
             # Create dummy with CORRECT dimension - even though not used, prevents segfaults
-            var dummy_ptr = UnsafePointer[Float32].alloc(self.dimension)
+            # CRITICAL: This memory will be freed at end of function to prevent leaks
+            dummy_ptr = UnsafePointer[Float32].alloc(self.dimension)
             for j in range(self.dimension):
                 dummy_ptr[j] = 0.0
             vector_binary = BinaryQuantizedVector(dummy_ptr, self.dimension)
@@ -1950,11 +1957,16 @@ struct HNSWIndex(Movable):
                 
                 # Prune neighbor's connections if needed (maintain M limit)
                 self._prune_connections(neighbor_id, lc, M_layer)
-            
+
             # Use closest neighbor as entry for next layer
             if len(neighbors) > 0:
                 curr_nearest = neighbors[0]  # First is closest
-    
+
+        # CRITICAL: Free dummy memory to prevent massive memory leaks
+        # During migration, we process 500+ nodes individually, leaking 1.5MB+ without this
+        if not self.use_binary_quantization and dummy_ptr:
+            dummy_ptr.free()
+
     fn _insert_node(mut self, new_id: Int, level: Int, vector: UnsafePointer[Float32]):
         """Insert node into graph structure with proper M-neighbor connectivity."""
         
