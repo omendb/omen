@@ -1002,15 +1002,15 @@ struct HNSWIndex(Movable):
         5. Bulk graph updates
         """
         var results = List[Int]()
-        
+
         if n_vectors == 0:
             return results
-        
+
         # 1. AGGRESSIVE PRE-ALLOCATION - KEY OPTIMIZATION!
         # Pre-calculate optimal capacity to avoid mid-operation resizes
         var needed_capacity = self.size + n_vectors
         var optimal_capacity = Int(needed_capacity * 2.0)  # 2x buffer for future growth
-        
+
         # RESIZE DISABLED: Use capacity-bounded insertion instead
         # Since resize() is disabled for stability, limit insertion to available capacity
         var available_capacity = self.capacity - self.size
@@ -1025,7 +1025,7 @@ struct HNSWIndex(Movable):
         var start_id = self.size
         var node_ids = List[Int]()
         var node_levels = List[Int]()
-        
+
         # Pre-allocate all nodes at once
         for i in range(actual_n_vectors):
             var level = self.get_random_level()
@@ -1034,7 +1034,7 @@ struct HNSWIndex(Movable):
                 # If allocation fails, return what we have so far
                 break
             node_ids.append(node_id)
-            node_levels.append(level) 
+            node_levels.append(level)
             results.append(node_id)
         
         var actual_count = len(node_ids)
@@ -1047,6 +1047,9 @@ struct HNSWIndex(Movable):
             var node_id = node_ids[i]
             var src_vector = vectors.offset(i * self.dimension)
             var dest_vector = self.get_vector(node_id)
+            if not dest_vector:
+                print("ERROR: NULL dest_vector for node_id", node_id)
+                return results
             memcpy(dest_vector, src_vector, self.dimension * 4)  # Fix: Float32 = 4 bytes
         
         # 4. BULK QUANTIZATION (if enabled) - FIXED MEMORY MANAGEMENT
@@ -1074,17 +1077,37 @@ struct HNSWIndex(Movable):
                     var binary_vec = BinaryQuantizedVector(vector_ptr, self.dimension)
                     self.binary_vectors[node_id] = binary_vec
         
-        # 5. SPECIAL CASE: First node becomes entry point
+        # 5. SPECIAL CASE: Building graph from scratch
         if self.size == 0 and actual_count > 0:
+            # When starting from empty, bootstrap with individual insertion
+            # then switch to bulk for performance
+            var bootstrap_count = min(100, actual_count)  # Bootstrap first 100 nodes
+
+            # Set up the first node as entry point
             self.entry_point = node_ids[0]
             self.size = 1
-            
-            # Process remaining nodes if any
-            for i in range(1, actual_count):
+
+            # Process bootstrap nodes individually for initial connectivity
+            for i in range(1, bootstrap_count):
                 self._insert_node_bulk(node_ids[i], node_levels[i], self.get_vector(node_ids[i]))
                 self.size += 1
-        else:
-            # 6. HIERARCHICAL BATCHING FOR COMPETITIVE PERFORMANCE
+
+            # Remaining nodes will be processed via bulk path
+            if bootstrap_count < actual_count:
+                var remaining_ids = List[Int]()
+                var remaining_levels = List[Int]()
+                for i in range(bootstrap_count, actual_count):
+                    remaining_ids.append(node_ids[i])
+                    remaining_levels.append(node_levels[i])
+                node_ids = remaining_ids
+                node_levels = remaining_levels
+                actual_count = len(node_ids)
+            else:
+                actual_count = 0  # All nodes processed
+
+        # 6. HIERARCHICAL BATCHING FOR COMPETITIVE PERFORMANCE
+        # Process ALL nodes through bulk path for proper connectivity
+        if actual_count > 0:
             # Optimized batch sizes targeting 25K+ vec/s competitive performance
             
             var chunk_size = 1000  # Larger chunks for efficiency (competitive target)
@@ -1856,11 +1879,21 @@ struct HNSWIndex(Movable):
         
         # Search for neighbors starting from entry point
         var curr_nearest = self.entry_point
-        
+
+        # SAFETY: Check entry point is valid before using it
+        if self.entry_point < 0:
+            print("ERROR: Invalid entry point in _insert_node_bulk")
+            return
+
+        var entry_node = self.node_pool.get(self.entry_point)
+        if not entry_node:
+            print("ERROR: Entry point node not found in _insert_node_bulk")
+            return
+
         # Search from top layer to target layer
         var curr_dist = self.distance(vector, self.get_vector(self.entry_point))
-        
-        for lc in range(self.node_pool.get(self.entry_point)[].level, level, -1):
+
+        for lc in range(entry_node[].level, level, -1):
             curr_nearest = self._search_layer_simple(
                 vector, curr_nearest, 1, lc
             )
