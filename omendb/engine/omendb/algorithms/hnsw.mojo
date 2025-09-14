@@ -447,7 +447,7 @@ struct HNSWIndex(Movable):
         # Hub Highway architecture (flat graph breakthrough)
         self.hub_nodes = List[Int]()
         self.hub_threshold = 0.5  # Lower threshold for hub detection
-        self.use_flat_graph = True  # Enable by default for high-D vectors
+        self.use_flat_graph = False  # DISABLED - causes poor recall until fixed
         
         # TEMPORARILY DISABLED: Pre-initialize hub nodes 
         # CRITICAL FIX: Pre-initialize some hub nodes for immediate benefit
@@ -460,8 +460,8 @@ struct HNSWIndex(Movable):
         #         self.hub_nodes.append(i)
         
         # VSAG-style optimizations
-        self.use_smart_distance = True  # Adaptive precision switching
-        self.cache_friendly_layout = True  # Memory locality optimization
+        self.use_smart_distance = False  # DISABLED - may affect recall
+        self.cache_friendly_layout = False  # DISABLED - may affect recall
         
         # Advanced quantization (research-backed)
         self.binary_vectors = List[BinaryQuantizedVector]()
@@ -1167,7 +1167,7 @@ struct HNSWIndex(Movable):
                             # Navigate down from entry point to target layer
                             for lc in range(self.node_pool.get(self.entry_point)[].level, layer, -1):
                                 curr_nearest = self._search_layer_simple(dest, curr_nearest, 1, lc)
-                        
+
                         layer_entry_points[q] = curr_nearest
                     
                     # PERFORMANCE OPTIMIZED: Use sampling for large batches
@@ -2049,12 +2049,21 @@ struct HNSWIndex(Movable):
     ) -> List[Int]:
         """Search for M nearest neighbors at specific layer using beam search with binary quantization."""
         
-        # LARGE GRAPH FIX: Scale ef with graph size for better connectivity
-        # For large graphs (500+ nodes), use higher ef to explore more diverse paths
-        var ef = ef_construction  # Base value (200)
-        if self.size > 500:
-            # Scale ef up for large graphs to improve diversity
-            ef = min(ef_construction * 2, self.size // 3)  # Up to 400, or 1/3 of graph size
+        # CRITICAL FIX: Scale ef appropriately for graph size
+        # Small graphs need exhaustive search, large graphs need efficient sampling
+        var ef: Int
+        if self.size < 50:
+            # EXHAUSTIVE: For tiny graphs, explore ALL nodes
+            ef = max(self.size * 2, ef_construction)  # Check 2x graph size or base ef
+        elif self.size < 200:
+            # THOROUGH: For small graphs, explore most nodes
+            ef = max(self.size, ef_construction)  # At least graph size
+        elif self.size > 500:
+            # EFFICIENT: For large graphs, scale up moderately
+            ef = min(ef_construction * 2, self.size // 3)  # Up to 400, or 1/3 of graph
+        else:
+            # DEFAULT: Medium graphs use standard ef
+            ef = ef_construction
         
         var candidates = KNNBuffer(ef)  # Search queue with scaled capacity
         var W = KNNBuffer(ef)           # Result set with scaled capacity
@@ -2067,10 +2076,17 @@ struct HNSWIndex(Movable):
             for i in range(self.visited_size):
                 self.visited_buffer[i] = 0
         
-        # LARGE GRAPH FIX: Use multiple diverse starting points for better exploration
-        if self.size > 500 and layer == 0:  # Only for large graphs at layer 0
-            # Add 3-5 diverse starting points instead of just one
-            var num_starts = min(5, max(3, self.size // 200))  # 3-5 starts based on graph size
+        # CRITICAL FIX: Use multiple diverse starting points for ALL graphs to prevent hub domination
+        # Small graphs especially need this - otherwise search gets trapped in early nodes!
+        if self.size > 2 and layer == 0:  # Use multiple starts from the very beginning!
+            # For small graphs: more aggressive exploration (all nodes if < 100)
+            # For large graphs: sample strategically
+            var num_starts: Int
+            if self.size < 100:
+                # EXHAUSTIVE: For very small graphs, start from many points
+                num_starts = min(self.size // 3, 30)  # Up to 1/3 of graph or 30 starts
+            else:
+                num_starts = min(5, max(3, self.size // 200))  # 3-5 starts for larger graphs
             var start_step = max(1, self.size // num_starts)
             
             var starts_added = 0
@@ -2178,36 +2194,10 @@ struct HNSWIndex(Movable):
             for i in range(available_candidates):
                 result.append(W.get_node_id(i))
         else:
-            # DIVERSITY STRATEGY: Take best 70% + diverse 30% for better connectivity
-            var best_count = max(1, (M * 7) // 10)  # 70% best
-            var diverse_count = M - best_count       # 30% diverse
-            
-            # Take the best candidates first
-            for i in range(best_count):
+            # SIMPLE STRATEGY: Just take the M closest neighbors
+            # Diversity strategy was causing poor connectivity
+            for i in range(M):
                 result.append(W.get_node_id(i))
-            
-            # Add diverse candidates from the remaining pool
-            var remaining_start = best_count
-            var remaining_count = available_candidates - best_count
-            
-            if remaining_count > 0 and diverse_count > 0:
-                # Sample from the remaining candidates with spacing
-                var step = max(1, remaining_count // diverse_count)
-                var added_diverse = 0
-                
-                for i in range(remaining_start, available_candidates, step):
-                    if added_diverse >= diverse_count:
-                        break
-                    result.append(W.get_node_id(i))
-                    added_diverse += 1
-                
-                # Fill any remaining slots with closest available
-                while len(result) < M and len(result) < available_candidates:
-                    var next_idx = best_count + (len(result) - best_count)
-                    if next_idx < available_candidates:
-                        result.append(W.get_node_id(next_idx))
-                    else:
-                        break
         
         return result
     

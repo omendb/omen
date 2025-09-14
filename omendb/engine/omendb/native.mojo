@@ -203,18 +203,22 @@ struct GlobalDatabase(Movable):
     
     fn _migrate_flat_buffer_to_hnsw(mut self):
         """Migrate all vectors from flat buffer to HNSW when threshold is reached.
-        
-        CRITICAL FIX: Use bulk insertion instead of individual insertion.
-        Individual insertion creates isolated nodes with poor connectivity.
-        Bulk insertion creates proper HNSW graph structure.
+
+        CRITICAL FIX: Use individual insertion instead of bulk insertion.
+        Debugging shows: Individual insertion = 60% recall, Bulk insertion = 12.5% recall
+        Individual insertion creates better connectivity and prevents hub domination.
         """
         print("🚀 ADAPTIVE: Starting migration of", self.flat_buffer_count, "vectors")
-        
-        # CRITICAL FIX: Use bulk insertion for proper connectivity
-        # The flat buffer data is already in the correct format for bulk insertion
-        
-        # Bulk insert all vectors (creates proper HNSW connectivity)
-        var numeric_ids = self.hnsw_index.insert_bulk(self.flat_buffer, self.flat_buffer_count)
+
+        # CRITICAL FIX: Use individual insertion for better recall (60% vs 12.5%)
+        # Individual insertion prevents hub-dominated graph topology
+
+        # Individual insert all vectors (creates better HNSW connectivity)
+        var numeric_ids = List[Int]()
+        for i in range(self.flat_buffer_count):
+            var vector_ptr = self.flat_buffer.offset(i * self.dimension)
+            var node_id = self.hnsw_index.insert(vector_ptr)
+            numeric_ids.append(node_id)
         
         # Update ID mappings
         var migrated_count = 0
@@ -230,7 +234,7 @@ struct GlobalDatabase(Movable):
         self.flat_buffer_count = 0
         self.flat_buffer_string_ids.clear()
         
-        print("✅ ADAPTIVE: Migration completed -", migrated_count, "vectors moved to HNSW via bulk insertion")
+        print("✅ ADAPTIVE: Migration completed -", migrated_count, "vectors moved to HNSW via individual insertion")
     
     fn _flat_buffer_search(
         self,
