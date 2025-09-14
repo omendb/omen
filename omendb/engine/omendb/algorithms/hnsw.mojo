@@ -1079,31 +1079,20 @@ struct HNSWIndex(Movable):
         
         # 5. SPECIAL CASE: Building graph from scratch
         if self.size == 0 and actual_count > 0:
-            # When starting from empty, bootstrap with individual insertion
-            # then switch to bulk for performance
-            var bootstrap_count = min(100, actual_count)  # Bootstrap first 100 nodes
+            # When starting from empty graph, use individual insertion for all nodes
+            # Individual insertion creates proper connectivity, bulk insertion has issues
 
             # Set up the first node as entry point
             self.entry_point = node_ids[0]
             self.size = 1
 
-            # Process bootstrap nodes individually for initial connectivity
-            for i in range(1, bootstrap_count):
+            # Process ALL nodes individually for proper graph construction
+            for i in range(1, actual_count):
                 self._insert_node_bulk(node_ids[i], node_levels[i], self.get_vector(node_ids[i]))
                 self.size += 1
 
-            # Remaining nodes will be processed via bulk path
-            if bootstrap_count < actual_count:
-                var remaining_ids = List[Int]()
-                var remaining_levels = List[Int]()
-                for i in range(bootstrap_count, actual_count):
-                    remaining_ids.append(node_ids[i])
-                    remaining_levels.append(node_levels[i])
-                node_ids = remaining_ids
-                node_levels = remaining_levels
-                actual_count = len(node_ids)
-            else:
-                actual_count = 0  # All nodes processed
+            # Skip bulk path - all nodes already processed
+            actual_count = 0
 
         # 6. HIERARCHICAL BATCHING FOR COMPETITIVE PERFORMANCE
         # Process ALL nodes through bulk path for proper connectivity
@@ -1133,6 +1122,7 @@ struct HNSWIndex(Movable):
                     memcpy(dest, src, self.dimension * 4)  # Fix: Float32 = 4 bytes
             
                 # Process this chunk by layer groups
+                # Note: self.size will be updated after graph construction for safety
                 var chunk_max_level = 0
                 for i in range(chunk_size_actual):
                     if chunk_levels[i] > chunk_max_level:
@@ -1184,11 +1174,38 @@ struct HNSWIndex(Movable):
                     var M_layer = max_M if layer > 0 else max_M0
                     var bulk_neighbors: UnsafePointer[Int]
                     
-                    # QUALITY FIX: Always use thorough bulk search for better connectivity
-                    # Fast sampling was causing poor recall - prioritize quality over speed
-                    bulk_neighbors = self._bulk_neighbor_search(
-                        layer_query_vectors, n_layer_queries, layer_entry_points, layer, M_layer
-                    )
+                    # CRITICAL FIX: Use proper graph-based search instead of brute-force bulk search
+                    # Bulk search bypasses graph structure causing poor connectivity
+                    # Individual graph traversal creates proper HNSW connectivity
+                    bulk_neighbors = UnsafePointer[Int].alloc(n_layer_queries * M_layer)
+
+                    for q in range(n_layer_queries):
+                        var query_vec = layer_query_vectors.offset(q * self.dimension)
+                        var entry_point = layer_entry_points[q]
+
+                        # Create binary quantized version for this query
+                        var query_binary: BinaryQuantizedVector
+                        if self.use_binary_quantization:
+                            query_binary = BinaryQuantizedVector(query_vec, self.dimension)
+                        else:
+                            var dummy_ptr = UnsafePointer[Float32].alloc(self.dimension)
+                            for j in range(self.dimension):
+                                dummy_ptr[j] = 0.0
+                            query_binary = BinaryQuantizedVector(dummy_ptr, self.dimension)
+
+                        # Use proper graph-based search for M neighbors
+                        var neighbors = self._search_layer_for_M_neighbors(
+                            query_vec, entry_point, M_layer, layer, query_binary
+                        )
+
+                        # Store neighbors in bulk_neighbors array
+                        var result_offset = q * M_layer
+                        for m in range(min(M_layer, len(neighbors))):
+                            bulk_neighbors[result_offset + m] = neighbors[m]
+
+                        # Fill remaining slots with -1 if we have fewer than M neighbors
+                        for m in range(len(neighbors), M_layer):
+                            bulk_neighbors[result_offset + m] = -1
                     
                     # Bulk graph updates - apply connections for this chunk
                     for q in range(n_layer_queries):
@@ -1222,7 +1239,7 @@ struct HNSWIndex(Movable):
                 
                 # Update size counter for this chunk
                 self.size += chunk_size_actual
-                
+
                 # Cleanup chunk resources
                 chunk_vectors.free()
         
