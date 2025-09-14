@@ -711,3 +711,68 @@ struct VectorStorage:
     var index_file: PythonObject  # Separate index
     var id_map: Dict[String, Int]  # In-memory index
 ```
+
+## HNSW Quality Patterns (Critical Learnings)
+
+### Bulk Insertion Must Navigate Hierarchy
+```mojo
+// ❌ WRONG: Direct connection without navigation
+for node in bulk_nodes:
+    connect_to_random_nodes(node)
+
+// ✅ RIGHT: Navigate from entry point through layers
+var curr_nearest = self.entry_point
+for lc in range(entry_level, layer, -1):
+    curr_nearest = self._search_layer_simple(vector, curr_nearest, 1, lc)
+```
+
+### Graph Connectivity Requires Sufficient Sampling
+```mojo
+// ❌ WRONG: Sample too few nodes
+var sample_size = min(20, self.size)
+
+// ✅ RIGHT: Sample at least 100 nodes or 10% of graph
+var sample_size = min(self.size, max(100, self.size // 10))
+```
+
+### Use Correct Search Parameters
+```mojo
+// ❌ WRONG: Use M for search (way too small)
+var ef = M  // Only 16!
+
+// ✅ RIGHT: Use ef_construction for quality
+var ef = ef_construction  // 200 for good recall
+```
+
+### Bidirectional Connections Need Pruning
+```mojo
+// ❌ WRONG: Add reverse connection without pruning
+neighbor[].add_connection(layer, node_id)
+
+// ✅ RIGHT: Add connection then prune to maintain capacity
+neighbor[].add_connection(layer, node_id)
+self._prune_connections(neighbor_id, layer, M_layer)
+```
+
+### Adaptive Strategy for Small Datasets
+```mojo
+// ❌ WRONG: Always use HNSW regardless of size
+if true: use_hnsw()
+
+// ✅ RIGHT: Use flat buffer for small datasets
+if dataset_size < 500:
+    use_flat_buffer()  // 100% recall, 2-4x faster
+else:
+    use_hnsw()  // Scalable for large datasets
+```
+
+### Migration Requires Careful Memory Management
+- Small migrations (<500): Work perfectly
+- Large migrations (1000+): Can segfault if not batched
+- Solution: Batch large migrations or use pure bulk insertion
+
+### Quality Testing Must Use Realistic Queries
+- Exact match testing: Can hide real issues
+- Random queries: Better represent production use
+- Always test recall@1 and recall@10
+

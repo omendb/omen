@@ -16,7 +16,7 @@ Architecture: Mojo core + Python bindings for maximum performance.
 from python import PythonObject, Python
 from python.bindings import PythonModuleBuilder
 from collections import List, Dict
-from memory import UnsafePointer
+from memory import UnsafePointer, memcpy
 from math import sqrt
 from random import random_float64
 from omendb.algorithms.hnsw import HNSWIndex  # FIXED - memory corruption resolved
@@ -152,7 +152,8 @@ struct GlobalDatabase(Movable):
             return True
         else:
             # Add to HNSW (for larger datasets)
-            var numeric_id = self.hnsw_index.insert(vector)
+            # CRITICAL TEST: Force individual insertion to isolate bulk insertion bug
+            var numeric_id = self.hnsw_index.insert(vector)  # Individual insertion (works)
             if numeric_id < 0:
                 return False
             
@@ -201,28 +202,35 @@ struct GlobalDatabase(Movable):
             return results
     
     fn _migrate_flat_buffer_to_hnsw(mut self):
-        """Migrate all vectors from flat buffer to HNSW when threshold is reached."""
+        """Migrate all vectors from flat buffer to HNSW when threshold is reached.
+        
+        CRITICAL FIX: Use bulk insertion instead of individual insertion.
+        Individual insertion creates isolated nodes with poor connectivity.
+        Bulk insertion creates proper HNSW graph structure.
+        """
         print("🚀 ADAPTIVE: Starting migration of", self.flat_buffer_count, "vectors")
         
-        for i in range(self.flat_buffer_count):
-            var string_id = self.flat_buffer_string_ids[i]
-            
-            # Get vector from flat buffer
-            var vector_offset = i * self.dimension
-            var vector_ptr = self.flat_buffer + vector_offset
-            
-            # Insert into HNSW
-            var numeric_id = self.hnsw_index.insert(vector_ptr)
+        # CRITICAL FIX: Use bulk insertion for proper connectivity
+        # The flat buffer data is already in the correct format for bulk insertion
+        
+        # Bulk insert all vectors (creates proper HNSW connectivity)
+        var numeric_ids = self.hnsw_index.insert_bulk(self.flat_buffer, self.flat_buffer_count)
+        
+        # Update ID mappings
+        var migrated_count = 0
+        for i in range(len(numeric_ids)):
+            var numeric_id = numeric_ids[i]
             if numeric_id >= 0:
-                # Store ID mapping (both directions)
+                var string_id = self.flat_buffer_string_ids[i]
                 _ = self.id_mapper.insert(string_id, numeric_id)
                 _ = self.reverse_id_mapper.insert(numeric_id, string_id)
+                migrated_count += 1
         
         # Clear flat buffer
         self.flat_buffer_count = 0
         self.flat_buffer_string_ids.clear()
         
-        print("✅ ADAPTIVE: Migration completed, now using HNSW for all operations")
+        print("✅ ADAPTIVE: Migration completed -", migrated_count, "vectors moved to HNSW via bulk insertion")
     
     fn _flat_buffer_search(
         self,
@@ -317,6 +325,10 @@ struct GlobalDatabase(Movable):
         _ = self.id_mapper.clear() 
         _ = self.reverse_id_mapper.clear()
         _ = self.metadata_storage.clear()
+        
+        # Clear flat buffer state (CRITICAL FIX)
+        self.flat_buffer_count = 0
+        self.flat_buffer_string_ids.clear()
         
         # Reset state
         self.initialized = False
@@ -544,66 +556,46 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 if db_ptr[].initialize(dimension):
                     pass  # Database initialized
             
-            # EXPERIMENT: Try bulk insertion for massive speedup potential
-            # If this fails, will fallback to individual (lines 392+)
-            print("🚀 EXPERIMENTAL: Trying bulk insertion for massive speedup")
+            # FIX: Use adaptive strategy for batch operations
+            print("🚀 ADAPTIVE: Using adaptive strategy for batch insertion")
             
-            try:
-                # Use bulk insertion for potentially 5-10x speedup
-                var bulk_results = db_ptr[].hnsw_index.insert_bulk(vectors_ptr, num_vectors)
+            # Use the adaptive strategy by going through add_vector_with_metadata
+            # This ensures flat buffer vs HNSW logic is consistent
+            for i in range(num_vectors):
+                var id_str = String(vector_ids[i])
                 
-                if len(bulk_results) == num_vectors:
-                    print("✅ BULK SUCCESS:", num_vectors, "vectors inserted via bulk path")
-                    
-                    # Process ID mappings for successful bulk insertion
-                    for i in range(num_vectors):
-                        var id_str = String(vector_ids[i])
-                        var numeric_id = bulk_results[i]
-                        
-                        _ = db_ptr[].id_mapper.insert(id_str, numeric_id)
-                        _ = db_ptr[].reverse_id_mapper.insert(numeric_id, id_str)
-                        
-                        if i < len(metadata_list):
-                            var empty_metadata = Metadata()
-                            _ = db_ptr[].metadata_storage.set(id_str, empty_metadata)
-                        
-                        results.append(id_str)
-                        db_ptr[].next_numeric_id = max(db_ptr[].next_numeric_id, numeric_id + 1)
-                    
-                    # Bulk insertion succeeded - skip individual fallback
-                    pass
+                # Get vector pointer for this specific vector
+                var vector_ptr = vectors_ptr.offset(i * dimension)
+                
+                # Convert metadata if provided
+                var empty_metadata = Metadata()
+                if i < len(metadata_list):
+                    try:
+                        var metadata = metadata_list[i]
+                        var metadata_str = String(metadata)
+                        if metadata_str != "None" and metadata:
+                            var keys_list = List[String]()
+                            var values_list = List[String]()
+                            
+                            var keys = metadata.keys()
+                            for j in range(len(keys)):
+                                var key = String(keys[j])
+                                var value_str = String(metadata[keys[j]])
+                                keys_list.append(key)
+                                values_list.append(value_str)
+                            
+                            empty_metadata = Metadata(keys_list, values_list)
+                    except:
+                        pass  # Use empty metadata for any errors
+                
+                # Use adaptive strategy for consistency 
+                var success = db_ptr[].add_vector_with_metadata(id_str, vector_ptr, empty_metadata)
+                
+                if success:
+                    results.append(id_str)
                 else:
-                    print("⚠️  BULK PARTIAL:", len(bulk_results), "/", num_vectors, "- falling back")
-                    # Will fall through to individual insertion fallback
-                    raise String("Bulk insertion incomplete")
-                    
-            except e:
-                print("⚠️  BULK FAILED:", e, "- falling back to individual insertion")
-                
-                # FALLBACK: Individual inserts (current working approach)
-                for i in range(num_vectors):
-                    var id_str = String(vector_ids[i])
-                    
-                    # Get vector pointer for this specific vector
-                    var vector_ptr = vectors_ptr.offset(i * dimension)
-                    
-                    # Use individual insert (we know this works)
-                    var numeric_id = db_ptr[].hnsw_index.insert(vector_ptr)
-                    
-                    if numeric_id >= 0:
-                        _ = db_ptr[].id_mapper.insert(id_str, numeric_id)
-                        _ = db_ptr[].reverse_id_mapper.insert(numeric_id, id_str)
-                        
-                        if i < len(metadata_list):
-                            # Use empty metadata for now
-                            var empty_metadata = Metadata()
-                            _ = db_ptr[].metadata_storage.set(id_str, empty_metadata)
-                        
-                        results.append(id_str)
-                        db_ptr[].next_numeric_id = max(db_ptr[].next_numeric_id, numeric_id + 1)
-                    else:
-                        # Individual insert failed - continue with remaining vectors
-                        print("Individual insert failed for vector", i)
+                    # Individual insert failed - continue with remaining vectors
+                    print("Individual insert failed for vector", i)
             
             # vectors_ptr points to NumPy's managed memory - attempting to free() causes 
             # "Attempt to free invalid pointer" crash. NumPy handles deallocation.

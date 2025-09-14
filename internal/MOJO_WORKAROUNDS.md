@@ -1,7 +1,9 @@
-# Mojo Workarounds & Limitations
+# OmenDB-Specific Mojo Workarounds
 
-## Critical Context for AI Agents
-**This file tracks Mojo limitations and our workarounds. Always check this before implementing.**
+## Critical Context for AI Agents  
+**This file tracks OmenDB-specific Mojo workarounds. For general Mojo patterns, see @external/agent-contexts/languages/mojo/MOJO_PATTERNS.md**
+
+## Project-Specific Solutions
 
 ## Language Limitations & Solutions
 
