@@ -2050,12 +2050,25 @@ struct HNSWIndex(Movable):
                 var neighbor_node = self.node_pool.get(neighbor_id)
                 var reverse_success = neighbor_node[].add_connection(lc, new_id)
 
+                # CRITICAL FIX: If reverse connection fails due to capacity, prune and retry
+                if not reverse_success and neighbor_node:
+                    # Calculate distance from neighbor to new node for smarter pruning
+                    var neighbor_vec = self.get_vector(neighbor_id)
+                    var new_vec = self.get_vector(new_id)
+                    if neighbor_vec and new_vec:
+                        var dist_to_new = self.distance(neighbor_vec, new_vec)
+                        # Force pruning with knowledge of the new connection quality
+                        self._prune_connections_with_candidate(neighbor_id, lc, M_layer, new_id, dist_to_new)
+                        # Try again after pruning
+                        reverse_success = neighbor_node[].add_connection(lc, new_id)
+
                 # DEBUG: Check reverse connections
                 if self.size == 500 and lc == 0 and i < 3:
-                    print("    Reverse from", neighbor_id, "- success:", reverse_success)
-                
-                # Prune neighbor's connections if needed (maintain M limit)
-                self._prune_connections(neighbor_id, lc, M_layer)
+                    print("    Reverse from", neighbor_id, "- success:", reverse_success, "(after pruning if needed)")
+
+                # Regular pruning (in case we added without failure)
+                if reverse_success:
+                    self._prune_connections(neighbor_id, lc, M_layer)
             
             # Use closest neighbor as entry for next layer
             if len(neighbors) > 0:
@@ -2558,7 +2571,60 @@ struct HNSWIndex(Movable):
             for i in range(len(selected)):
                 var idx = layer * max_M0 + i  # Use max_M0 for consistent indexing
                 node[].connections_higher[idx] = selected[i]
-    
+
+    fn _prune_connections_with_candidate(mut self, node_id: Int, layer: Int, M: Int, candidate_id: Int, candidate_dist: Float32):
+        """Prune connections considering a new candidate connection.
+        This removes the worst connection if the candidate is better than any existing connection.
+        """
+        # SAFETY: Use same validation as regular pruning
+        if node_id < 0 or node_id >= self.node_pool.capacity:
+            return
+
+        var node = self.node_pool.get(node_id)
+        if not node:
+            return
+
+        if layer == 0:
+            var num_connections = node[].connections_l0_count
+            if num_connections < max_M0:
+                return  # Not at capacity, shouldn't happen
+
+            # Collect current connections with their distances
+            var connections = List[Tuple[Float32, Int]]()
+            var node_vector = self.get_vector(node_id)
+            if not node_vector:
+                return
+
+            # Add existing connections
+            for i in range(num_connections):
+                var neighbor = node[].connections_l0[i]
+                if neighbor >= 0:
+                    var neighbor_vector = self.get_vector(neighbor)
+                    if neighbor_vector:
+                        var dist = self.distance(node_vector, neighbor_vector)
+                        connections.append((dist, neighbor))
+
+            # Add the candidate connection
+            connections.append((candidate_dist, candidate_id))
+
+            # Sort by distance and keep the best M connections
+            for i in range(len(connections)):
+                for j in range(len(connections) - 1 - i):
+                    if connections[j][0] > connections[j+1][0]:  # Sort by distance (ascending)
+                        var temp = connections[j]
+                        connections[j] = connections[j+1]
+                        connections[j+1] = temp
+
+            # Keep only the best M connections
+            var to_keep = min(M, len(connections))
+
+            # Update the node's connections with the best ones
+            node[].connections_l0_count = 0
+            for i in range(to_keep):
+                if connections[i][1] != candidate_id:  # Don't add candidate here, will be added by caller
+                    node[].connections_l0[node[].connections_l0_count] = connections[i][1]
+                    node[].connections_l0_count += 1
+
     fn _remove_reverse_connection(mut self, from_node: Int, to_node: Int, layer: Int):
         """Remove connection from from_node to to_node at specified layer.
         
