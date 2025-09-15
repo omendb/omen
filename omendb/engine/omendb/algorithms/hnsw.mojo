@@ -1080,21 +1080,43 @@ struct HNSWIndex(Movable):
                     var binary_vec = BinaryQuantizedVector(vector_ptr, self.dimension)
                     self.binary_vectors[node_id] = binary_vec
         
-        # 5. SPECIAL CASE: Building graph from scratch
-        if self.size == 0 and actual_count > 0:
-            # When starting from empty graph, use individual insertion for all nodes
-            # Individual insertion creates proper connectivity, bulk insertion has issues
+        # 5. CONNECTIVITY FIX: Use individual insertion for proper graph structure
+        # Analysis showed bulk insertion creates disconnected graphs with poor recall
+        # Individual insertion creates proper bidirectional connectivity and navigation
 
+        if self.size == 0 and actual_count > 0:
             # Set up the first node as entry point
             self.entry_point = node_ids[0]
             self.size = 1
 
-            # Process ALL nodes individually for proper graph construction
+            # Process ALL nodes individually for proper HNSW graph construction
             for i in range(1, actual_count):
-                self._insert_node_bulk(node_ids[i], node_levels[i], self.get_vector(node_ids[i]))
+                # Use proper individual insertion algorithm, not bulk variant
+                self._insert_node(node_ids[i], node_levels[i], self.get_vector(node_ids[i]))
+
+                # Update entry point if this node has higher level (critical for HNSW)
+                var current_entry_level = self.node_pool.get(self.entry_point)[].level
+                if node_levels[i] > current_entry_level:
+                    self.entry_point = node_ids[i]
+
                 self.size += 1
 
-            # Skip bulk path - all nodes already processed
+            # Skip bulk path - all nodes processed with proper connectivity
+            actual_count = 0
+        else:
+            # For incremental additions to existing graph, also use individual insertion
+            # This ensures new nodes connect properly to the existing graph structure
+            for i in range(actual_count):
+                self._insert_node(node_ids[i], node_levels[i], self.get_vector(node_ids[i]))
+
+                # Update entry point if needed
+                var current_entry_level = self.node_pool.get(self.entry_point)[].level
+                if node_levels[i] > current_entry_level:
+                    self.entry_point = node_ids[i]
+
+                self.size += 1
+
+            # All nodes processed individually
             actual_count = 0
 
         # 6. HIERARCHICAL BATCHING FOR COMPETITIVE PERFORMANCE
