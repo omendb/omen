@@ -103,8 +103,8 @@ struct FastMinHeap(Copyable, Movable):
             return self.heap[0]
         return SearchCandidate(Float32.MAX, -1)
 
-    fn add(mut self, distance: Float32, node_id: Int):
-        """Add element to heap. O(log n)"""
+    fn add(mut self, distance: Float32, node_id: Int) -> Bool:
+        """Add element to heap. O(log n). Returns success."""
         if self.size >= self.capacity:
             self._resize()
 
@@ -115,6 +115,7 @@ struct FastMinHeap(Copyable, Movable):
 
         # Bubble up to maintain heap property
         self._bubble_up(idx)
+        return True
 
     fn extract_min(mut self) -> SearchCandidate:
         """Remove and return minimum element. O(log n)"""
@@ -273,25 +274,23 @@ struct FastMaxHeap(Copyable, Movable):
         """Get current size."""
         return self.size
 
-    fn add(mut self, distance: Float32, node_id: Int):
-        """Add element to max-heap. O(log n)"""
+    fn add(mut self, distance: Float32, node_id: Int) -> Bool:
+        """Add element to max-heap. O(log n). Returns success."""
         if self.size < self.max_size:
             # Add normally
             var idx = self.size
             self.heap[idx] = SearchCandidate(distance, node_id)
             self.size += 1
             self._bubble_up_max(idx)
+            return True
         else:
-            # Replace maximum if this is smaller
-            if distance < self.heap[0].distance:
-                self.heap[0] = SearchCandidate(distance, node_id)
-                var root_idx = 0
-                self._bubble_down_max(root_idx)
+            # At capacity, don't add - use replace_furthest instead
+            return False
 
     fn replace_furthest(mut self, distance: Float32, node_id: Int) -> Bool:
         """OPTIMIZED: Replace furthest (maximum) element if distance is closer."""
         if self.size < self.max_size:
-            self.add(distance, node_id)
+            _ = self.add(distance, node_id)
             return True
         elif distance < self.heap[0].distance:
             self.heap[0] = SearchCandidate(distance, node_id)
