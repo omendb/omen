@@ -558,46 +558,89 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 if db_ptr[].initialize(dimension):
                     pass  # Database initialized
             
-            # FIX: Use adaptive strategy for batch operations
-            print("🚀 ADAPTIVE: Using adaptive strategy for batch insertion")
-            
-            # Use the adaptive strategy by going through add_vector_with_metadata
-            # This ensures flat buffer vs HNSW logic is consistent
-            for i in range(num_vectors):
-                var id_str = String(vector_ids[i])
-                
-                # Get vector pointer for this specific vector
-                var vector_ptr = vectors_ptr.offset(i * dimension)
-                
-                # Convert metadata if provided
-                var empty_metadata = Metadata()
-                if i < len(metadata_list):
-                    try:
-                        var metadata = metadata_list[i]
-                        var metadata_str = String(metadata)
-                        if metadata_str != "None" and metadata:
-                            var keys_list = List[String]()
-                            var values_list = List[String]()
-                            
-                            var keys = metadata.keys()
-                            for j in range(len(keys)):
-                                var key = String(keys[j])
-                                var value_str = String(metadata[keys[j]])
-                                keys_list.append(key)
-                                values_list.append(value_str)
-                            
-                            empty_metadata = Metadata(keys_list, values_list)
-                    except:
-                        pass  # Use empty metadata for any errors
-                
-                # Use adaptive strategy for consistency 
-                var success = db_ptr[].add_vector_with_metadata(id_str, vector_ptr, empty_metadata)
-                
-                if success:
-                    results.append(id_str)
-                else:
-                    # Individual insert failed - continue with remaining vectors
-                    print("Individual insert failed for vector", i)
+            # BREAKTHROUGH: Intelligent batch processing strategy
+            var current_total = db_ptr[].flat_buffer_count + db_ptr[].hnsw_index.size
+            var batch_size = num_vectors
+
+            # OPTIMIZATION: Skip flat buffer for large batches (eliminates migration bottleneck)
+            if batch_size >= 1000 or current_total + batch_size >= 1000:
+                print("🚀 BATCH OPTIMIZATION: Large batch detected (" + String(batch_size) + " vectors), using direct HNSW construction")
+
+                # Force migration if flat buffer has any vectors
+                if db_ptr[].flat_buffer_count > 0:
+                    print("🔄 BATCH: Migrating existing " + String(db_ptr[].flat_buffer_count) + " vectors before batch HNSW construction")
+                    db_ptr[]._migrate_flat_buffer_to_hnsw()
+
+                # Direct batch HNSW construction (Phase 1 optimization)
+                for i in range(num_vectors):
+                    var id_str = String(vector_ids[i])
+                    var vector_ptr = vectors_ptr.offset(i * dimension)
+
+                    # Convert metadata if provided
+                    var empty_metadata = Metadata()
+                    if i < len(metadata_list):
+                        try:
+                            var metadata = metadata_list[i]
+                            var metadata_str = String(metadata)
+                            if metadata_str != "None" and metadata:
+                                var keys_list = List[String]()
+                                var values_list = List[String]()
+
+                                var keys = metadata.keys()
+                                for j in range(len(keys)):
+                                    var key = String(keys[j])
+                                    var value_str = String(metadata[keys[j]])
+                                    keys_list.append(key)
+                                    values_list.append(value_str)
+
+                                empty_metadata = Metadata(keys_list, values_list)
+                        except:
+                            pass  # Use empty metadata for any errors
+
+                    # Direct HNSW insertion (bypasses flat buffer entirely)
+                    var node_id = db_ptr[].hnsw_index.insert(vector_ptr)
+                    if node_id >= 0:
+                        _ = db_ptr[].id_mapper.insert(id_str, node_id)
+                        _ = db_ptr[].reverse_id_mapper.insert(node_id, id_str)
+                        _ = db_ptr[].metadata_storage.set(id_str, empty_metadata)
+                        results.append(id_str)
+
+            else:
+                # STANDARD: Use adaptive strategy for smaller batches
+                print("🚀 ADAPTIVE: Using adaptive strategy for batch insertion (" + String(batch_size) + " vectors)")
+
+                for i in range(num_vectors):
+                    var id_str = String(vector_ids[i])
+
+                    # Get vector pointer for this specific vector
+                    var vector_ptr = vectors_ptr.offset(i * dimension)
+
+                    # Convert metadata if provided
+                    var empty_metadata = Metadata()
+                    if i < len(metadata_list):
+                        try:
+                            var metadata = metadata_list[i]
+                            var metadata_str = String(metadata)
+                            if metadata_str != "None" and metadata:
+                                var keys_list = List[String]()
+                                var values_list = List[String]()
+
+                                var keys = metadata.keys()
+                                for j in range(len(keys)):
+                                    var key = String(keys[j])
+                                    var value_str = String(metadata[keys[j]])
+                                    keys_list.append(key)
+                                    values_list.append(value_str)
+
+                                empty_metadata = Metadata(keys_list, values_list)
+                        except:
+                            pass  # Use empty metadata for any errors
+
+                    # Use adaptive strategy for consistency
+                    var success = db_ptr[].add_vector_with_metadata(id_str, vector_ptr, empty_metadata)
+
+                    if success:
+                        results.append(id_str)
             
             # vectors_ptr points to NumPy's managed memory - attempting to free() causes 
             # "Attempt to free invalid pointer" crash. NumPy handles deallocation.
