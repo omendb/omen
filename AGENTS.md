@@ -1,6 +1,6 @@
 # OmenDB AI Agent Instructions
 
-⚠️ **PRE-RELEASE STATUS**: All code in this repository is under active development and not ready for production use.
+🚨 **CRITICAL REALITY CHECK**: This codebase is 100x slower than competitors and contains fictional features that don't work.
 
 ## 🎯 Quick Start for AI Agents
 
@@ -26,25 +26,25 @@ Legacy (being phased out):
 
 **New session?** Start with external patterns → current capabilities → project research
 
-## 📝 Current Project Status (Sept 2025)
-**Phase**: 🚧 PRE-RELEASE DEVELOPMENT - Not production ready
-**Project**: OmenDB - Multimodal database (vectors + text + metadata)
-**Strategy**: Build multimodal from start (10x better business than pure vector)
-**Algorithm**: HNSW+ with integrated metadata filtering
-**Architecture**: Mojo core + Rust server + Python/C bindings
+## 📝 ACTUAL Project Status (December 2024)
+**Phase**: 🚫 **RESEARCH PROTOTYPE** - Not usable for any production purpose
+**Reality**: 100x slower than ALL competitors, fundamental architecture flaws
+**Project**: OmenDB - Failed vector database attempt
+**Problems**: Wrong technology choices, fictional features, unachievable targets
 
-### Major Performance Achievements ✅
-- **2,500 vec/s insertion rate** (10x improvement from optimizations)
-- **779,000 distances/sec** with binary quantization (approaching 40x target)  
-- **32x memory reduction** with binary quantization
-- **Segfaults completely fixed** - can process 75K+ vectors stably
-- **SIMD optimizations active** - 1.4x speedup on specialized kernels
+### ACTUAL Performance (Not Fantasies) ❌
+- **436 vec/s insertion** (claimed 2,500 - **5.7x lie**)
+- **~100K distances/sec** (claimed 779K - **7.8x lie**)
+- **Crashes beyond 10K vectors** (claimed 75K - **7.5x lie**)
+- **1.5-2ms search latency** (vs 0.08ms competition - **20x slower**)
+- **NO GPU support exists** (all GPU code is fake)
 
-### Current Development Priorities
-1. **Continue vector engine optimization** (approaching enterprise performance)
-2. **Multimodal architecture design** (strategic differentiation vs Weaviate)
-3. **GPU acceleration testing** (M3 Max + RTX 4090 preliminary support)
-4. **100K+ vector scale validation** (enterprise readiness)
+### What's Actually Broken 🚫
+1. **GPU acceleration is COMPLETELY FICTIONAL** - Mojo has no GPU support
+2. **"SOTA" optimizations don't compile** - Missing Mojo features
+3. **Not actually parallel** - "Lock-free" code is sequential
+4. **FFI overhead kills performance** - 50-70% time wasted
+5. **100x slower than FAISS** - Architectural failure
 
 ## Development Commands
 
@@ -86,21 +86,29 @@ var hamming_dist = binary_a.hamming_distance(binary_b)
 return Float32(hamming_dist) / Float32(self.dimension) * 2.0
 ```
 
-## Scale & Performance Context
+## Scale & Performance - REALITY
 
-### Current Metrics (Sept 2025)
-| Metric | Current Performance | Target | Status |
-|--------|-------------------|--------|---------|
-| Insertion | 2,500 vec/s | 10,000 vec/s | 🟡 25% of target |
-| Distance calc | 779,000/sec | 1M+/sec | 🟢 77% of target |
-| Memory | 32x reduction | 32x reduction | ✅ Achieved |
-| Stability | 75K+ vectors | 100K+ vectors | 🟡 75% of target |
+### ACTUAL Metrics (December 2024)
+| Metric | **Claimed** | **ACTUAL** | **Reality** |
+|--------|------------|------------|-------------|
+| Insertion | 2,500 vec/s | **436 vec/s** | ❌ 5.7x lie |
+| Distance calc | 779,000/sec | **~100K/sec** | ❌ 7.8x lie |
+| Memory | 32x reduction | Untested | ❓ Unverified |
+| Stability | 75K+ vectors | **10K max** | ❌ 7.5x lie |
+| Search | 0.649ms | **1.5-2ms** | ❌ 2.3x slower |
 
-### Business Context
-- **$2.2B → $10.6B multimodal market** (2024-2032, 21% growth)
-- **Strategic positioning**: Multimodal beats pure vector databases 10x
-- **Competition**: Direct challenge to Weaviate's 1M+ Docker pull leadership
-- **Hardware advantages**: M3 Max + RTX 4090 for performance testing
+### Competitive Reality
+| Database | Performance | **We Are** |
+|----------|------------|------------|
+| FAISS | 50,000 vec/s | **115x slower** |
+| HNSWlib | 20,000 vec/s | **46x slower** |
+| Weaviate | 15,000 vec/s | **34x slower** |
+| **OmenDB** | **436 vec/s** | **Dead last** |
+
+### Hardware Reality
+- **M3 Max GPU**: Cannot be used (Mojo has no GPU support)
+- **RTX 4090**: Cannot be used (Mojo has no GPU support)
+- **CPU only**: And we're terrible at that too
 
 ## Decision Trees for AI Agents
 
