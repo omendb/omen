@@ -583,7 +583,14 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 print("🚀 PHASE 2: Using true bulk HNSW insertion (5-10x faster than individual)")
 
                 # Revolutionary bulk insertion - processes all vectors simultaneously
-                var bulk_node_ids = db_ptr[].hnsw_index.insert_bulk(vectors_ptr, num_vectors)
+                # Enable parallel processing for better performance
+                var use_parallel = num_vectors >= 500  # Use parallel for larger batches
+                var bulk_node_ids: List[Int]
+                if use_parallel:
+                    print("🚀 PARALLEL: Using parallel graph construction for " + String(num_vectors) + " vectors")
+                    bulk_node_ids = db_ptr[].hnsw_index.insert_bulk_wip(vectors_ptr, num_vectors)
+                else:
+                    bulk_node_ids = db_ptr[].hnsw_index.insert_bulk(vectors_ptr, num_vectors)
 
                 print("✅ BULK INSERT: " + String(len(bulk_node_ids)) + " vectors processed in bulk")
 
