@@ -1,3 +1,5 @@
+> **Status:** Legacy reference (October 2025). See `internal/ARCHITECTURE.md`, `internal/RESEARCH.md`, and `internal/STATUS.md` for the active CPU-first plan.
+
 # ULTRATHINKING: COMPETITIVE PERFORMANCE ANALYSIS
 
 ## 🎯 **BRUTAL PERFORMANCE REALITY CHECK**

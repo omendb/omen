@@ -1,3 +1,5 @@
+> **Status:** Legacy reference (October 2025). See `internal/ARCHITECTURE.md`, `internal/RESEARCH.md`, and `internal/STATUS.md` for the active CPU-first plan.
+
 # OmenDB Next Steps & Strategic Roadmap
 *September 2025 - Post-Revolutionary Performance Breakthroughs*
 

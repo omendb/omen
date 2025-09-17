@@ -26,9 +26,12 @@ from ..core.utils import get_optimal_workers
 from ..compression.product_quantization import PQCompressor, PQVector
 from ..utils.memory_pool import allocate_vector, free_vector, AlignedBuffer
 from ..utils.specialized_kernels import euclidean_distance_128d, euclidean_distance_256d, euclidean_distance_384d, euclidean_distance_512d, euclidean_distance_768d, euclidean_distance_1536d, has_specialized_kernel
-from ..utils.advanced_simd import euclidean_distance_128d_avx512, euclidean_distance_adaptive_simd, vectorized_candidate_distances, binary_hamming_distance_avx512, get_simd_capabilities, select_optimal_distance_function
-from ..utils.parallel_construction import parallel_bulk_insert_lockfree, select_parallel_strategy, estimate_parallel_speedup, measure_parallel_construction_performance
-from ..utils.adaptive_search import AdaptiveSearchParameters, QueryDifficultyEstimator, optimize_search_for_latency, classify_query_type, measure_adaptive_search_impact
+# CRITICAL: advanced_simd doesn't compile (lambda syntax errors), using alternatives
+# from ..utils.advanced_simd import euclidean_distance_128d_avx512, euclidean_distance_adaptive_simd
+from ..utils.simd_distance import simd_l2_distance as euclidean_distance_adaptive_simd
+# NOTE: These imports also fail, commenting out for now
+# from ..utils.parallel_construction import parallel_bulk_insert_lockfree, select_parallel_strategy, estimate_parallel_speedup, measure_parallel_construction_performance
+# from ..utils.adaptive_search import AdaptiveSearchParameters, QueryDifficultyEstimator, optimize_search_for_latency, classify_query_type, measure_adaptive_search_impact
 from .fast_priority_queue import FastMinHeap, FastMaxHeap, SearchCandidate
 
 fn min(a: Int, b: Int) -> Int:
@@ -408,6 +411,8 @@ struct HNSWIndex(Movable):
     
     var node_pool: NodePool
     var vectors: UnsafePointer[Float32]
+    var vectors_soa: UnsafePointer[Float32]
+    var vector_stride: Int
     var dimension: Int
     var capacity: Int
     var size: Int
@@ -429,8 +434,9 @@ struct HNSWIndex(Movable):
     var use_product_quantization: Bool  # Enable 16x memory compression
 
     # SOTA Query-Adaptive Search (2025 breakthrough)
-    var adaptive_search: AdaptiveSearchParameters  # Dynamic ef selection for 2-4x speedup
-    var use_adaptive_search: Bool  # Enable ML-based parameter optimization
+    # TODO: Re-enable after fixing imports
+    # var adaptive_search: AdaptiveSearchParameters  # Dynamic ef selection for 2-4x speedup
+    var use_adaptive_search: Bool  # Disabled until imports fixed
     var target_search_latency_ms: Float32  # Target latency for adaptive optimization
 
     # Version-based visited tracking (no O(n) clearing needed!)
@@ -451,7 +457,9 @@ struct HNSWIndex(Movable):
         # Use memory pool allocation for cache-aligned vector storage
         # Note: Allocating as single contiguous block (capacity * dimension) for cache efficiency
         self.vectors = UnsafePointer[Float32].alloc(capacity * dimension)  # TODO: Replace with aligned allocation when available
-        
+        self.vector_stride = capacity
+        self.vectors_soa = UnsafePointer[Float32].alloc(capacity * dimension)
+
         # Initialize 2025 research optimizations
         # Hub Highway architecture (flat graph breakthrough)
         self.hub_nodes = List[Int]()
@@ -479,8 +487,8 @@ struct HNSWIndex(Movable):
         self.use_product_quantization = False
 
         # SOTA Query-Adaptive Search (2025 breakthrough)
-        self.adaptive_search = AdaptiveSearchParameters(dimension, 50)  # Default ef=50
-        self.use_adaptive_search = True  # Enable by default for performance
+        # self.adaptive_search = AdaptiveSearchParameters(dimension, 50)  # Default ef=50
+        self.use_adaptive_search = False  # Disabled until imports fixed
         self.target_search_latency_ms = 1.0  # 1ms target latency
 
         # Pre-allocate visited buffer with version tracking
@@ -500,6 +508,8 @@ struct HNSWIndex(Movable):
         self.entry_point = existing.entry_point
         self.node_pool = existing.node_pool^
         self.vectors = existing.vectors
+        self.vectors_soa = existing.vectors_soa
+        self.vector_stride = existing.vector_stride
         self.visited_size = existing.visited_size
         self.visited_buffer = existing.visited_buffer
         self.visited_version = existing.visited_version
@@ -518,18 +528,21 @@ struct HNSWIndex(Movable):
         self.use_product_quantization = existing.use_product_quantization
 
         # Move SOTA Query-Adaptive Search
-        self.adaptive_search = existing.adaptive_search^
+        # self.adaptive_search = existing.adaptive_search^
         self.use_adaptive_search = existing.use_adaptive_search
         self.target_search_latency_ms = existing.target_search_latency_ms
 
         # Null out the pointers in existing to prevent double-free
         existing.vectors = UnsafePointer[Float32]()
+        existing.vectors_soa = UnsafePointer[Float32]()
         existing.visited_buffer = UnsafePointer[Int]()
     
     fn __del__(owned self):
         """Clean up all allocations."""
         if self.vectors:
             self.vectors.free()
+        if self.vectors_soa:
+            self.vectors_soa.free()
         if self.visited_buffer:
             self.visited_buffer.free()
     
@@ -577,31 +590,48 @@ struct HNSWIndex(Movable):
         if not new_vectors:
             print("ERROR: Failed to allocate memory for vectors")
             return
-        
+
+        var new_vectors_soa = UnsafePointer[Float32].alloc(new_capacity * self.dimension)
+        if not new_vectors_soa:
+            print("ERROR: Failed to allocate memory for SoA vectors")
+            new_vectors.free()
+            return
+
         var new_visited_buffer = UnsafePointer[Int].alloc(new_capacity)
         if not new_visited_buffer:
             print("ERROR: Failed to allocate memory for visited buffer")
             new_vectors.free()  # Clean up partial allocation
+            new_vectors_soa.free()
             return
-        
+
         # SAFETY CHECK 5: Copy existing data with bounds checking
         if self.size > 0 and self.vectors and self.visited_buffer:
             var copy_size = min(self.size, self.capacity)  # Never copy more than capacity
             memcpy(new_vectors, self.vectors, copy_size * self.dimension * 4)  # Float32 = 4 bytes
             memcpy(new_visited_buffer, self.visited_buffer, copy_size * 4)  # Int = 4 bytes
-        
+            if self.vectors_soa:
+                var old_stride = self.vector_stride
+                for d in range(self.dimension):
+                    var src = self.vectors_soa.offset(d * old_stride)
+                    var dest = new_vectors_soa.offset(d * new_capacity)
+                    memcpy(dest, src, copy_size * 4)
+
         # Initialize new visited buffer entries
         for i in range(self.size, new_capacity):
             new_visited_buffer[i] = 0
-        
+
         # Free old memory
         if self.vectors:
             self.vectors.free()
+        if self.vectors_soa:
+            self.vectors_soa.free()
         if self.visited_buffer:
             self.visited_buffer.free()
-        
+
         # Update pointers and capacity
         self.vectors = new_vectors
+        self.vectors_soa = new_vectors_soa
+        self.vector_stride = new_capacity
         self.visited_buffer = new_visited_buffer
         self.visited_size = new_capacity
         
@@ -662,12 +692,18 @@ struct HNSWIndex(Movable):
     
     @always_inline
     fn distance(self, a: UnsafePointer[Float32], b: UnsafePointer[Float32]) -> Float32:
-        """Simple L2 distance - removed over-engineered optimizations.
-        
-        The "smart" distance switching was adding overhead without benefit.
-        Simple is faster.
-        """
-        return self._simple_euclidean_distance(a, b)
+        """Compute distance, preferring SoA storage for in-index vectors."""
+        var idx_a = self._vector_index_from_ptr(a)
+        var idx_b = self._vector_index_from_ptr(b)
+
+        if idx_a >= 0 and idx_b >= 0:
+            return self._distance_between_nodes(idx_a, idx_b)
+        elif idx_a >= 0:
+            return self._distance_node_to_query(idx_a, b)
+        elif idx_b >= 0:
+            return self._distance_node_to_query(idx_b, a)
+        else:
+            return self._simple_euclidean_distance(a, b)
     
     @always_inline
     fn _fast_approximate_distance(self, a: UnsafePointer[Float32], b: UnsafePointer[Float32]) -> Float32:
@@ -687,19 +723,23 @@ struct HNSWIndex(Movable):
     
     @always_inline
     fn _simple_euclidean_distance(self, a: UnsafePointer[Float32], b: UnsafePointer[Float32]) -> Float32:
-        """🚀 SOTA SIMD: Advanced vectorization with AVX-512 support.
-
-        3-4x speedup with SOTA optimizations:
-        - AVX-512 64-wide SIMD utilization
-        - Software prefetching
-        - FMA operations
-        - Adaptive SIMD for any dimension
-        """
-        # Use SOTA AVX-512 kernel for 128D (most common)
+        if not a or not b:
+            return 0.0
+        # Use specialized kernels for common dimensions (better cache locality)
         if self.dimension == 128:
-            return euclidean_distance_128d_avx512(a, b)
-        # Use advanced adaptive SIMD for all other dimensions
+            return euclidean_distance_128d(a, b)
+        elif self.dimension == 256:
+            return euclidean_distance_256d(a, b)
+        elif self.dimension == 384:
+            return euclidean_distance_384d(a, b)
+        elif self.dimension == 512:
+            return euclidean_distance_512d(a, b)
+        elif self.dimension == 768:
+            return euclidean_distance_768d(a, b)
+        elif self.dimension == 1536:
+            return euclidean_distance_1536d(a, b)
         else:
+            # Fallback to generic SIMD version
             return euclidean_distance_adaptive_simd(a, b, self.dimension)
     
     @always_inline
@@ -720,9 +760,7 @@ struct HNSWIndex(Movable):
                     return binary_distance(binary_a, binary_b)
         
         # Fallback to full precision SIMD distance
-        var a = self.get_vector(idx_a)
-        var b = self.get_vector(idx_b)
-        return self.distance(a, b)
+        return self._distance_between_nodes(idx_a, idx_b)
     
     @always_inline
     fn distance_to_query(self, query_binary: BinaryQuantizedVector, node_idx: Int, query: UnsafePointer[Float32]) -> Float32:
@@ -734,7 +772,7 @@ struct HNSWIndex(Movable):
                 return binary_distance(query_binary, node_binary)
 
         # Fallback to full precision
-        return self.distance(query, self.get_vector(node_idx))
+        return self._distance_node_to_query(node_idx, query)
     
     fn _search_hub_highway(mut self, query: UnsafePointer[Float32], k: Int) -> List[List[Float32]]:
         """
@@ -944,6 +982,63 @@ struct HNSWIndex(Movable):
             # Return null pointer for invalid index - safer than segfault
             return UnsafePointer[Float32]()
         return self.vectors.offset(idx * self.dimension)
+
+    @always_inline
+    fn _write_vector_soa(mut self, idx: Int, source: UnsafePointer[Float32]):
+        """Write a vector into the SoA buffer."""
+        if not self.vectors_soa or not source:
+            return
+        if idx < 0 or idx >= self.vector_stride:
+            return
+        var stride = self.vector_stride
+        var base = self.vectors_soa
+        for d in range(self.dimension):
+            base[d * stride + idx] = source[d]
+
+    @always_inline
+    fn _vector_index_from_ptr(self, ptr: UnsafePointer[Float32]) -> Int:
+        """Return the node index for an AoS pointer or -1 if not owned by this index."""
+        if not ptr or not self.vectors or self.dimension <= 0:
+            return -1
+        var base_addr = Int(self.vectors)
+        var diff = Int(ptr) - base_addr
+        if diff < 0:
+            return -1
+        var stride_bytes = self.dimension * 4  # Float32 = 4 bytes
+        if stride_bytes == 0 or diff % stride_bytes != 0:
+            return -1
+        var idx = diff // stride_bytes
+        if idx < 0 or idx >= self.capacity:
+            return -1
+        return idx
+
+    @always_inline
+    fn _distance_node_to_query(self, node_idx: Int, query: UnsafePointer[Float32]) -> Float32:
+        if node_idx < 0 or node_idx >= self.vector_stride or not query:
+            return self._simple_euclidean_distance(self.get_vector(node_idx), query)
+        if not self.vectors_soa:
+            return self._simple_euclidean_distance(self.get_vector(node_idx), query)
+        var stride = self.vector_stride
+        var total = Float32(0)
+        for d in range(self.dimension):
+            var node_val = self.vectors_soa[d * stride + node_idx]
+            var diff = node_val - query[d]
+            total += diff * diff
+        return sqrt(total)
+
+    @always_inline
+    fn _distance_between_nodes(self, idx_a: Int, idx_b: Int) -> Float32:
+        if idx_a < 0 or idx_a >= self.vector_stride or idx_b < 0 or idx_b >= self.vector_stride:
+            return self._simple_euclidean_distance(self.get_vector(idx_a), self.get_vector(idx_b))
+        if not self.vectors_soa:
+            return self._simple_euclidean_distance(self.get_vector(idx_a), self.get_vector(idx_b))
+        var stride = self.vector_stride
+        var total = Float32(0)
+        for d in range(self.dimension):
+            var offset = d * stride
+            var diff = self.vectors_soa[offset + idx_a] - self.vectors_soa[offset + idx_b]
+            total += diff * diff
+        return sqrt(total)
     
     fn insert(mut self, vector: UnsafePointer[Float32]) -> Int:
         """Insert vector into index with static capacity (resize disabled for stability)."""
@@ -962,6 +1057,7 @@ struct HNSWIndex(Movable):
         if not dest:
             return -1  # get_vector returned null - invalid index
         memcpy(dest, vector, self.dimension * 4)  # Fix: Float32 = 4 bytes
+        self._write_vector_soa(new_id, dest)
         
         # Create quantized versions if enabled (40x speedup)
         if self.use_binary_quantization:
@@ -1061,6 +1157,7 @@ struct HNSWIndex(Movable):
                 print("ERROR: NULL dest_vector for node_id", node_id)
                 return results
             memcpy(dest_vector, src_vector, self.dimension * 4)  # Fix: Float32 = 4 bytes
+            self._write_vector_soa(node_id, dest_vector)
         
         # 4. BULK QUANTIZATION (if enabled) - FIXED MEMORY MANAGEMENT
         if self.use_binary_quantization:
@@ -1370,6 +1467,7 @@ struct HNSWIndex(Movable):
             var src_vector = vectors.offset(i * self.dimension)
             var dest_vector = self.get_vector(node_id)
             memcpy(dest_vector, src_vector, self.dimension * 4)  # Fix: Float32 = 4 bytes
+            self._write_vector_soa(node_id, dest_vector)
         
         # 4. BULK QUANTIZATION (same as sequential - this part is fast)
         if self.use_binary_quantization:
@@ -1570,6 +1668,7 @@ struct HNSWIndex(Movable):
                 print("ERROR: NULL dest_vector for node_id", node_id)
                 return results
             memcpy(dest_vector, src_vector, self.dimension * 4)
+            self._write_vector_soa(node_id, dest_vector)
 
         # 3. BULK QUANTIZATION (Sequential - Fast)
         if self.use_binary_quantization:
@@ -3025,15 +3124,16 @@ struct HNSWIndex(Movable):
 
         # SOTA QUERY-ADAPTIVE SEARCH: Dynamic ef selection for 2-4x speedup
         var search_ef: Int
-        if self.use_adaptive_search:
-            # Use ML-based difficulty estimation for optimal ef selection
-            search_ef = self.adaptive_search.select_ef_adaptive(
-                query, curr_dist, self.size, self.target_search_latency_ms
-            )
-            # Note: Performance history update would be added in production
-        else:
-            # Fallback to traditional ef calculation
-            search_ef = max(ef_search + k * 5, k * 15)  # Adaptive: 150 + k*5 to k*15 range
+        # TODO: Re-enable adaptive search after fixing imports
+        # if self.use_adaptive_search:
+        #     # Use ML-based difficulty estimation for optimal ef selection
+        #     search_ef = self.adaptive_search.select_ef_adaptive(
+        #         query, curr_dist, self.size, self.target_search_latency_ms
+        #     )
+        #     # Note: Performance history update would be added in production
+        # else:
+        # Fallback to traditional ef calculation
+        search_ef = max(ef_search + k * 5, k * 15)  # Adaptive: 150 + k*5 to k*15 range
 
         var num_to_check = min(search_ef, 300)  # Cap exploration for safety
         var checked = 0

@@ -1,99 +1,60 @@
 # OmenDB Core Monorepo
 
-**Private monorepo for dual database engine development**
+Private workspace for the OmenDB vector engine (Mojo + Python) and the ZenDB hybrid database (Rust).
 
-This repository contains two complementary database engines designed for AI-native and cloud-native applications.
-
-## Repository Structure
-
+## Repository Layout
 ```
-omendb/               # OmenDB product suite
-├── engine/           # Mojo vector database (DiskANN algorithm)
-├── server/           # Rust HTTP/gRPC service (potentially outdated)
-└── web/              # SolidJS frontend (needs content updates)
+omendb/
+├── engine/        # Mojo vector engine + Python bindings + tests
+├── server/        # Rust API surface (maintained only when APIs shift)
+└── web/           # SolidJS UI shell (update alongside server changes)
 
-zendb/                # Rust hybrid database
-├── src/              # Core database implementation
-├── tests/            # 61/70 tests passing
-└── docs/             # Architecture & development docs
+zendb/             # Rust hybrid database (src/, tests/, docs/)
 
-internal/             # Internal documentation
-├── research/         # Performance & architecture research
-├── strategy/         # Business planning (private)
-├── decisions/        # Architecture decisions
-└── archive/          # Historical investigations
-
-agent-contexts/       # AI assistant patterns (git submodule)
+internal/          # Living documentation (ARCHITECTURE, RESEARCH, STATUS)
+external/agent-contexts/
+                    # AI assistant decision trees required for automation
 ```
 
-## Database Engines
+## OmenDB Engine (Mojo)
+- **Design**: CPU-first HNSW with binary quantization, SoA storage, reusable workspaces.
+- **Current throughput** (768D): ~1,052 vec/s (1K batch), ~763 vec/s (2K), ~294 vec/s (25K sequential fallback).
+- **Active roadmap**: migrate distance helpers to SoA, add zero-copy ingestion from NumPy buffers, introduce chunked bulk builder, then parallelize chunk execution.
+- **Verification**: `pixi run mojo build omendb/native.mojo ...`, `pixi run python test_binary_quantization_quick.py`, `pixi run python test_simd_performance.py`, `pixi run benchmark-quick`.
 
-### OmenDB Engine (Vector Database)
-- **Language**: Mojo with Python bindings
-- **Algorithm**: DiskANN/Vamana for billion-scale vectors
-- **Memory**: 288 bytes/vector (PQ compression fixed)
-- **Status**: ⚠️ Performance bottleneck at 25K+ vectors
-- **Known Issues**: Global singleton VectorStore, FFI overhead
-
-### ZenDB (Hybrid SQL Database)
-- **Language**: Rust
-- **Features**: ACID transactions, MVCC, WAL, compression, multi-writer
-- **Architecture**: B+Tree with page-level locking
-- **Status**: ✅ 87% tests passing (61/70)
-- **Next Steps**: Fix cache eviction, add SQL layer
+## ZenDB (Rust)
+- **Focus**: Hybrid row+column store with ACID guarantees.
+- **Status**: Requires fresh test run (`cargo test`); treat docs/tests in `zendb/` as the source of truth.
+- **Next steps**: Address outstanding test failures, continue API surface cleanup as part of the broader roadmap.
 
 ## Quick Start
-
 ```bash
 # Clone with submodules
 git clone --recursive git@github.com:omendb/core.git
 cd core
 
-# OmenDB Engine (requires Pixi)
+# Build & smoke-test the Mojo engine
 cd omendb/engine
 pixi install
-pixi run benchmark-quick         # Test with 1K-10K vectors
+pixi run mojo build omendb/native.mojo -o python/omendb/native.so --emit shared-lib -I omendb
+PYTHONPATH=python pixi run python -c "import omendb"
+pixi run python test_binary_quantization_quick.py
 
-# ZenDB (requires Rust)
-cd zendb
-cargo test                        # 61/70 tests passing
-cargo run --example basic_usage
-
-# OmenDB Server (optional, may be outdated)
-cd omendb/server
-cargo build --release
-
-# Web Interface (optional)
-cd omendb/web
-npm install && npm run dev
+# Run the Rust suite
+cd ../../zendb
+cargo test
 ```
 
-## Development Priorities
-
-### Immediate Focus
-1. **OmenDB**: Debug 25K+ vector bottleneck in buffer flush
-2. **ZenDB**: Fix remaining 9 test failures
-3. **Shared**: Build unified vector benchmarks
-
-### Strategic Goals
-- **OmenDB**: Scale to 1M+ vectors with memory-mapped storage
-- **ZenDB**: Add SQL layer for PostgreSQL compatibility
-- **Integration**: Cross-engine vector format standardization
+## Current Engineering Focus
+1. **SoA distance kernels** – make every distance helper load directly from column-major storage and validate parity with existing AoS paths.
+2. **Zero-copy ingestion** – accept NumPy buffer protocol inputs and write straight to SoA buffers with robust fallbacks.
+3. **Chunked bulk builder** – design chunked ingestion with reusable workspaces before enabling parallel execution.
+4. **Parallel chunk processing** – once sequential chunking is solid, introduce thread-local workspaces and deterministic merges.
 
 ## Documentation
+- `AGENTS.md` – contributor and agent quick-start guide.
+- `internal/ARCHITECTURE.md`, `internal/RESEARCH.md`, `internal/STATUS.md` – living design, research, and status references (read these before major changes).
+- `CLAUDE.md` – auxiliary agent instructions.
+- Archive legacy docs under `internal/archive/` when superseded, keeping the top-level index aligned with the CPU-first plan.
 
-- **[CLAUDE.md](CLAUDE.md)** - AI assistant context and patterns
-- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Development workflows
-- **[internal/](internal/)** - Architecture decisions and research
-- **[agent-contexts/](agent-contexts/)** - Shared AI patterns (submodule)
-
-## Contributing
-
-This is a private repository. Development is coordinated through:
-- AI agent workflows (see agent-contexts/)
-- Cross-engine benchmarking
-- Shared optimization patterns
-
----
-
-*Private development repository - January 2025*
+_Last updated: October 2025_

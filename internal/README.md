@@ -1,86 +1,44 @@
-# Internal Documentation Index
+# Internal Documentation
 
-## Quick Navigation for AI Agents
+## Core Files (Read in Order)
+1. **ARCHITECTURE.md** – Current system design and roadmap (SoA storage, zero-copy ingestion, chunked builder, parallel plan).
+2. **RESEARCH.md** – SOTA techniques, competitor metrics, and implementation priorities.
+3. **STATUS.md** – Latest benchmarks (per batch size) and next-action callouts.
 
-### Current Work
-- **[NOW.md](NOW.md)** - What we're working on this sprint
-- **[DOC_ORGANIZATION.md](DOC_ORGANIZATION.md)** - How to organize documentation
+## Directory Overview
+```
+internal/
+├── ARCHITECTURE.md          # System blueprint & roadmap
+├── RESEARCH.md              # SOTA reference and priorities
+├── STATUS.md                # Benchmarks & blockers
+├── DOCUMENTATION_STRUCTURE.md
+├── SIMD_CPU_CLEANUP_STATUS.md  # Historical notes (Oct 2025 cleanup)
+├── architecture/            # Supplemental specs (multimodal, storage)
+├── current/                 # WIP scratch docs for active sprints
+├── research/                # Deep-dive experiments/papers
+└── archive/2025-10-pre-reorg/ # Previous documentation set
+```
 
-### Core Documentation
-- **[DECISIONS.md](DECISIONS.md)** - Major decisions and rationale (append-only)
-- **[KNOWLEDGE.md](KNOWLEDGE.md)** - Patterns, gotchas, and learnings
+## Usage Guidelines
+### AI Agents / Contributors
+- Load the three core docs first; they contain the SoA/zero-copy/chunk plan and current metrics.
+- When implementing or benchmarking, update `STATUS.md` with the command, dataset, and results.
+- Major architectural changes (memory layout, ingestion, batching) belong in `ARCHITECTURE.md` with rationale.
+- Capture new research findings or competitor learnings in `RESEARCH.md` with citations or links.
+- Move outdated material into `archive/` instead of deleting, so history remains available.
 
-### Architecture
-- **[architecture/MULTIMODAL.md](architecture/MULTIMODAL.md)** - Multimodal database design
-- **[architecture/](architecture/)** - System design documents
+### Maintenance Tips
+- Keep each document concise (< ~500 lines) to ease consumption by future agents.
+- Add “Last Updated” timestamps when making significant edits.
+- Include specific test commands and targets when describing goals or metrics.
+- Reflect actual implementation state—avoid speculative language without an accompanying plan.
 
-### Archive
-- **[archive/](archive/)** - Historical documents and old research
+## Current Snapshot (Oct 2025)
+- **Insertion throughput:** 1K batch ~1,052 vec/s; 25K batch ~294 vec/s (sequential fallback).
+- **Search latency:** ~0.73 ms (binary quant on).
+- **Next milestones:** SoA distance kernels → zero-copy ingestion → chunked/parallel builder.
 
-## Current Project Status
+Keep this README synchronized with the other docs so new sessions follow the correct path immediately.
 
-### What We're Building
-**OmenDB**: Open source multimodal database for AI applications
-- Vectors + text + metadata in unified system
-- 10x faster than MongoDB Atlas
-- GPU acceleration path via Mojo
-
-### Key Decisions
-1. **Multimodal from start** (not pure vector first)
-2. **HNSW+ algorithm** (not DiskANN)
-3. **Mojo core** + Rust server + Python bindings
-4. **SQL interface** with vector extensions
-
-### Why These Choices
-- **Multimodal**: 10x pricing power, less competition
-- **HNSW+**: Industry standard, streaming updates
-- **Mojo**: GPU compilation, Python-native, SIMD
-- **SQL**: Everyone knows it, better query planning
-
-### Development Timeline
-- **Month 1**: HNSW+ core with metadata filtering
-- **Month 2**: Add BM25 text search, query planner
-- **Month 3**: Production features, cloud deployment
-- **Month 4**: GPU acceleration, enterprise features
-
-## For New AI Agents
-
-### Starting a Session
-1. Read `/CLAUDE.md` for project overview
-2. Read `NOW.md` for current tasks
-3. Check `DECISIONS.md` for context
-4. Reference `KNOWLEDGE.md` for patterns
-
-### Making Changes
-1. Update `NOW.md` with progress
-2. Append decisions to `DECISIONS.md`
-3. Update patterns in `KNOWLEDGE.md`
-4. Never create analysis files
-
-### Documentation Philosophy
-- **Actionable over analytical**
-- **Single source of truth**
-- **Append-only for decisions**
-- **AI-agent optimized**
-
-## Technical Context
-
-### Current Bottlenecks
-- Mojo missing async/await (use thread pools)
-- Limited Mojo stdlib (implement what we need)
-- No mature HTTP server (use Python wrapper)
-
-### Performance Targets
-- 100K vectors/sec insertion
-- <10ms hybrid query latency
-- 2-4 bytes per vector memory
-- 10K QPS single node
-
-### Competitive Advantages
-- GPU compilation (Mojo exclusive)
-- Python-native (zero FFI overhead)
-- Open source full functionality
-- Unified multimodal queries
-
----
-*Last updated: Feb 5, 2025 - See NOW.md for current sprint*
+## Caveats & Mitigations
+Refer to `internal/ARCHITECTURE.md` for detailed risk notes (SoA kernels, zero-copy safeguards, chunked builder plan).
