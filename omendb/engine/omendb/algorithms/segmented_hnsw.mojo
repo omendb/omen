@@ -96,30 +96,22 @@ struct SegmentedHNSW(Movable):
         """
         print("🚀 SEGMENTED: Processing", n_vectors, "vectors with parallel chunks")
 
-        # For now, use improved bulk insertion
+        # Use proper bulk insertion that maintains HNSW graph quality
         # Future: True independent segment building
-        var results = self.main_index.insert_bulk_wip(vectors, n_vectors)
+        var results = self.main_index.insert_bulk(vectors, n_vectors)
 
         self.total_vectors += n_vectors
         print("✅ Segmented insertion complete:", len(results), "vectors indexed")
 
         return results
     
-    fn search(mut self, query: UnsafePointer[Float32], k: Int) -> List[Int]:
+    fn search(mut self, query: UnsafePointer[Float32], k: Int) -> List[List[Float32]]:
         """
-        Search with optimized algorithm
+        Search with optimized algorithm - returns [node_id, distance] pairs
         """
-        # For now, use main index search
+        # For now, use main index search which already returns [node_id, distance] pairs
         # Future: Parallel segment search with merge
-        var raw_results = self.main_index.search(query, k)
-
-        # Convert List[List[Float32]] to List[Int]
-        var results = List[Int]()
-        for i in range(len(raw_results)):
-            var node_id = Int(raw_results[i][0])
-            results.append(node_id)
-
-        return results
+        return self.main_index.search(query, k)
     
     fn get_vector_count(self) -> Int:
         """Get total number of vectors in all segments"""

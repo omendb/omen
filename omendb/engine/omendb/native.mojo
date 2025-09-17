@@ -195,13 +195,13 @@ struct GlobalDatabase(Movable):
             # Use segmented HNSW if active, otherwise use monolithic
             if self.use_segmented and self.segmented_hnsw.get_vector_count() > 0:
                 print("🔍 SEGMENTED SEARCH: Parallel search across segments")
-                var node_ids = self.segmented_hnsw.search(query, k)
+                var segmented_results = self.segmented_hnsw.search(query, k)
 
-                # Get distances and string IDs for results
-                for i in range(len(node_ids)):
-                    var numeric_id = node_ids[i]
-                    # Compute distance (in production, should return from search)
-                    var distance = Float32(0.0)  # Placeholder
+                # Process segmented results with proper distances
+                for i in range(len(segmented_results)):
+                    var result_pair = segmented_results[i]
+                    var numeric_id = Int(result_pair[0])
+                    var distance = result_pair[1]  # Use actual distance, not placeholder!
                     var string_id = self._get_string_id_for_numeric(numeric_id)
                     if len(string_id) > 0:
                         results.append((string_id, distance))
