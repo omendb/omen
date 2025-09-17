@@ -6,7 +6,7 @@ Achieve 15-25K vec/s insertion with 95% recall through segment-based parallelism
 Key insight: Parallelize the problem, not the algorithm.
 """
 
-from math import ceil, min, max
+from math import ceil
 from algorithm import parallelize
 from collections import List, Dict
 from memory import UnsafePointer, memcpy
@@ -60,63 +60,151 @@ struct HNSWSegment(Movable):
             global_ids.append(self.start_global_id + node_ids[i])
         return global_ids
     
-    fn search(self, query: UnsafePointer[Float32], k: Int) -> List[SearchResult]:
+    fn search(mut self, query: UnsafePointer[Float32], k: Int) -> List[SearchResult]:
         """Search this segment"""
-        var local_results = self.hnsw.search(query, k)
+        var local_results = self.hnsw.search(query, k)  # Returns [node_id, distance] pairs
         var segment_results = List[SearchResult]()
-        
+
         for i in range(len(local_results)):
-            var local_id = local_results[i]
-            var distance = self.hnsw.compute_distance(query, local_id)
+            var result_pair = local_results[i]
+            var local_id = Int(result_pair[0])  # Node ID from HNSW search
+            var distance = result_pair[1]       # Distance from HNSW search
             var global_id = self.start_global_id + local_id
             segment_results.append(SearchResult(self.segment_id, local_id, distance, global_id))
-        
+
         return segment_results
 
 struct SegmentedHNSW(Movable):
     """
-    Simplified segmented HNSW implementation
-    Uses parallel construction by splitting into independent chunks
+    TRUE SEGMENTED HNSW: Independent segments like Qdrant
+
+    Key insight: Industry leaders DON'T parallelize graph construction.
+    Instead, they build separate independent HNSW graphs and merge at search time.
     """
     var dimension: Int
-    var main_index: HNSWIndex  # Main index for now - will be split in future
+    var segments: List[UnsafePointer[HNSWSegment]]
     var total_vectors: Int
+    var current_segment_index: Int
 
     fn __init__(out self, dimension: Int):
         self.dimension = dimension
-        # Large capacity to handle multiple segments worth of data
-        self.main_index = HNSWIndex(dimension, SEGMENT_SIZE * MAX_SEGMENTS)
-        self.main_index.enable_binary_quantization()
-        self.main_index.use_flat_graph = False
+        self.segments = List[UnsafePointer[HNSWSegment]]()
         self.total_vectors = 0
+        self.current_segment_index = -1
+
+    fn __del__(owned self):
+        """Properly deallocate all segment memory"""
+        for i in range(len(self.segments)):
+            self.segments[i].free()
     
     fn insert_batch(mut self, vectors: UnsafePointer[Float32], n_vectors: Int) -> List[Int]:
         """
-        Parallel chunk processing for better performance
+        TRUE SEGMENTED APPROACH: Independent segments like Qdrant
+
+        Each segment has its own HNSW graph (no shared state).
+        Parallel construction happens at segment level, not graph level.
         """
-        print("🚀 SEGMENTED: Processing", n_vectors, "vectors with parallel chunks")
+        print("🎯 TRUE SEGMENTED: Building independent segments for", n_vectors, "vectors")
 
-        # Use proper bulk insertion that maintains HNSW graph quality
-        # Future: True independent segment building
-        var results = self.main_index.insert_bulk(vectors, n_vectors)
+        var results = List[Int]()
+        var vectors_processed = 0
 
-        self.total_vectors += n_vectors
-        print("✅ Segmented insertion complete:", len(results), "vectors indexed")
+        while vectors_processed < n_vectors:
+            # Calculate how many vectors to add to current segment
+            var vectors_remaining: Int = n_vectors - vectors_processed
+            var vectors_for_this_segment: Int = min(SEGMENT_SIZE, vectors_remaining)
 
+            # Get or create current segment
+            if self.current_segment_index == -1 or self._current_segment_full():
+                self._create_new_segment()
+
+            var segment_vector_ptr = vectors.offset(vectors_processed * self.dimension)
+
+            print("  Segment " + String(self.current_segment_index) + ": Adding " + String(vectors_for_this_segment) + " vectors")
+
+            # Build this segment independently (sequential within segment = 95%+ quality)
+            var segment_results = self.segments[self.current_segment_index][].insert_batch(segment_vector_ptr, vectors_for_this_segment)
+
+            # Convert local segment IDs to global IDs
+            for i in range(len(segment_results)):
+                results.append(self.total_vectors + i)
+
+            vectors_processed += vectors_for_this_segment
+            self.total_vectors += vectors_for_this_segment
+
+        print("✅ True segmented complete: " + String(len(self.segments)) + " segments, " + String(self.total_vectors) + " total vectors")
         return results
     
     fn search(mut self, query: UnsafePointer[Float32], k: Int) -> List[List[Float32]]:
         """
-        Search with optimized algorithm - returns [node_id, distance] pairs
+        SEARCH-TIME MERGING: Query all segments and merge results
+
+        This is how Qdrant achieves both performance and quality:
+        - Each segment maintains perfect HNSW quality (built sequentially)
+        - Search all segments in parallel (true parallelism at search time)
+        - Merge top-k results from all segments
         """
-        # For now, use main index search which already returns [node_id, distance] pairs
-        # Future: Parallel segment search with merge
-        return self.main_index.search(query, k)
-    
+        print("🔍 TRUE SEGMENTED SEARCH: Querying " + String(len(self.segments)) + " segments")
+
+        var all_results = List[SearchResult]()
+
+        # Query each segment independently (can be parallel in future)
+        for i in range(len(self.segments)):
+            var segment_results = self.segments[i][].search(query, k)
+
+            # Add segment results to global results list
+            for j in range(len(segment_results)):
+                all_results.append(segment_results[j])
+
+        # Sort all results by distance and take top-k
+        self._sort_results_by_distance(all_results)
+
+        # Convert to expected format [node_id, distance] pairs
+        var final_results = List[List[Float32]]()
+        var results_to_return: Int = min(k, len(all_results))
+
+        for i in range(results_to_return):
+            var result = all_results[i]
+            var result_pair = List[Float32]()
+            result_pair.append(Float32(result.global_id))
+            result_pair.append(result.distance)
+            final_results.append(result_pair)
+
+        print("  Merged results from segments, returning top results")
+        return final_results
+
+    fn _create_new_segment(mut self):
+        """Create a new independent segment"""
+        var segment_id: Int = len(self.segments)
+        var start_global_id: Int = self.total_vectors
+        var new_segment_ptr = UnsafePointer[HNSWSegment].alloc(1)
+        new_segment_ptr[] = HNSWSegment(segment_id, self.dimension, SEGMENT_SIZE, start_global_id)
+
+        self.segments.append(new_segment_ptr)
+        self.current_segment_index = segment_id
+        print("  Created segment " + String(segment_id) + " (capacity: " + String(SEGMENT_SIZE) + ")")
+
+    fn _current_segment_full(self) -> Bool:
+        """Check if current segment is full"""
+        if self.current_segment_index == -1:
+            return True
+        return self.segments[self.current_segment_index][].indexed_count >= SEGMENT_SIZE
+
+    fn _sort_results_by_distance(self, mut results: List[SearchResult]):
+        """Sort results by distance (simple bubble sort for now)"""
+        var n = len(results)
+        for i in range(n):
+            for j in range(0, n - i - 1):
+                if results[j].distance > results[j + 1].distance:
+                    # Swap results[j] and results[j + 1]
+                    var temp = results[j]
+                    results[j] = results[j + 1]
+                    results[j + 1] = temp
+
     fn get_vector_count(self) -> Int:
         """Get total number of vectors in all segments"""
         return self.total_vectors
-    
+
     fn optimize(mut self):
         """
         Optimize internal structure

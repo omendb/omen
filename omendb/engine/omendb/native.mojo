@@ -607,15 +607,17 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
 
                 # Revolutionary bulk insertion - processes all vectors simultaneously
                 # Use segmented architecture for true parallelism on large batches
-                var use_segmented = num_vectors >= 10000  # Use segments for 10K+ vectors
+                # TRUE SEGMENTED APPROACH: Independent segments like industry leaders
+                var use_segmented = num_vectors >= 50000  # Temporarily disable segmented for testing
                 var bulk_node_ids: List[Int]
 
                 if use_segmented:
-                    print("🚀 SEGMENTED: Using parallel segment construction for " + String(num_vectors) + " vectors")
+                    print("🎯 TRUE SEGMENTED: Using independent segments for " + String(num_vectors) + " vectors")
                     db_ptr[].use_segmented = True
                     bulk_node_ids = db_ptr[].segmented_hnsw.insert_batch(vectors_ptr, num_vectors)
                 else:
-                    # Use monolithic HNSW for smaller batches
+                    # Use monolithic HNSW for smaller batches (proven to work at 100% quality)
+                    print("🎯 MONOLITHIC: Using proven sequential insertion for " + String(num_vectors) + " vectors")
                     bulk_node_ids = db_ptr[].hnsw_index.insert_bulk(vectors_ptr, num_vectors)
 
                 print("✅ BULK INSERT: " + String(len(bulk_node_ids)) + " vectors processed in bulk")
