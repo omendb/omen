@@ -504,10 +504,18 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
         var numpy = Python.import_module("numpy")
         
         # Get array info for zero-copy access
-        var is_numpy = python.hasattr(vectors, "ctypes")
+        var is_numpy = False
+        try:
+            # More robust NumPy detection
+            var has_ctypes = python.hasattr(vectors, "ctypes")
+            var has_shape = python.hasattr(vectors, "shape")
+            is_numpy = Bool(has_ctypes) and Bool(has_shape)
+        except:
+            is_numpy = False
+
         var dimension = 0
         var vectors_ptr: UnsafePointer[Float32]
-        
+
         if is_numpy:
             # BREAKTHROUGH: True zero-copy batch processing!
             var vectors_f32 = vectors

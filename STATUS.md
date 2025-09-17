@@ -1,23 +1,33 @@
 # OmenDB Status (October 2025)
 
-## Critical Update
-**Major finding**: SoA strategy is WRONG for HNSW. Industry benchmarks prove AoS is 7x faster due to cache locality.
+## Performance Update
+- **Baseline**: 427 vec/s (NumPy zero-copy working)
+- **Previous**: 298 vec/s (Python lists, slow path)
+- **Speedup**: 1.4x with zero-copy FFI ✅
+- **Target**: 25K+ vec/s (need 60x more)
 
-## Current Performance
-- **Before**: 763 vec/s (broken imports)
-- **Now**: 427 vec/s (working, generic SIMD)
-- **Target**: 25K+ vec/s
+## Major Findings
 
-## What Changed
-1. ✅ Fixed broken SIMD imports
-2. ✅ Build now succeeds
-3. ⚠️ Discovered SoA will hurt performance
-4. 🔄 Pivoting to cache-optimized AoS approach
+### 1. SoA is WRONG for HNSW
+- Industry benchmarks: hnswlib (AoS) is 7x faster than FAISS (SoA)
+- Cache locality > SIMD width for graph traversal
+- **Decision**: Keep AoS layout ✅
 
-## Next Steps
-1. **Zero-copy FFI** - Eliminate 50% overhead
-2. **Keep AoS** - Better for HNSW's random access
-3. **Cache prefetching** - Predict next nodes
-4. **NO SoA migration** - Would make things worse
+### 2. Zero-Copy FFI Working
+- NumPy buffer protocol implemented ✅
+- Direct memory access via ctypes ✅
+- 1.4x speedup achieved (limited by other bottlenecks)
 
-See `internal/STATUS.md` for full details.
+### 3. Real Bottleneck: Graph Construction
+- HNSW graph building: ~70% of time
+- FFI overhead: only ~10% now
+- Need parallel construction and cache optimization
+
+## Next Priorities
+
+1. **Parallel graph construction** - Expected 2-3x speedup
+2. **Cache prefetching** - Expected 1.5x speedup
+3. **Batch metadata processing** - Expected 1.2x speedup
+4. **Combined target**: 2,000+ vec/s achievable
+
+See `internal/ZERO_COPY_ANALYSIS.md` for detailed breakdown.
