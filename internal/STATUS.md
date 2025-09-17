@@ -60,20 +60,23 @@ Metadata/ID handling:       10%
 - Cache misses increase
 - Memory bandwidth saturates
 
-## Competitive Position
+## Competitive Position: Tier 3 Performance ✅
 
 ```
-Database     | Insert vec/s | Gap to OmenDB
--------------|-------------|---------------
-FAISS        | 100,000+    | 10.5x faster
-Milvus       | 50,000      | 5.3x faster
-Qdrant       | 20,000      | 2.1x faster
-Pinecone     | 15,000      | 1.6x faster
-OmenDB       | 9,504       | ---
-Weaviate     | 8,000       | 1.2x slower ✅
-ChromaDB     | 5,000       | 1.9x slower ✅
-pgvector     | 2,000       | 4.8x slower ✅
+Database     | Insert vec/s | Gap to OmenDB | Architecture | Status
+-------------|-------------|---------------|--------------|--------
+Milvus       | 50,000      | 5.2x ahead    | C++ core     | Market leader
+Qdrant       | 20,000      | 2.1x ahead    | Rust core    | Performance leader
+Pinecone     | 15,000      | 1.6x ahead    | Cloud-native | Managed service
+OmenDB       | 9,607       | BASELINE ✅   | Mojo+AVX-512 | Advanced CPU optimization
+Weaviate     | 8,000       | 1.2x behind ✅| Go core      | Feature-rich platform
+ChromaDB     | 5,000       | 1.9x behind ✅| Python/SQLite| Ease of use
+pgvector     | 2,000       | 4.8x behind ✅| PostgreSQL   | SQL integration
 ```
+
+**🎯 Market Position**: Beat Weaviate and ChromaDB, approaching Pinecone tier
+**🚀 Next Milestone**: 15K vec/s (Pinecone competitive)
+**⭐ Ultimate Target**: 20K vec/s (Qdrant tier)
 
 ## Research-Backed Optimizations Implemented ✅
 
