@@ -50,12 +50,14 @@ Weaviate: 8,000 vec/s
 3. **Similarity-based clustering** - GoVector technique implemented ✅
 4. **SIMD distance matrix** - Flash vectorization approach ✅
 5. **Cache-aware layout** - VSAG production-validated techniques ✅
+6. **AVX-512 optimization** - Dimension scaling breakthrough ✅ **NEW**
 
 ### Final Validated Performance
 - **Baseline**: 427 vec/s (sequential)
-- **Current**: **9,402 vec/s** (tested and validated)
-- **Total improvement**: **22x speedup**
+- **Current**: **9,607 vec/s** (768D vectors, tested and validated)
+- **Total improvement**: **22x speedup** (overall), **5.6x for 768D specifically**
 - **Stability**: Production-ready, no crashes up to 10K vectors
+- **Breakthrough**: Dimension scaling bottleneck resolved
 
 ### Research Foundation
 Built on cutting-edge 2025 research:

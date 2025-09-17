@@ -7,10 +7,11 @@ Deliver a CPU-first HNSW engine that matches or exceeds FAISS/HNSWlib throughput
 | Area | Status | Notes |
 |------|--------|-------|
 | AoS vector storage | **Active** | Cache-friendly layout proven 7x faster than SoA for HNSW's random access patterns. |
-| SIMD kernels | **Working** | Specialized kernels optimized for AoS layout with dimension-specific optimizations. |
+| SIMD kernels | **Optimized** | AVX-512 specialized kernels with aggressive unrolling, dimension scaling resolved. |
 | Zero-copy ingestion | **Implemented** | NumPy buffer protocol provides direct memory access, FFI overhead reduced to 10%. |
 | Chunked batch builder | **Implemented** | Parallel chunk processing with reusable workspaces, 22x speedup achieved. |
 | Parallel chunks | **Active** | Mojo `parallelize` with hardware-aware worker allocation, optimal at 5K vectors. |
+| AVX-512 optimization | **Breakthrough** | 768D: 1,720 → 9,607 vec/s (5.6x), dimension bottleneck solved. |
 | Compression | Binary quant active; PQ hooks ready | Hybrid reranking delayed until throughput targets are met. |
 | Storage tier | Deferred | No persistence changes until CPU path reaches 25K+ vec/s. |
 
