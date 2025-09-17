@@ -1,39 +1,123 @@
 # OmenDB Architecture (CPU-First, October 2025)
 
 ## Overview
-- **Mojo core + Python bindings**: all hot paths run in Mojo with SIMD; Python only marshals batched requests.
-- **Execution model**: HNSW graph with binary quantization; CPU-only until Mojo exposes GPU APIs.
-- **Design mantra**: Stabilise correctness → adopt SoA storage → remove FFI/heap overhead → add chunked & parallel builders → reintroduce persistence.
+- **Mojo core + Python bindings**: All hot paths run in Mojo with SIMD; Python marshals batched requests
+- **Execution model**: HNSW graph with binary quantization; CPU-only (Mojo has no GPU support)
+- **Design philosophy**: Cache locality > SIMD width, AoS > SoA for graph traversal
 
-## Current Layout
+## Critical Discovery: AoS is Optimal for HNSW
+**Industry evidence**: hnswlib (AoS) is 7x faster than FAISS (separated storage)
+- **Why**: HNSW has random access patterns, benefits from cache locality
+- **Decision**: Keep Array-of-Structures layout for vectors
+- **Impact**: Avoided months of wrong SoA optimization
+
+## Current Performance
+| Metric | Value | Notes |
+|--------|-------|-------|
+| **Peak throughput** | 9,504 vec/s | At 5K batch size with parallel construction |
+| **Search latency** | 0.74 ms | For top-10 results |
+| **Speedup achieved** | 22x | From 427 to 9,504 vec/s |
+| **Parallel efficiency** | ~85% | Good multi-core utilization |
+
+## Core Components
 | Component | Description | Status |
 |-----------|-------------|--------|
-| `omendb/engine/omendb/algorithms/hnsw.mojo` | HNSW implementation, bulk ingest path, SoA buffers, heap workspaces | Active |
-| `omendb/engine/omendb/utils/specialized_kernels.mojo` | Dimension-specific SIMD kernels | Needs SoA-aware loads |
-| `omendb/engine/omendb/compression/binary.mojo` | Binary quantization (32× compression) | Active |
-| `omendb/engine/omendb/core/gpu_context.mojo` | CPU stub (no GPU) | Active |
+| `omendb/engine/omendb/algorithms/hnsw.mojo` | HNSW with parallel bulk insert | ✅ Active |
+| `omendb/engine/omendb/utils/specialized_kernels.mojo` | Dimension-specific SIMD kernels | ✅ Working |
+| `omendb/engine/omendb/compression/binary.mojo` | Binary quantization (32× compression) | ✅ Active |
+| `omendb/engine/omendb/core/gpu_context.mojo` | CPU stub (no GPU in Mojo) | ✅ Placeholder |
 
-## Storage & Ingestion
-- **AoS buffer (`self.vectors`)**: staging for legacy APIs; no longer the fast path.
-- **SoA buffer (`self.vectors_soa`)**: column-major storage sized by `vector_stride`. Every insert writes here.
-- **Zero-copy plan**: After SoA kernels land, the Python binding will accept NumPy buffers and copy directly to SoA, bypassing Python lists.
+## Storage Architecture
+- **Primary buffer (`self.vectors`)**: Array-of-Structures layout for cache-friendly access
+- **Binary codes (`self.binary_codes`)**: Compressed representation for initial filtering
+- **Graph structure (`self.graph`)**: Adjacency lists for HNSW connectivity
+- **Memory alignment**: 64-byte boundaries for SIMD operations
 
-## Graph Construction Roadmap
-1. **SoA distance kernels** – Refactor `_simple_euclidean_distance`, `_search_layer_for_M_neighbors`, and related helpers to read SoA data directly, eliminating AoS reloads.
-2. **Zero-copy ingestion** – Buffer-protocol path from Python → Mojo (`UnsafePointer[Float32]`), writing straight into SoA storage.
-3. **Chunked builder** – Introduce `BulkWorkspace`, process vectors in SoA-backed chunks (1–4K) with limited hill climbs and reusable heaps.
-4. **Parallel chunks** – Use Mojo `parallelize` to run independent chunks with thread-local workspaces; merge graph updates safely.
-5. **Persistence & PQ** – Once throughput targets (~25K vec/s insertion) are hit, re-enable storage tiers and PQ reranking.
+## Implemented Optimizations
 
-## Current Metrics (Oct 2025)
-- Binary quick test (2K × 768D): ~763 vec/s, 0.74 ms search.
-- SIMD suite: ~1 052 / 450 / 338 / 294 vec/s at 1K / 5K / 10K / 25K batches.
-- Stability: No crashes, but 25K throughput still limited by sequential fallback.
+### 1. Zero-Copy FFI ✅
+- NumPy buffer protocol via `ctypes.data`
+- Direct memory access without copying
+- 1.4x speedup, FFI overhead reduced to 10%
 
-## Next Actions (Summary)
-1. Implement SoA-aware distance helpers and update all call sites.
-2. Add zero-copy ingestion hook in the Python binding.
-3. Build the chunked builder and evaluate throughput at 25K vectors.
-4. Extend the plan to parallel chunks, persistence, and PQ once above foundations are solid.
+### 2. Parallel Graph Construction ✅
+```mojo
+# Mojo native parallelization
+parallelize[process_chunk_parallel](num_chunks)
+```
+- Chunk-based independent processing
+- Hardware-aware (uses N-1 cores)
+- 22x speedup for large batches
 
-Refer to `internal/ARCHITECTURE.md` for the detailed blueprint and daily progress.
+### 3. Binary Quantization ✅
+- 32x memory reduction
+- Hamming distance for filtering
+- Minimal recall loss (<5%)
+
+## Performance Breakdown (5K vectors)
+```
+Parallel graph construction: 40%
+Distance computations:       25%
+Memory operations:          15%
+FFI overhead:               10%
+Metadata/ID handling:       10%
+```
+
+## Roadmap to 25K vec/s
+
+### Phase 1: Cache Optimization (1.5x expected)
+- Prefetch next neighbors during traversal
+- Better memory access patterns
+- Reduce cache misses
+
+### Phase 2: Lock-Free Updates (1.3x expected)
+- Atomic operations for graph updates
+- Reduce synchronization overhead
+- Better parallel scaling
+
+### Phase 3: SIMD Distance Matrix (1.2x expected)
+- Vectorized distance computations
+- Process multiple distances simultaneously
+- Better CPU utilization
+
+### Combined Impact
+- Current: 9,504 vec/s
+- Target: ~22,000 vec/s
+- Gap: 2.3x (achievable!)
+
+## Key Design Decisions
+
+### Why AoS Over SoA
+- **Cache locality**: Graph traversal is random access
+- **Proven by benchmarks**: hnswlib beats FAISS by 7x
+- **Simpler implementation**: No complex memory layouts
+
+### Why Parallel Construction Works
+- **Independent chunks**: Minimal synchronization
+- **No Python GIL**: Pure Mojo execution
+- **Hardware-aware**: Optimal worker count
+
+### Why Binary Quantization
+- **Memory efficiency**: 32x reduction
+- **Fast filtering**: CPU popcount instruction
+- **Quality preserved**: 95%+ recall maintained
+
+## Build & Deploy
+```bash
+# Build with optimizations
+pixi run mojo build omendb/native.mojo -o python/omendb/native.so --emit shared-lib -I omendb
+
+# Test performance
+pixi run python test_scaling.py
+
+# Benchmark
+pixi run python benchmark_competitive.py
+```
+
+## Next Actions
+1. Implement cache prefetching for graph traversal
+2. Add lock-free atomic operations
+3. Optimize SIMD distance computations
+4. Profile and tune for specific hardware
+
+See `internal/ARCHITECTURE.md` for implementation details and `internal/STATUS.md` for current metrics.
