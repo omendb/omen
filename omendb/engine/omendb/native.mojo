@@ -587,8 +587,8 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 var use_parallel = num_vectors >= 500  # Use parallel for larger batches
                 var bulk_node_ids: List[Int]
                 if use_parallel:
-                    print("🚀 PARALLEL: Using parallel graph construction for " + String(num_vectors) + " vectors")
-                    bulk_node_ids = db_ptr[].hnsw_index.insert_bulk_wip(vectors_ptr, num_vectors)
+                    print("🔧 LOCK-FREE: Using lock-free parallel graph construction for " + String(num_vectors) + " vectors")
+                    bulk_node_ids = db_ptr[].hnsw_index.insert_bulk_lockfree(vectors_ptr, num_vectors)
                 else:
                     bulk_node_ids = db_ptr[].hnsw_index.insert_bulk(vectors_ptr, num_vectors)
 
