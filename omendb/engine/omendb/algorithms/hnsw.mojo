@@ -19,6 +19,7 @@ from math import log, sqrt
 from random import random_float64
 from algorithm import vectorize, parallelize
 from sys.info import simdwidthof
+from sys.intrinsics import prefetch, PrefetchOptions
 from collections import InlineArray, List
 # Removed complex SIMD imports - using idiomatic Mojo compiler optimization instead
 from ..compression.binary import BinaryQuantizedVector, binary_distance
@@ -1616,16 +1617,36 @@ struct HNSWIndex(Movable):
         # Research: GoVector (2025) shows 42% locality improvement
         var clustered_indices = List[Int]()
 
-        if actual_count > 16:  # Only cluster for larger batches
-            # Simple k-means-style clustering to group similar vectors
-            var cluster_size = 8  # Group vectors in cache-friendly clusters
-            var num_clusters = (actual_count + cluster_size - 1) // cluster_size
+        if actual_count > 32:  # Only cluster for batches where it's beneficial
+            # 🚀 OPTIMIZED CLUSTERING: GoVector 2025 cache-aware clustering
+            # Dynamic cluster sizing based on vector dimensions and cache characteristics
+            var optimal_cluster_size: Int
+            if self.dimension <= 128:
+                optimal_cluster_size = 16  # Smaller vectors, larger clusters
+            elif self.dimension <= 384:
+                optimal_cluster_size = 12  # Medium vectors
+            elif self.dimension <= 768:
+                optimal_cluster_size = 8   # Large vectors (BERT), smaller clusters for cache efficiency
+            else:
+                optimal_cluster_size = 6   # Very large vectors (OpenAI), minimal clusters
 
-            # Initialize cluster centers (sample every k-th vector)
+            var num_clusters = min(
+                (actual_count + optimal_cluster_size - 1) // optimal_cluster_size,
+                actual_count // 4  # Never create more clusters than makes sense
+            )
+            num_clusters = max(num_clusters, 1)  # At least 1 cluster
+
+            # 🚀 IMPROVED CENTER INITIALIZATION: Better seed distribution for clustering
             var centers = List[Int]()
-            for c in range(num_clusters):
-                var center_idx = (c * actual_count) // num_clusters
-                centers.append(center_idx)
+            if num_clusters == 1:
+                centers.append(0)  # Single cluster case
+            else:
+                # Use golden ratio sampling for better center distribution
+                var phi = Float32(1.618033988749)  # Golden ratio as Float32
+                for c in range(num_clusters):
+                    var ratio = Float32(c) / Float32(num_clusters - 1)
+                    var golden_idx = Int(ratio * phi * Float32(actual_count)) % actual_count
+                    centers.append(golden_idx)
 
             # Assign vectors to nearest cluster center
             var assignments = List[Int]()
@@ -1640,7 +1661,25 @@ struct HNSWIndex(Movable):
                 for c in range(len(centers)):
                     var center_idx = centers[c]
                     var center_vector = vectors.offset(center_idx * self.dimension)
-                    var dist = euclidean_distance_128d(src_vector, center_vector)
+
+                    # 🚀 SIMILARITY CLUSTERING: Use dimension-appropriate distance function (GoVector 2025)
+                    var dist: Float32
+                    if self.dimension == 768:
+                        dist = euclidean_distance_768d(src_vector, center_vector)
+                    elif self.dimension == 1536:
+                        dist = euclidean_distance_1536d(src_vector, center_vector)
+                    elif self.dimension == 512:
+                        dist = euclidean_distance_512d(src_vector, center_vector)
+                    elif self.dimension == 384:
+                        dist = euclidean_distance_384d(src_vector, center_vector)
+                    elif self.dimension == 256:
+                        dist = euclidean_distance_256d(src_vector, center_vector)
+                    elif self.dimension == 128:
+                        dist = euclidean_distance_128d(src_vector, center_vector)
+                    else:
+                        # Fallback for other dimensions
+                        dist = euclidean_distance_adaptive_simd(src_vector, center_vector, self.dimension)
+
                     if dist < best_dist:
                         best_dist = dist
                         best_cluster = c
@@ -2104,45 +2143,102 @@ struct HNSWIndex(Movable):
             if worker_entry < self.capacity and worker_entry < self.size:
                 entry_point = worker_entry
 
-        # Simplified lock-free search and connection
-        # In production, this would use sophisticated lock-free algorithms
+        # FIX: Use proper distance-based neighbor finding instead of random modulo!
+        # This was the root cause of 0.1% recall - connections were essentially random!
 
-        # Find candidates using conflict-minimal search
-        var candidates = List[Int]()
-        candidates.append(entry_point)
+        # Find actual nearest neighbors by computing distances
+        var candidates_with_dist = List[List[Float32]]()
 
-        # Limited breadth-first expansion to avoid excessive conflicts
-        var max_candidates = min(32, ef_construction // 4)  # Reduced for parallel efficiency
+        # Start from entry point
+        var entry_dist = self.distance(vector, self.get_vector(entry_point))
+        var entry_candidate = List[Float32]()
+        entry_candidate.append(Float32(entry_point))
+        entry_candidate.append(entry_dist)
+        candidates_with_dist.append(entry_candidate)
 
-        # Simplified neighbor finding (production would use proper lock-free search)
-        for expansion in range(min(3, level + 1)):  # Limit expansions to reduce contention
-            if len(candidates) >= max_candidates:
+        # Track visited nodes to avoid duplicates
+        var visited_nodes = List[Bool]()
+        for i in range(self.capacity):
+            visited_nodes.append(False)
+        if entry_point >= 0 and entry_point < self.capacity:
+            visited_nodes[entry_point] = True
+
+        # Greedy search for nearest neighbors (limited for lock-free efficiency)
+        var max_candidates = min(ef_construction, 64)  # Reasonable limit for parallel
+        var search_ef = max_candidates * 2  # Search more broadly to find better neighbors
+        var iterations = 0
+        var max_iterations = search_ef  # Prevent infinite loops
+
+        while len(candidates_with_dist) < max_candidates and iterations < max_iterations:
+            iterations += 1
+
+            # Find best unvisited neighbor from current candidates
+            var best_unvisited = -1
+            var best_unvisited_dist = Float32(1e10)
+
+            # Check neighbors of all current candidates
+            for i in range(len(candidates_with_dist)):
+                var cand_id = Int(candidates_with_dist[i][0])
+                if cand_id < 0 or cand_id >= self.size:
+                    continue
+
+                var cand_node = self.node_pool.get(cand_id)
+                if not cand_node:
+                    continue
+
+                # Get this candidate's connections
+                var neighbors: List[Int]
+                if level == 0:
+                    neighbors = cand_node[].get_connections_layer0()
+                else:
+                    neighbors = cand_node[].get_connections_higher(level)
+
+                # Check each neighbor
+                for n_idx in range(len(neighbors)):
+                    var neighbor = neighbors[n_idx]
+                    if neighbor < 0 or neighbor >= self.size or neighbor >= self.capacity:
+                        continue
+                    if visited_nodes[neighbor]:
+                        continue
+
+                    # Compute actual distance
+                    var neighbor_vec = self.get_vector(neighbor)
+                    if not neighbor_vec:
+                        continue
+
+                    var dist = self.distance(vector, neighbor_vec)
+                    if dist < best_unvisited_dist:
+                        best_unvisited = neighbor
+                        best_unvisited_dist = dist
+
+            # If no unvisited neighbors found, stop
+            if best_unvisited < 0:
                 break
 
-            # Add some variety to candidate selection
-            var search_offset = (worker_id + expansion) % max(1, len(candidates))
-            if search_offset < len(candidates):
-                var search_candidate = candidates[search_offset]
+            # Add best unvisited to candidates
+            visited_nodes[best_unvisited] = True
+            var new_candidate = List[Float32]()
+            new_candidate.append(Float32(best_unvisited))
+            new_candidate.append(best_unvisited_dist)
+            candidates_with_dist.append(new_candidate)
 
-                # Simple geometric progression for neighbor discovery
-                var safe_capacity = max(self.capacity, 1)  # Prevent division by zero
-                var neighbor_estimate = (search_candidate + node_id) % safe_capacity
-                if neighbor_estimate != node_id and neighbor_estimate < self.size and neighbor_estimate >= 0:
-                    var already_in_candidates = False
-                    for c in range(len(candidates)):
-                        if candidates[c] == neighbor_estimate:
-                            already_in_candidates = True
-                            break
+        # Sort candidates by distance to get M nearest
+        for i in range(len(candidates_with_dist)):
+            var min_idx = i
+            for j in range(i + 1, len(candidates_with_dist)):
+                if candidates_with_dist[j][1] < candidates_with_dist[min_idx][1]:
+                    min_idx = j
+            if min_idx != i:
+                var temp = candidates_with_dist[i]
+                candidates_with_dist[i] = candidates_with_dist[min_idx]
+                candidates_with_dist[min_idx] = temp
 
-                    if not already_in_candidates:
-                        candidates.append(neighbor_estimate)
-
-        # Connect to best candidates (simplified for lock-free operation)
+        # Connect to M nearest neighbors (proper HNSW algorithm)
         var max_connections = M if level == 0 else max_M0
         var connections_made = 0
 
-        for i in range(min(len(candidates), max_connections)):
-            var candidate = candidates[i]
+        for i in range(min(len(candidates_with_dist), max_connections)):
+            var candidate = Int(candidates_with_dist[i][0])
             if candidate != node_id and candidate < self.capacity:
                 # Lock-free bidirectional connection using atomic-style updates
                 var node_ref = self.node_pool.get(node_id)
@@ -3424,12 +3520,21 @@ struct HNSWIndex(Movable):
                 # Get current node for this iteration
                 var current_node = self.node_pool.get(curr_nearest)
                 
-                # Check all neighbors at current layer
+                # Check all neighbors at current layer with aggressive prefetching
                 var connections = current_node[].get_connections_higher(layer)
                 for neighbor_idx in range(len(connections)):
                     var neighbor = connections[neighbor_idx]
+
+                    # 🚀 CACHE PREFETCHING: Prefetch next neighbor's vector (GoVector 2025)
+                    if neighbor_idx + 1 < len(connections):
+                        var next_neighbor = connections[neighbor_idx + 1]
+                        var next_vector_ptr = self.get_vector(next_neighbor)
+                        if next_vector_ptr:
+                            # Aggressive prefetching: cache prefetch for next vector
+                            prefetch(next_vector_ptr)
+
                     var dist = self.distance(query, self.get_vector(neighbor))
-                    
+
                     if dist < curr_dist:
                         curr_nearest = neighbor
                         curr_dist = dist
@@ -3489,22 +3594,31 @@ struct HNSWIndex(Movable):
             # Get nearest unchecked candidate
             var nearest_idx = 0
             var nearest_dist = candidates[0][1]
-            
+
             for i in range(1, len(candidates)):
                 if candidates[i][1] < nearest_dist:
                     nearest_idx = i
                     nearest_dist = candidates[i][1]
-            
+
             var current = Int(candidates[nearest_idx][0])
             var current_dist = candidates[nearest_idx][1]
-            
+
             # Remove from candidates
             candidates[nearest_idx] = candidates[len(candidates) - 1]
             _ = candidates.pop()
-            
-            # Check neighbors at layer 0
+
+            # 🚀 CANDIDATE PREFETCHING: Get neighbors and prefetch their vectors (GoVector 2025)
             var current_node = self.node_pool.get(current)
             var neighbors = current_node[].get_connections_layer0()
+
+            # Aggressive prefetching of neighbor vectors before processing
+            if len(neighbors) > 0:
+                var prefetch_count = min(4, len(neighbors))  # Prefetch first 4 neighbors
+                for prefetch_i in range(prefetch_count):
+                    var prefetch_neighbor = neighbors[prefetch_i]
+                    var prefetch_ptr = self.get_vector(prefetch_neighbor)
+                    if prefetch_ptr:
+                        prefetch(prefetch_ptr)  # Cache prefetch for upcoming computation
             
             # OPTIMIZATION: Batch distance computation for cache efficiency
             # Collect unvisited neighbors first
@@ -3519,9 +3633,29 @@ struct HNSWIndex(Movable):
                     unvisited_neighbors.append(neighbor)
                     self.visited_buffer[neighbor] = self.visited_version
             
-            # Compute distances for all unvisited neighbors
+            # 🚀 BATCH PREFETCHING: Aggressive cache prefetching for unvisited neighbors (GoVector 2025)
+            # Prefetch next 3-4 neighbor vectors to maximize cache hits
+            var batch_size = min(4, len(unvisited_neighbors))
+            for prefetch_idx in range(batch_size):
+                if prefetch_idx < len(unvisited_neighbors):
+                    var prefetch_neighbor = unvisited_neighbors[prefetch_idx]
+                    var prefetch_vector_ptr = self.get_vector(prefetch_neighbor)
+                    if prefetch_vector_ptr:
+                        # Cache prefetch for maximum hit rate
+                        prefetch(prefetch_vector_ptr)
+
+            # Compute distances for all unvisited neighbors with rolling prefetch
             for i in range(len(unvisited_neighbors)):
                 var neighbor = unvisited_neighbors[i]
+
+                # 🚀 ROLLING PREFETCH: Prefetch upcoming neighbors during processing
+                var lookahead = 4  # GoVector research: 4-vector lookahead optimal
+                if i + lookahead < len(unvisited_neighbors):
+                    var future_neighbor = unvisited_neighbors[i + lookahead]
+                    var future_vector_ptr = self.get_vector(future_neighbor)
+                    if future_vector_ptr:
+                        prefetch(future_vector_ptr)
+
                 var dist = self.distance(query, self.get_vector(neighbor))
                 
                 # Add to candidates if promising

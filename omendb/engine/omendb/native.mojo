@@ -584,7 +584,7 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
 
                 # Revolutionary bulk insertion - processes all vectors simultaneously
                 # Enable parallel processing for better performance
-                var use_parallel = num_vectors >= 500  # Use parallel for larger batches
+                var use_parallel = num_vectors >= 50000  # TEMPORARILY DISABLED: Lock-free creates disconnected graphs
                 var bulk_node_ids: List[Int]
                 if use_parallel:
                     print("🔧 LOCK-FREE: Using lock-free parallel graph construction for " + String(num_vectors) + " vectors")

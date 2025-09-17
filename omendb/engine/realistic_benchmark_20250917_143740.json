@@ -1,0 +1,18 @@
+{
+  "status": "SUCCESS",
+  "dataset": "realistic_10000_128d",
+  "vectors_indexed": 10000,
+  "dimensions": 128,
+  "insertion_time_sec": 13.60104229200806,
+  "insertion_rate_vec_per_sec": 735.2377696726945,
+  "synthetic_rate_comparison": 0.0273556486837331,
+  "queries_tested": 200,
+  "recall_at_1": 0.96,
+  "recall_at_10": 0.9430000000000001,
+  "recall_at_100": 0.9031999999999999,
+  "avg_search_latency_ms": 14.400766639882931,
+  "p95_search_latency_ms": 15.012333655613475,
+  "memory_used_mb": 290.9375,
+  "memory_per_vector_mb": 0.02909375,
+  "test_timestamp": 1758145060.608225
+}
