@@ -1339,13 +1339,13 @@ struct HNSWIndex(Movable):
                 var needed = target_capacity - len(self.binary_vectors)
                 for _ in range(needed):
                     # Create empty binary vector without dummy allocation
-                    # FIXED: Don't free zero_vec - BinaryQuantizedVector needs the memory
+                    # CRITICAL FIX: BinaryQuantizedVector copies data, original must be freed
                     var zero_vec = allocate_vector(self.dimension)
                     for j in range(self.dimension):
                         zero_vec[j] = 0.0
                     var empty_vec = BinaryQuantizedVector(zero_vec, self.dimension)
                     self.binary_vectors.append(empty_vec)
-                    # zero_vec memory will be cleaned up by BinaryQuantizedVector destructor
+                    zero_vec.free()  # CRITICAL FIX: Free after BinaryQuantizedVector copies the data
             
             # Batch create quantized versions
             for i in range(actual_count):
