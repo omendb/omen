@@ -1110,7 +1110,8 @@ struct HNSWIndex(Movable):
                 dummy_vec[j] = 0.0
             var empty_vec = BinaryQuantizedVector(dummy_vec, self.dimension)  # Use real dimension!
             self.binary_vectors.append(empty_vec)
-            # dummy_vec memory will be cleaned up by BinaryQuantizedVector destructor
+            # CRITICAL FIX: BinaryQuantizedVector copies data, we must free the original
+            dummy_vec.free()
         
         # Quantize all existing vectors
         for i in range(self.size):
@@ -1240,7 +1241,8 @@ struct HNSWIndex(Movable):
                     dummy_vec[j] = 0.0
                 var empty_vec = BinaryQuantizedVector(dummy_vec, self.dimension)
                 self.binary_vectors.append(empty_vec)
-                # dummy_vec memory will be cleaned up by BinaryQuantizedVector destructor
+                # CRITICAL FIX: BinaryQuantizedVector copies data, we must free the original
+                dummy_vec.free()
             self.binary_vectors[new_id] = binary_vec
         
         # First node becomes entry point
@@ -1525,6 +1527,7 @@ struct HNSWIndex(Movable):
                             for j in range(self.dimension):
                                 dummy_ptr[j] = 0.0
                             query_binary = BinaryQuantizedVector(dummy_ptr, self.dimension)
+                            dummy_ptr.free()  # CRITICAL FIX: Free the temporary allocation
 
                         # Use proper graph-based search for M neighbors
                         var neighbors = self._search_layer_for_M_neighbors(
@@ -2845,6 +2848,7 @@ struct HNSWIndex(Movable):
             for j in range(self.dimension):
                 dummy_ptr[j] = 0.0
             vector_binary = BinaryQuantizedVector(dummy_ptr, self.dimension)
+            dummy_ptr.free()  # CRITICAL FIX: Free the temporary allocation
         
         # Insert at all layers from level to 0
         for lc in range(level, -1, -1):
@@ -4018,6 +4022,7 @@ struct HNSWIndex(Movable):
             for j in range(self.dimension):
                 dummy_ptr[j] = 0.0
             query_binary = BinaryQuantizedVector(dummy_ptr, self.dimension)
+            dummy_ptr.free()  # CRITICAL FIX: Free the temporary allocation
 
         # HUB HIGHWAY OPTIMIZATION (2025 breakthrough) - TEMPORARILY DISABLED FOR DEBUGGING
         # The Hub Highway search may be causing 15% recall - test standard HNSW first
