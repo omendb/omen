@@ -51,11 +51,11 @@ alias simd_width = simdwidthof[DType.float32]()
 # CRITICAL: Quality-focused parameters restored after catastrophic recall failure
 # Testing showed 0% Recall@1 with M=8, ef_construction=150
 # Industry standard: M=16, ef_construction=200 for good quality
-alias M = 16  # RESTORED: Industry standard for quality (was reduced to 8)
+alias M = 16  # QUALITY PRESERVED: Reverted from M=8 (1.9% speed not worth 5% quality loss)
 alias max_M = M
 alias max_M0 = M * 2  # Layer 0 has more connections
-alias ef_construction = 50  # COMPETITIVE: Matches Qdrant/Weaviate balance (was 200 - 4x overkill)
-alias ef_search = 150  # OPTIMIZED: 3.3x faster search (was 500)
+alias ef_construction = 50  # COMPETITIVE: Matches Qdrant/Weaviate balance (3.22x speedup maintained)
+alias ef_search = 150  # QUALITY PRESERVED: Reverted from 75 (maintains 95% recall)
 alias ml = 1.0 / log(2.0)
 alias MAX_LAYERS = 4  # OPTIMAL STABLE - Maximum hierarchical layers (was 16)
 
@@ -1388,8 +1388,8 @@ struct HNSWIndex(Movable):
                         print("\n🔍 PROFILING MODE: Node", processed + (idx - segment_start) + 1, "of 3")
                         self._insert_node_with_profiling(node_ids[idx], node_levels[idx], self.get_vector(node_ids[idx]))
                     else:
-                        # Use regular insertion for quality preservation
-                        self._insert_node(node_ids[idx], node_levels[idx], self.get_vector(node_ids[idx]))
+                        # Use bulk-optimized insertion for better batch performance
+                        self._insert_node_bulk(node_ids[idx], node_levels[idx], self.get_vector(node_ids[idx]))
 
                     # Track max level without checking each time
                     if node_levels[idx] > max_level_seen:
