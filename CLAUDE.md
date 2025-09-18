@@ -2,7 +2,7 @@
 
 ## Documentation Organization (AI-Optimized)
 **🚨 MANDATORY: Load these first**:
-1. **`internal/HNSW_INVARIANTS.md`** - ⛔ What MUST NEVER be violated
+1. **`internal/HNSW_CORRECTNESS_RULES.md`** - ⛔ What MUST NEVER be violated
 2. **`internal/STATUS.md`** - 📊 Current performance (867 vec/s, 95.5% recall)
 3. **`internal/COMPETITIVE_ANALYSIS_2025.md`** - 🎯 Market targets (20K+ vec/s needed)
 4. **`internal/AI_AGENT_CONTEXT.md`** - 🤖 Complete development guide

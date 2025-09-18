@@ -34,6 +34,7 @@ from ..utils.simd_distance import simd_l2_distance as euclidean_distance_adaptiv
 # from ..utils.parallel_construction import parallel_bulk_insert_lockfree, select_parallel_strategy, estimate_parallel_speedup, measure_parallel_construction_performance
 # from ..utils.adaptive_search import AdaptiveSearchParameters, QueryDifficultyEstimator, optimize_search_for_latency, classify_query_type, measure_adaptive_search_impact
 from .fast_priority_queue import FastMinHeap, FastMaxHeap, SearchCandidate
+from time import perf_counter
 
 fn min(a: Int, b: Int) -> Int:
     """Return minimum of two integers."""
@@ -1366,8 +1367,13 @@ struct HNSWIndex(Movable):
                     if idx >= actual_count:
                         break
 
-                    # Use regular insertion for quality preservation
-                    self._insert_node(node_ids[idx], node_levels[idx], self.get_vector(node_ids[idx]))
+                    # Use profiling insertion for first 3 nodes to identify bottlenecks
+                    if processed + (idx - segment_start) < 3:
+                        print("\n🔍 PROFILING MODE: Node", processed + (idx - segment_start) + 1, "of 3")
+                        self._insert_node_with_profiling(node_ids[idx], node_levels[idx], self.get_vector(node_ids[idx]))
+                    else:
+                        # Use regular insertion for quality preservation
+                        self._insert_node(node_ids[idx], node_levels[idx], self.get_vector(node_ids[idx]))
 
                     # Track max level without checking each time
                     if node_levels[idx] > max_level_seen:
@@ -2868,6 +2874,123 @@ struct HNSWIndex(Movable):
             # Use closest neighbor as entry for next layer
             if len(neighbors) > 0:
                 curr_nearest = neighbors[0]  # First is closest
+
+    fn _insert_node_with_profiling(mut self, new_id: Int, level: Int, vector: UnsafePointer[Float32]):
+        """Insert node into graph structure with detailed performance profiling."""
+        var total_start = perf_counter()
+
+        # Component 1: Visited buffer management
+        var visited_start = perf_counter()
+        if new_id >= self.visited_size and new_id < self.capacity:
+            self.visited_size = new_id + 1
+        self.visited_version += 1
+        if self.visited_version > 1000000000:
+            self.visited_version = 1
+            for i in range(self.visited_size):
+                self.visited_buffer[i] = 0
+        var visited_time = perf_counter() - visited_start
+
+        # Component 2: Initial entry point setup
+        var entry_setup_start = perf_counter()
+        var curr_nearest = self.entry_point
+        var entry_vec = self.get_vector(self.entry_point)
+        var curr_dist = self.distance(vector, entry_vec)
+        var entry_node = self.node_pool.get(self.entry_point)
+        var entry_level = entry_node[].level
+        var entry_setup_time = perf_counter() - entry_setup_start
+
+        # Component 3: Hierarchical navigation (critical bottleneck)
+        var navigation_start = perf_counter()
+        for lc in range(entry_level, level, -1):
+            curr_nearest = self._search_layer_simple(vector, curr_nearest, 1, lc)
+        var navigation_time = perf_counter() - navigation_start
+
+        # Component 4: Binary quantization setup
+        var binary_setup_start = perf_counter()
+        var vector_binary: BinaryQuantizedVector
+        if self.use_binary_quantization:
+            vector_binary = BinaryQuantizedVector(vector, self.dimension)
+        else:
+            var dummy_ptr = UnsafePointer[Float32].alloc(self.dimension)
+            for j in range(self.dimension):
+                dummy_ptr[j] = 0.0
+            vector_binary = BinaryQuantizedVector(dummy_ptr, self.dimension)
+        var binary_setup_time = perf_counter() - binary_setup_start
+
+        # Component 5: Layer-by-layer insertion (biggest bottleneck expected)
+        var layer_insertion_start = perf_counter()
+        var total_neighbor_search_time = 0.0
+        var total_connection_time = 0.0
+        var total_pruning_time = 0.0
+
+        for lc in range(level, -1, -1):
+            var M_layer = max_M if lc > 0 else max_M0
+
+            # Sub-component 5a: Neighbor search (likely biggest bottleneck)
+            var neighbor_search_start = perf_counter()
+            var neighbors = self._search_layer_for_M_neighbors(
+                vector, curr_nearest, M_layer, lc, vector_binary
+            )
+            total_neighbor_search_time += (perf_counter() - neighbor_search_start)
+
+            # Sub-component 5b: Connection management
+            var connection_start = perf_counter()
+            var new_node = self.node_pool.get(new_id)
+            for i in range(len(neighbors)):
+                var neighbor_id = neighbors[i]
+                var success = new_node[].add_connection(lc, neighbor_id)
+
+                var neighbor_node = self.node_pool.get(neighbor_id)
+                var reverse_success = neighbor_node[].add_connection(lc, new_id)
+
+                if not reverse_success and neighbor_node:
+                    var neighbor_vec = self.get_vector(neighbor_id)
+                    var new_vec = self.get_vector(new_id)
+                    if neighbor_vec and new_vec:
+                        var dist_to_new = self.distance(neighbor_vec, new_vec)
+
+                        # Sub-component 5c: Pruning (expensive when triggered)
+                        var pruning_start = perf_counter()
+                        self._prune_connections_with_candidate(neighbor_id, lc, M_layer, new_id, dist_to_new)
+                        total_pruning_time += (perf_counter() - pruning_start)
+
+                        reverse_success = neighbor_node[].add_connection(lc, new_id)
+
+                if reverse_success:
+                    var regular_pruning_start = perf_counter()
+                    self._prune_connections(neighbor_id, lc, M_layer)
+                    total_pruning_time += (perf_counter() - regular_pruning_start)
+
+            total_connection_time += (perf_counter() - connection_start)
+
+            # Use closest neighbor as entry for next layer
+            if len(neighbors) > 0:
+                curr_nearest = neighbors[0]
+
+        var layer_insertion_time = perf_counter() - layer_insertion_start
+        var total_time = perf_counter() - total_start
+
+        # Print detailed profiling results
+        print("🔍 HNSW Insertion Profiling Results (Node", new_id, "):")
+        print("  📊 Component Breakdown:")
+        print("    Visited Management:     ", visited_time * 1000, "ms")
+        print("    Entry Setup:            ", entry_setup_time * 1000, "ms")
+        print("    Hierarchical Navigation:", navigation_time * 1000, "ms")
+        print("    Binary Quantization:    ", binary_setup_time * 1000, "ms")
+        print("    Layer Insertion Total:  ", layer_insertion_time * 1000, "ms")
+        print("      └─ Neighbor Search:   ", total_neighbor_search_time * 1000, "ms")
+        print("      └─ Connection Mgmt:   ", total_connection_time * 1000, "ms")
+        print("      └─ Pruning:           ", total_pruning_time * 1000, "ms")
+        print("  ⏱️  Total Insertion Time:   ", total_time * 1000, "ms")
+
+        # Calculate percentages for bottleneck identification
+        var total_ms = total_time * 1000
+        if total_ms > 0:
+            print("  📈 Bottleneck Analysis:")
+            print("    Navigation:   ", Int((navigation_time * 1000 / total_ms) * 100), "%")
+            print("    Neighbor Search:", Int((total_neighbor_search_time * 1000 / total_ms) * 100), "%")
+            print("    Connection:   ", Int((total_connection_time * 1000 / total_ms) * 100), "%")
+            print("    Pruning:      ", Int((total_pruning_time * 1000 / total_ms) * 100), "%")
 
     fn _insert_node_simplified(mut self, new_id: Int, level: Int, vector: UnsafePointer[Float32]):
         """

@@ -9,7 +9,7 @@ This document organizes all critical information needed for AI agents (Claude, G
 ### Level 1: Critical Invariants (ALWAYS LOAD FIRST)
 ```
 internal/
-├── HNSW_INVARIANTS.md          # What MUST NEVER be violated
+├── HNSW_CORRECTNESS_RULES.md   # What MUST NEVER be violated
 ├── PERFORMANCE_TARGETS.md       # Current metrics and goals
 └── KNOWN_FAILURES.md           # What doesn't work and why
 ```
@@ -302,7 +302,7 @@ internal/
 ### For Code Changes
 ```
 1. Read current implementation first
-2. Check HNSW_INVARIANTS.md
+2. Check HNSW_CORRECTNESS_RULES.md
 3. Profile before optimizing
 4. Test quality after EVERY change
 5. Commit working baselines

@@ -4,7 +4,7 @@
 ## Quick Start for AI Agents
 
 ### 🚨 MANDATORY: Load These First
-1. **`HNSW_INVARIANTS.md`** - What MUST NEVER be violated
+1. **`HNSW_CORRECTNESS_RULES.md`** - What MUST NEVER be violated
 2. **`STATUS.md`** - Current performance (867 vec/s, 95.5% recall)
 3. **`COMPETITIVE_ANALYSIS_2025.md`** - Market targets (20K+ vec/s needed)
 4. **`AI_AGENT_CONTEXT.md`** - This guide and decision trees
@@ -23,7 +23,7 @@ Status: Quality excellent, speed needs 23x improvement
 ### 🔴 Critical (Always Load First)
 ```
 internal/
-├── HNSW_INVARIANTS.md          # ⛔ NEVER violate these rules
+├── HNSW_CORRECTNESS_RULES.md   # ⛔ NEVER violate these rules
 ├── STATUS.md                   # 📊 Latest performance and progress
 ├── COMPETITIVE_ANALYSIS_2025.md # 🎯 Market targets and strategy
 └── AI_AGENT_CONTEXT.md         # 🤖 Guide for AI development
@@ -121,7 +121,7 @@ Advantages:
 ## Development Workflow
 
 ### For New Optimizations
-1. **Read invariants** (`HNSW_INVARIANTS.md`)
+1. **Read correctness rules** (`HNSW_CORRECTNESS_RULES.md`)
 2. **Check if tried before** (`HNSW_OPTIMIZATION_FINDINGS.md`)
 3. **Profile current performance** (identify real bottleneck)
 4. **Implement with tests** (maintain quality)

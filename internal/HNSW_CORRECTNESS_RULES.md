@@ -1,7 +1,7 @@
-# HNSW Invariants - NEVER VIOLATE THESE
-## Critical Rules That Must Be Preserved for Correctness
+# HNSW Correctness Rules - NEVER VIOLATE THESE
+## Critical Requirements That Must Be Preserved for Quality
 
-## ⛔ ABSOLUTE INVARIANTS
+## ⛔ ABSOLUTE REQUIREMENTS
 
 ### 1. Hierarchical Navigation is MANDATORY
 ```mojo
