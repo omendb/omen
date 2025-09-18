@@ -117,9 +117,14 @@ struct GlobalDatabase(Movable):
         return True
     
     fn __del__(owned self):
-        """Clean up flat buffer memory."""
+        """Clean up all allocated memory."""
+        # Clean up flat buffer
         if self.flat_buffer:
             self.flat_buffer.free()
+
+        # CRITICAL FIX: Mojo automatically destructs hnsw_index and segmented_hnsw
+        # Their destructors properly free all UnsafePointer allocations
+        # No manual cleanup needed - let Mojo handle destruction
     
     fn add_vector_with_metadata(
         mut self, 
