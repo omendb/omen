@@ -103,7 +103,50 @@ fn clear(mut self):
 | 4 | ✅ | - | - |
 | 5 | ❌ (0xa) | - | Original crash |
 
-**Conclusion**: Fixes made the problem worse by exposing deeper issues.
+**Conclusion**: The applied fixes are **INCORRECT** and made the problem worse.
+
+## Why the Fixes Are Wrong
+
+### 1. Keeping `initialized = True` breaks clear() semantics
+- `clear_database()` should reset to uninitialized state
+- Users expect to change dimensions after clearing
+- This masks the real problem instead of fixing it
+
+### 2. Not freeing flat_buffer creates memory leaks
+- Allocated memory MUST be freed to prevent leaks
+- The double-free suggests the real issue is elsewhere
+- Memory pools need proper lifecycle management
+
+### 3. Treating symptoms, not root cause
+- By preventing reinitialization, we hide the real problem
+- The crash happens during insertion, not clear()
+- Something in clear() corrupts memory that manifests later
+
+## Real Problem Analysis
+
+The crash occurs at `native.add_vector_batch()` **after** clear, suggesting:
+
+1. **Global singleton is fundamentally broken in Mojo**
+   - Destructor called multiple times
+   - Move semantics unclear
+   - No RAII protection
+
+2. **HNSWIndex/SegmentedHNSW have stale pointers after clear**
+   - Internal structures not properly reset
+   - Cached pointers to freed memory
+   - Missing state synchronization
+
+3. **Flat buffer corruption during clear/reinit cycle**
+   - Allocation/deallocation mismatch
+   - Buffer used after free
+   - Size/capacity desync
+
+## Correct Approach
+
+1. **Revert all "fixes"** - they're making it worse
+2. **Fix the actual destructor/move issues** in HNSWIndex
+3. **Implement proper flat buffer lifecycle** with matching alloc/free
+4. **Add memory debugging** to track the actual corruption point
 
 ---
-*Key insight: The problem is architectural - Mojo lacks the memory management primitives needed for safe repeated initialization/destruction cycles.*
+*Key insight: Never mask problems with workarounds. Fix the actual memory corruption at its source.*

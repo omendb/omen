@@ -199,9 +199,7 @@ struct SparseMetadataMap(Copyable, Movable):
     fn clear(mut self):
         """Clear all metadata."""
         self.entries = List[CompactMetadata]()
-        # CRITICAL FIX: Clear existing map instead of creating new instance
-        # Creating new instance causes double-free on repeated clear_database() calls
-        self.id_to_index.clear()  # Clear existing map, keep allocated memory
+        self.id_to_index = SparseMap(64)  # Reset with default capacity
     
     fn len(self) -> Int:
         """Return number of vectors with metadata."""

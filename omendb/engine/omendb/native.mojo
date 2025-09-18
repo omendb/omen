@@ -56,21 +56,27 @@ struct GlobalDatabase(Movable):
     alias FLAT_BUFFER_THRESHOLD = 500
     
     fn __init__(out self):
-        # DON'T create HNSWIndex here - wait for initialize() with correct dimension
-        # This prevents double allocation and memory corruption
-        self.hnsw_index = HNSWIndex(32, 1)  # Minimal placeholder (32 divisible by PQ requirements), will be replaced
-        self.segmented_hnsw = SegmentedHNSW(32)  # RESTORED: Working segmented implementation
-        self.use_segmented = False  # Start with monolithic, switch for large batches
+        # PROPER MOJO PATTERN: Must initialize all struct members
+        # Mojo will properly destroy old objects when reassigned
+
+        # Automatic memory management - these are fine
         self.id_mapper = SparseMap()
         self.reverse_id_mapper = ReverseSparseMap()
-        self.metadata_storage = SparseMetadataMap(50000)  # Large capacity for production
-        
-        # Initialize flat buffer (adaptive strategy)
+        self.metadata_storage = SparseMetadataMap(50000)
+        self.flat_buffer_string_ids = List[String]()
+
+        # Initialize with minimal placeholder - will be replaced in initialize()
+        # Mojo's assignment will properly destroy the old object
+        self.hnsw_index = HNSWIndex(32, 1)
+        self.segmented_hnsw = SegmentedHNSW(32)
+        self.use_segmented = False
+
+        # CRITICAL: Initialize manual memory as null - proper lifecycle
         self.flat_buffer = UnsafePointer[Float32]()
         self.flat_buffer_capacity = 0
         self.flat_buffer_count = 0
-        self.flat_buffer_string_ids = List[String]()
-        
+
+        # State management
         self.dimension = 0
         self.initialized = False
         self.next_numeric_id = 0
@@ -79,33 +85,35 @@ struct GlobalDatabase(Movable):
         """Initialize the database with specified dimension."""
         if self.initialized and self.dimension != dimension:
             return False  # Cannot change dimension
-        
+
         if not self.initialized:
             self.dimension = dimension
-            
+
+            # CRITICAL FIX: Proper UnsafePointer lifecycle
+            # Free any existing buffer before allocating new one
+            if self.flat_buffer:
+                self.flat_buffer.free()
+
             # Initialize flat buffer for adaptive strategy (small datasets)
             self.flat_buffer_capacity = Self.FLAT_BUFFER_THRESHOLD
             self.flat_buffer = UnsafePointer[Float32].alloc(self.flat_buffer_capacity * dimension)
             self.flat_buffer_count = 0
-            
+
             # PRODUCTION CAPACITY: Sized to avoid resize crash discovered at 100K vectors
             var initial_capacity = 150000  # Avoid resize up to 150K vectors (covers 95% use cases)
+
+            # Mojo assignment properly destroys old objects and creates new ones
             self.hnsw_index = HNSWIndex(dimension, initial_capacity)
-
-            # RESTORED: Initialize working segmented HNSW for proven 19K+ vec/s performance
             self.segmented_hnsw = SegmentedHNSW(dimension)
-            
-            # PERFORMANCE OPTIMIZATIONS: Re-enabled after systematic testing
-            # Binary quantization proven safe: maintains 100% recall with 40x speedup
-            # Distance errors don't affect ranking-based search quality
 
-            self.hnsw_index.enable_binary_quantization()  # RE-ENABLED - safe with massive speedup!
-            self.hnsw_index.use_flat_graph = False   # DISABLED Hub Highway - breaks quality
+            # PERFORMANCE OPTIMIZATIONS: Re-enabled after systematic testing
+            self.hnsw_index.enable_binary_quantization()  # Safe with massive speedup
+            self.hnsw_index.use_flat_graph = False   # Keep disabled for quality
             self.hnsw_index.use_smart_distance = False   # Keep disabled
             self.hnsw_index.cache_friendly_layout = False   # Keep disabled
-            
+
             self.initialized = True
-        
+
         return True
     
     fn __del__(owned self):
@@ -345,24 +353,27 @@ struct GlobalDatabase(Movable):
         if not self.initialized:
             return  # Already clear
 
-        # Clear all data structures properly
-        # CRITICAL: Clear existing structures instead of recreating them
-        _ = self.hnsw_index.clear()  # Clear but keep allocated memory
-        _ = self.segmented_hnsw.clear()  # Clear but keep allocated memory
+        # Clear all data structures - they use automatic memory management
+        _ = self.hnsw_index.clear()
+        _ = self.segmented_hnsw.clear()
         _ = self.id_mapper.clear()
         _ = self.reverse_id_mapper.clear()
         _ = self.metadata_storage.clear()
-
-        # CRITICAL FIX: Properly handle flat buffer memory
-        # Keep the allocated flat buffer but reset count
-        # Don't free and reallocate - that causes double-free issues
-        self.flat_buffer_count = 0
         self.flat_buffer_string_ids.clear()
 
-        # Keep initialized=True to prevent reinitialize() from creating new structures
-        # Just reset the data counters
+        # CRITICAL FIX: Proper UnsafePointer lifecycle
+        # Free the manually allocated buffer
+        if self.flat_buffer:
+            self.flat_buffer.free()
+            self.flat_buffer = UnsafePointer[Float32]()  # Reset to null
+
+        self.flat_buffer_capacity = 0
+        self.flat_buffer_count = 0
+
+        # Reset to uninitialized state - allows dimension change
+        self.initialized = False
+        self.dimension = 0
         self.next_numeric_id = 0
-        # Don't reset initialized or dimension - keep the database ready for reuse
 
 # Instance-based database management - fixes memory corruption
 # Each Python DB() gets its own database instance
@@ -388,6 +399,12 @@ fn get_global_db() -> UnsafePointer[GlobalDatabase]:
     if not __global_db:
         __global_db = create_database()
     return __global_db
+
+fn cleanup_global_db():
+    """Properly cleanup global database to prevent double-free."""
+    if __global_db:
+        destroy_database(__global_db)
+        __global_db = UnsafePointer[GlobalDatabase]()
 
 # =============================================================================
 # PYTHON API FUNCTIONS
@@ -972,9 +989,10 @@ fn count() raises -> PythonObject:
 fn clear_database() raises -> PythonObject:
     """Clear all vectors from database."""
     try:
-        # Use global singleton for now (Mojo limitation)
-        var db = get_global_db()
-        db[].clear()
+        # CRITICAL FIX: Properly destroy and recreate global to prevent double-free
+        # This avoids global destruction order problems
+        cleanup_global_db()  # Destroy old instance properly
+        # Next call to get_global_db() will create fresh instance
         return PythonObject(True)
     except:
         return PythonObject(False)
