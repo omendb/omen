@@ -162,6 +162,18 @@ struct SegmentedHNSW(Movable):
         # Future: Implement segment merging and optimization
         pass
 
+    fn clear(mut self):
+        """Clear all data and reset to empty state."""
+        # Clear each segment's HNSW index
+        for i in range(self.num_segments):
+            self.segment_indices[i].clear()
+            self.segment_sizes[i] = 0
+
+        # Reset counters
+        self.total_vectors = 0
+
+        # Note: Keep allocated memory (segment_indices, vectors_buffer) for reuse
+
     fn __del__(owned self):
         """Clean up allocated memory."""
         self.segment_indices.free()

@@ -344,21 +344,25 @@ struct GlobalDatabase(Movable):
         """Clear all data and reset to uninitialized state."""
         if not self.initialized:
             return  # Already clear
-            
+
         # Clear all data structures properly
-        _ = self.hnsw_index.clear()
-        _ = self.id_mapper.clear() 
+        # CRITICAL: Clear existing structures instead of recreating them
+        _ = self.hnsw_index.clear()  # Clear but keep allocated memory
+        _ = self.segmented_hnsw.clear()  # Clear but keep allocated memory
+        _ = self.id_mapper.clear()
         _ = self.reverse_id_mapper.clear()
         _ = self.metadata_storage.clear()
-        
-        # Clear flat buffer state (CRITICAL FIX)
+
+        # CRITICAL FIX: Properly handle flat buffer memory
+        # Keep the allocated flat buffer but reset count
+        # Don't free and reallocate - that causes double-free issues
         self.flat_buffer_count = 0
         self.flat_buffer_string_ids.clear()
-        
-        # Reset state
-        self.initialized = False
-        self.dimension = 0
+
+        # Keep initialized=True to prevent reinitialize() from creating new structures
+        # Just reset the data counters
         self.next_numeric_id = 0
+        # Don't reset initialized or dimension - keep the database ready for reuse
 
 # Instance-based database management - fixes memory corruption
 # Each Python DB() gets its own database instance

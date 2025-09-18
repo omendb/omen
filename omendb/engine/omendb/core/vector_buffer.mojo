@@ -542,7 +542,9 @@ struct VectorBuffer(Copyable, Movable):
         """Clear buffer for reuse."""
         self.size = 0
         self.ids.clear()
-        self.id_to_index = SparseMap(max(self.capacity, 100))  # Reset with new instance
+        # CRITICAL FIX: Clear existing map instead of creating new instance
+        # Creating new instance causes double-free on repeated clear_database() calls
+        self.id_to_index.clear()  # Clear existing map, keep allocated memory
         # Don't clear memory - will be overwritten
     
     fn is_full(self) -> Bool:

@@ -4263,23 +4263,26 @@ struct HNSWIndex(Movable):
         """Clear all data and reset index to empty state."""
         # Reset size to 0 (effectively makes all nodes inaccessible)
         self.size = 0
-        
+
         # CRITICAL FIX: Properly reset node pool instead of recreating
         # Creating new NodePool caused segfaults due to dangling pointers
         self.node_pool.size = 0  # Reset pool to empty but keep allocated memory
-        
+
         # Clear hub nodes list (keep allocated memory)
         self.hub_nodes.clear()
-        
-        # Clear binary quantization vectors (keep allocated memory) 
+
+        # Clear binary quantization vectors (keep allocated memory)
         self.binary_vectors.clear()
-        
+
         # Reset search state
         self.visited_version = 1
-        
+
+        # Reset visited size to match actual nodes (CRITICAL FIX)
+        self.visited_size = 0
+
         # Reset entry point
         self.entry_point = -1
-        
+
         # Note: We keep the allocated vectors memory and other buffers
         # This avoids deallocation/reallocation overhead while fixing segfaults
 
