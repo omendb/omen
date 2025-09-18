@@ -1,5 +1,5 @@
 # HNSW Optimization Findings & Roadmap to State-of-the-Art
-## October 2025
+## September 2025
 
 ## Executive Summary
 

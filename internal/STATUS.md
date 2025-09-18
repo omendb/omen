@@ -1,8 +1,8 @@
-# OmenDB Status (October 2025)
+# OmenDB Status (September 2025)
 
 ## Current Performance: Stable Baseline Achieved
 
-### Latest Benchmark Results (October 2025)
+### Latest Benchmark Results (September 2025)
 ```
 Architecture:     Segmented HNSW
 Insertion Rate:   867 vec/s (stable)
@@ -17,7 +17,7 @@ Status:           Production-ready quality, needs speed optimization
 
 ### Journey to Current State
 ```
-Baseline (Oct 24):         427 vec/s   (sequential, decent recall)
+Baseline (Sep 17):         427 vec/s   (sequential, decent recall)
 Parallel attempt:        9,607 vec/s   (broken, 0.1% recall)
 Lock-free attempt:      18,234 vec/s   (broken, random connections)
 Bulk sophisticated:     22,803 vec/s   (segfaults, 1.5% recall)
@@ -138,7 +138,7 @@ OmenDB Goal | 20,000+       | 95%       | 3-4 weeks
 
 ### Current Test Results
 ```bash
-# Final validation (Oct 2025)
+# Final validation (Sep 2025)
 python benchmarks/final_validation.py
 
 10K vectors: 867 vec/s, 95.5% recall ✅
@@ -203,5 +203,5 @@ pixi run python benchmark_competitive.py
 **Timeline to competitive performance**: 3-4 weeks of focused development
 
 ---
-*Last updated: October 2025*
+*Last updated: September 2025*
 *Next update: After Phase 1 (bulk construction fix) completion*
