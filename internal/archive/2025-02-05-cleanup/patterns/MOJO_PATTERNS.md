@@ -181,9 +181,95 @@ fn process_batch(items: List[T]) -> None:
 struct DoubleBuffer:
     var active: Buffer
     var inactive: Buffer
-    
+
     fn swap(inout self) -> None:
         self.active, self.inactive = self.inactive, self.active
+```
+
+## OmenDB Parallel Patterns (Week 2 Day 3 Learnings)
+
+### Parallel Segment Construction - FAILED
+```mojo
+# ATTEMPTED: True parallel HNSW construction
+from algorithm import parallelize
+from sys.info import num_performance_cores
+
+# ❌ FAILED - HNSWIndex not copyable
+struct SegmentedHNSW:
+    var segments: List[HNSWSegment]  # ERROR: requires Copyable
+
+struct HNSWSegment(Movable):  # Not Copyable
+    var hnsw: HNSWIndex  # This blocks copyability
+
+# ✅ WORKAROUND - UnsafePointer array (but didn't help performance)
+struct SegmentedHNSW:
+    var segment_indices: UnsafePointer[HNSWIndex]  # Works but complex
+    var segment_sizes: UnsafePointer[Int]
+
+    fn __init__(out self, dimension: Int):
+        self.segment_indices = UnsafePointer[HNSWIndex].alloc(8)
+        # Manual initialization required for each segment
+        for i in range(8):
+            var idx = HNSWIndex(dimension, 1000)
+            self.segment_indices[i] = idx^
+```
+
+### Algorithm.parallelize() Usage Pattern
+```mojo
+# ✅ CORRECT - True parallel execution achieved
+@parameter
+fn process_segment(segment_id: Int):
+    var start_idx = segment_id * vectors_per_segment
+    var segment_vectors = self.vectors_buffer.offset(start_idx * self.dimension)
+
+    # Insert into this segment's HNSW index
+    var local_ids = self.segment_indices[segment_id].insert_bulk(segment_vectors, count)
+    self.segment_sizes[segment_id] += count
+
+# Launch parallel workers (auto-scales to CPU cores)
+parallelize[process_segment](self.num_segments)
+
+# ❌ LIMITATION - Cannot capture mutable List in @parameter functions
+var shared_results = List[Int]()  # Cannot use in parallel closure
+# Must use pre-allocated arrays instead
+```
+
+### Why Parallelization Failed (Critical Discovery)
+```mojo
+# PERFORMANCE RESULT: 2,352 vec/s (0% improvement vs 2,353 vec/s baseline)
+# ROOT CAUSE: Algorithmic complexity, not threading overhead
+
+# Each HNSW segment still performs:
+# - O(log N × M) graph traversal per vector
+# - 96+ distance calculations per insertion
+# - 39.8x overhead vs NumPy distance baseline
+
+# INSIGHT: Need 10-20x algorithmic improvement, not 2-4x parallelization
+# Parallel segments work correctly but solve wrong bottleneck
+```
+
+### Parallel Memory Management
+```mojo
+# ✅ WORKS - Pre-allocated parallel arrays
+var results = UnsafePointer[Int].alloc(n_vectors)
+
+@parameter
+fn parallel_process(idx: Int):
+    results[idx] = compute_result(idx)  # Direct memory write, no contention
+
+# ❌ FAILS - Shared collections in parallel closures
+@parameter
+fn bad_parallel(idx: Int):
+    shared_list.append(result)  # Race condition!
+```
+
+### CPU Core Detection Pattern
+```mojo
+from sys.info import num_performance_cores
+
+# OmenDB auto-scales to hardware
+var n_segments = min(MAX_SEGMENTS, num_performance_cores())
+# Typical: 8 segments on M3 Max (8 performance cores)
 ```
 
 ## Compiler Limitations
@@ -202,11 +288,19 @@ struct FloatDict:  # Separate implementation
 # Or manual state machines for async patterns
 ```
 
-### No Thread Safety Primitives
+### Limited Thread Safety Primitives
 ```mojo
-# No Arc, Mutex, atomics
-# Solution: Single-threaded engine
-# Concurrency at server layer (Rust)
+# ✅ HAS: Basic parallel execution and atomics
+from algorithm import parallelize
+from atomic import Atomic
+
+var counter = Atomic[Int](0)
+counter.fetch_add(1)  # Atomic increment
+counter.compare_exchange_weak(expected, desired)  # CAS operation
+
+# ❌ MISSING: Higher-level concurrency (Arc, Mutex, channels)
+# Solution for OmenDB: Use algorithm.parallelize() for data parallelism
+# Complex coordination still needs single-threaded design
 ```
 
 ## Debugging Techniques
@@ -242,6 +336,8 @@ mojo build --debug program.mojo
 2. Full SIMD - Compiler bugs
 3. Module splitting - Import system limitations
 4. Generic collections - Limited generic support
+5. **Parallel segment construction** (Week 2 Day 3) - Struct copyability issues
+6. **HNSW parallelization** - Algorithmic complexity dominates, not threading overhead
 
 ## Critical Files & Lines
 

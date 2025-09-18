@@ -11,13 +11,18 @@
 - **Decision**: Keep Array-of-Structures layout for vectors
 - **Impact**: Avoided months of wrong SoA optimization
 
-## Current Performance
+## Current Performance (September 18, 2025)
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **Peak throughput** | 9,504 vec/s | At 5K batch size with parallel construction |
-| **Search latency** | 0.74 ms | For top-10 results |
-| **Speedup achieved** | 22x | From 427 to 9,504 vec/s |
-| **Parallel efficiency** | ~85% | Good multi-core utilization |
+| **Current throughput** | 2,352 vec/s | Week 2 Day 3 - parallel attempts failed |
+| **Search latency** | 0.90 ms | For top-10 results |
+| **Recall@10** | 95%+ | Algorithm quality excellent |
+| **Status** | Needs competitive optimization | Week 2 focused on wrong bottlenecks |
+
+## 🚨 Week 2 Realization: Implementation Naive vs Algorithm Sound
+- **Algorithm Quality**: ✅ State-of-the-art HNSW with 95% recall
+- **Implementation Quality**: ❌ Naive parameters (ef_construction=200 vs competitors' 50-100)
+- **Missing Optimizations**: Batch processing, proper parallelism, parameter tuning
 
 ## Core Components
 | Component | Description | Status |
