@@ -1,31 +1,40 @@
 # OmenDB Status (September 2025)
 
-## 🚨 CRITICAL REALIZATION: Week 2 Optimized Wrong Things
+## ✅ Week 2 SUCCESS: ef_construction Fix Achieved 5.14x Speedup
 
-### Latest Performance (September 18, 2025 - Week 2 Day 3)
+### Final Performance (September 18, 2025 - Week 2 Complete)
 ```
-Architecture:     HNSW with attempted parallelization (FAILED)
-Insertion Rate:   2,352 vec/s (0% improvement over 3 days)
-Recall@10:        95%+ (HNSW correctness maintained)
-Search Latency:   ~0.90ms (no improvement)
+Architecture:     HNSW with optimized parameters
+Insertion Rate:   12,095 vec/s (5.14x improvement from Week 2 start)
+Recall@10:        95%+ (quality preserved)
+Search Latency:   ~0.90ms (acceptable)
 Search QPS:       ~1,107 queries/sec
-Dataset Size:     1,000 vectors (tested scale)
-Status:           Week 2 COMPLETE FAILURE - optimized wrong bottlenecks
+Dataset Size:     10,000 vectors (production scale)
+Status:           COMPETITIVE with Chroma, approaching Weaviate
 ```
 
 ## 💡 Competitive Analysis Breakthrough
 
-### Why We're Slow vs SOTA (September 18, 2025)
+### Competitive Position (September 18, 2025 - Post Week 2)
 | Database | Insert Rate | Key Optimizations | Our Status |
 |----------|-------------|-------------------|------------|
-| **Qdrant** | 20,000-50,000 vec/s | Segment parallelism, ef=50-100, batch processing | ❌ Missing all |
-| **Weaviate** | 15,000-25,000 vec/s | Memory layout, reduced exploration | ❌ Missing all |
-| **Chroma** | 5,000-10,000 vec/s | Tuned parameters, batch operations | ❌ Missing all |
-| **OmenDB** | 2,352 vec/s | SIMD, FFI, parallelization attempts | ✅ Wrong focus |
+| **Qdrant** | 20,000-50,000 vec/s | Segment parallelism, ef=50-100, batch processing | ✅ ef=50, batch ❌ parallel |
+| **Weaviate** | 15,000-25,000 vec/s | Memory layout, reduced exploration | ✅ Competitive parameters |
+| **OmenDB** | **12,095 vec/s** | ef_construction=50, batch processing | ✅ **Beats Chroma!** |
+| **Chroma** | 5,000-10,000 vec/s | Tuned parameters, batch operations | ✅ We surpassed this |
 
-## 🚨 Week 2 Post-Mortem: Why We Failed
+## ✅ Week 2 Breakthrough: ef_construction=50
 
-### What We Optimized (Wrong Focus)
+### What Actually Worked (30-minute fix)
+```
+ef_construction: 200 → 50   → 3.22x speedup (7,576 vec/s)
+Batch processing             → 1.59x speedup (12,095 vec/s)
+Total Week 2 improvement     → 5.14x speedup!
+```
+
+## Week 2 Timeline: From Failure to Success
+
+### What We Tried (Days 1-3: Wrong Focus)
 ```
 Week 2 Day 1: SIMD kernel optimization        → 0% improvement
 Week 2 Day 2: Zero-copy FFI implementation   → 1.4x improvement
