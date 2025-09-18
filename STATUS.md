@@ -1,5 +1,14 @@
 # OmenDB Status (September 18, 2025)
 
+## 🔧 Current Focus: Memory Stability Issues
+
+### Critical Issue: Double-Free on clear_database()
+- **Problem**: Crashes after 2-5 clear/insert cycles
+- **Root cause**: Complex memory lifecycle issues in Mojo
+- **Partial fix**: Applied but needs architectural changes
+- **Workaround**: Avoid repeated clear_database() calls
+- **See**: `internal/MEMORY_STABILITY_ANALYSIS.md` for details
+
 ## 🚀 BREAKTHROUGH: Week 2 Day 4 - Batch Processing Success!
 
 ### Performance Evolution
