@@ -1,12 +1,16 @@
 # Repository Guidelines
 
-## Documentation Organization
-**Start here for context**:
-1. **Root summaries**: `ARCHITECTURE.md`, `RESEARCH.md`, `STATUS.md` - quick overviews
-2. **Detailed specs**: `internal/ARCHITECTURE.md`, `internal/RESEARCH.md`, `internal/STATUS.md` - full technical details
-3. **Single source of truth**: Each concept documented in exactly one place
-4. **Archive old docs**: Move to `internal/archive/YYYY-MM-DD/` when superseded
-5. **Update STATUS.md**: After each performance test or major change
+## Documentation Organization (AI-Optimized)
+**🚨 MANDATORY: Load these first**:
+1. **`internal/HNSW_INVARIANTS.md`** - ⛔ What MUST NEVER be violated
+2. **`internal/STATUS.md`** - 📊 Current performance (867 vec/s, 95.5% recall)
+3. **`internal/COMPETITIVE_ANALYSIS_2025.md`** - 🎯 Market targets (20K+ vec/s needed)
+4. **`internal/AI_AGENT_CONTEXT.md`** - 🤖 Complete development guide
+
+**Reference docs** (load when needed):
+- `internal/ARCHITECTURE.md`, `internal/HNSW_DEVELOPMENT_GUIDE.md`, `internal/RESEARCH.md`
+- **Single source of truth**: Each concept documented exactly once
+- **Update STATUS.md**: After every performance test or optimization attempt
 
 ## Project Structure
 - `omendb/engine` - Mojo vector core with Python bindings under `python/omendb/`
@@ -15,11 +19,18 @@
 - `external/agent-contexts/` - Decision trees for assistant runs
 - `omendb/server` and `omendb/web` - Secondary, update only when engine APIs change
 
-## Current Performance (October 2025)
-- **Throughput**: 670-1,052 vec/s (varies by batch size)
-- **Target**: 25,000+ vec/s (after SoA migration + zero-copy FFI)
-- **Bottlenecks**: SIMD compilation broken, FFI overhead 50%, bulk insertion crashes at 25K
-- **Next steps**: SoA distance kernels → zero-copy ingestion → chunked builder
+## Current Performance (September 2025)
+- **Insertion**: 867 vec/s with 95.5% recall@10 (stable, quality excellent)
+- **Proven Capability**: 27,604 vec/s achieved (but 1% recall due to broken navigation)
+- **Competitive Target**: 20,000+ vec/s with 95% recall (matches Qdrant/Weaviate)
+- **Core Challenge**: Maintain HNSW invariants while optimizing performance
+- **Next steps**: Fix bulk construction → segment parallelism → SIMD → zero-copy FFI
+
+## CRITICAL: HNSW Invariants (NEVER Violate)
+- **Hierarchical navigation**: MUST navigate from entry_point down through layers
+- **Bidirectional connections**: MUST maintain A↔B connections
+- **Progressive construction**: Graph MUST be valid after each insertion
+- **Quality requirement**: Recall@10 MUST be ≥95%
 
 ## Build & Test Commands
 ```bash
@@ -27,13 +38,14 @@
 cd omendb/engine
 pixi run mojo build omendb/native.mojo -o python/omendb/native.so --emit shared-lib -I omendb
 
-# Quick tests (current: 670-1,052 vec/s)
-pixi run python test_binary_quantization_quick.py
-pixi run python test_simd_performance.py
+# Current performance validation (867 vec/s, 95.5% recall)
+pixi run python benchmarks/final_validation.py
 
-# Full benchmarks
-pixi run benchmark-quick
-pixi run python benchmark_competitive.py
+# Quick tests
+pixi run python test_binary_quantization_quick.py
+
+# Debug broken SIMD (compiler issues)
+pixi run python test_simd_performance.py
 
 # ZenDB tests
 cd zendb && cargo test
