@@ -423,9 +423,34 @@ fn test_connection() raises -> PythonObject:
     return PythonObject("Connection successful - HNSW+ Native Module Ready for Production!")
 
 fn configure_database(config: PythonObject) raises -> PythonObject:
-    """Configure database settings."""
-    # Basic configuration for now
-    return PythonObject(True)
+    """Configure database settings and initialize if needed."""
+    try:
+        var db = get_global_db()
+
+        # CRITICAL FIX: Actually initialize the database after clear_database
+        # This was a placeholder causing crashes after migration cycles
+
+        # Extract dimension from config if provided
+        var dimension = 128  # Default dimension
+        try:
+            if config and config != Python.import_module("builtins").None_:
+                # Try to get dimension from config
+                var python = Python.import_module("builtins")
+                if python.hasattr(config, "get"):
+                    var dim_obj = config.get("dimension")
+                    if dim_obj and dim_obj != python.None_:
+                        dimension = Int(dim_obj)
+        except:
+            pass  # Use default dimension if config parsing fails
+
+        # Initialize database if not already initialized
+        if not db[].initialized:
+            if not db[].initialize(dimension):
+                return PythonObject(False)
+
+        return PythonObject(True)
+    except:
+        return PythonObject(False)
 
 # Production implementation using v25.4 with working singleton pattern
 # This provides 41,000 vec/s performance with zero-copy FFI

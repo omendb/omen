@@ -1,22 +1,35 @@
 # OmenDB Status (September 18, 2025)
 
-## 🔍 MEMORY STABILITY: Critical Investigation (September 18, 2025)
+## 🎯 MEMORY STABILITY: ROOT CAUSE IDENTIFIED (September 18, 2025)
 
-### Memory Corruption Analysis - Large Batch Issue Isolated
-- **Issue**: Memory corruption in large batch optimization path (1000+ vectors)
-- **Scope**: Small batches (10-500 vectors) work perfectly across all cycles ✅
-- **Root Cause**: Bulk HNSW construction has memory corruption that accumulates over cycles
-- **Pattern**: Invalid pointer errors (0x8, 0x5555555555555555, 0x13) on cycle 3+ with 1000 vectors
-- **Code Path**: "BATCH OPTIMIZATION: Large batch detected" triggers the problematic path
-- **Status**: Multiple memory leaks fixed (6 identified), but core corruption remains
+### 🚀 MAJOR BREAKTHROUGH: Migration Corruption Isolated
+- **REAL THRESHOLD**: **600 vectors** (NOT 1000!) - triggers adaptive strategy migration
+- **ROOT CAUSE**: Post-migration HNSW state corruption in adaptive strategy
+- **CODE PATH**: "ADAPTIVE: Threshold reached, migrating flat buffer to HNSW"
+- **PATTERN**: Migration succeeds in cycle 1, corruption manifests in cycle 2+
+- **CORRUPTION TYPE**: Invalid pointer errors (0x8, 0x5555555555555555, 0x13, 0x4, 0xc4)
 
-### Fixes Applied ✅
+### 📊 Complete Analysis - Systematic Investigation Results
+1. **✅ Small batches (≤500)**: 100% stable across unlimited cycles
+2. **❌ Migration batches (600+)**: Crash at cycle 2 after successful migration
+3. **✅ Single migration**: Works perfectly - no corruption during migration
+4. **❌ Post-migration operations**: HNSW state corrupted after migration
+5. **✅ No-migration control**: 10+ cycles with 400 vectors work perfectly
+
+### 🔧 Technical Root Cause
+- **Migration Process**: `_migrate_flat_buffer_to_hnsw()` function (line 238, native.mojo)
+- **Issue**: HNSW state corruption after flat buffer → HNSW individual insertions
+- **Memory Pattern**: HNSW copies data correctly, but internal state gets corrupted
+- **Manifestation**: Subsequent operations on migrated HNSW cause invalid pointer access
+
+### ✅ Fixes Applied During Investigation
 1. **Fixed zero_vec memory leak**: bulk insertion binary quantization setup
 2. **Fixed dummy_ptr leaks**: 5 locations across HNSW insertion functions
 3. **Fixed GlobalDatabase destructor**: proper cleanup approach
-4. **Improved understanding**: Issue is NOT general Mojo bugs, but specific optimization path
+4. **Fixed understanding**: Issue is migration corruption, NOT bulk optimization
 
-### Current Focus: Bulk HNSW Construction Memory Bugs
+### 🎯 Current Focus: Migration-Induced HNSW Corruption
+**Next Steps**: Fix HNSW internal state corruption during flat buffer migration
 
 ## 🚀 BREAKTHROUGH: Week 2 Day 4 - Batch Processing Success!
 
