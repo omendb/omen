@@ -54,7 +54,7 @@ alias simd_width = simdwidthof[DType.float32]()
 alias M = 16  # QUALITY PRESERVED: Reverted from M=8 (1.9% speed not worth 5% quality loss)
 alias max_M = M
 alias max_M0 = M * 2  # Layer 0 has more connections
-alias ef_construction = 50  # COMPETITIVE: Matches Qdrant/Weaviate balance (3.22x speedup maintained)
+alias ef_construction = 200  # Industry standard for good quality (lowering causes disconnected graphs)
 alias ef_search = 150  # QUALITY PRESERVED: Reverted from 75 (maintains 95% recall)
 alias ml = 1.0 / log(2.0)
 alias MAX_LAYERS = 4  # OPTIMAL STABLE - Maximum hierarchical layers (was 16)

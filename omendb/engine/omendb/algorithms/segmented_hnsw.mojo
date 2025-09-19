@@ -15,8 +15,8 @@ from random import random_float64
 from sys.info import num_performance_cores
 
 # Configuration based on research
-alias SEGMENT_SIZE = 1000           # Smaller segments for better parallelism
-alias MAX_SEGMENTS = 8              # Match typical core count
+alias SEGMENT_SIZE = 2500           # Larger segments for better graph connectivity
+alias MAX_SEGMENTS = 4              # Fewer segments = better recall per segment
 alias PARALLEL_WORKERS = 8          # 8-16 optimal per Qdrant
 alias INDEXING_THRESHOLD = 1000     # Rebuild if >1K unindexed
 
@@ -137,9 +137,10 @@ struct SegmentedHNSW(Movable):
 
         return all_node_ids
 
-    fn search(mut self, query: UnsafePointer[Float32], k: Int) -> List[Int]:
+    fn search(mut self, query: UnsafePointer[Float32], k: Int) -> List[List[Float32]]:
         """
         SEGMENTED SEARCH - Search all segments and merge results
+        Returns List[List[Float32]] where each inner list is [node_id, distance]
         """
         print("🔍 PARALLEL SEARCH: Searching", self.num_segments, "segments for", k, "results")
 
@@ -177,11 +178,11 @@ struct SegmentedHNSW(Movable):
                 all_results[i] = all_results[min_idx]
                 all_results[min_idx] = temp
 
-        # Extract top k node IDs
-        var final_results = List[Int]()
+        # Return top k results with distances
+        var final_results = List[List[Float32]]()
         var count = min(k, len(all_results))
         for i in range(count):
-            final_results.append(Int(all_results[i][0]))
+            final_results.append(all_results[i])
 
         return final_results
 

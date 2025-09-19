@@ -214,14 +214,14 @@ struct GlobalDatabase(Movable):
             print("🔍 RESTORED SEGMENTED SEARCH: Parallel search across segments")
             var segmented_results = self.segmented_hnsw.search(query, k)
 
-            # Process segmented results (already node IDs)
+            # Process segmented results (now includes distances)
             for i in range(len(segmented_results)):
-                var numeric_id = segmented_results[i]
-                # Compute distance for this result
-                var distance = Float32(0.0)  # Placeholder - would need actual distance calculation  # Use actual distance, not placeholder!
-                var string_id = self._get_string_id_for_numeric(numeric_id)
-                if len(string_id) > 0:
-                    results.append((string_id, distance))
+                if len(segmented_results[i]) >= 2:
+                    var numeric_id = Int(segmented_results[i][0])
+                    var distance = segmented_results[i][1]
+                    var string_id = self._get_string_id_for_numeric(numeric_id)
+                    if len(string_id) > 0:
+                        results.append((string_id, distance))
 
             return results
         else:
@@ -673,7 +673,9 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 # Revolutionary bulk insertion - processes all vectors simultaneously
                 # Use segmented architecture for true parallelism on large batches
                 # TRUE SEGMENTED APPROACH: Independent segments like industry leaders
-                var use_segmented = num_vectors >= 1000  # Enable parallel segmented for 1K+ vectors
+                # Use segmented only for very large batches where speed matters more than recall
+                # For smaller batches, use monolithic HNSW which has excellent recall
+                var use_segmented = num_vectors >= 10000  # Only use segmented for 10K+ vectors
                 var bulk_node_ids: List[Int]
 
                 if use_segmented:
