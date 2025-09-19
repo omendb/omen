@@ -1,18 +1,29 @@
 # OmenDB Status (September 2025)
 
-## 🔧 CRITICAL BREAKTHROUGH: Memory Corruption COMPLETELY FIXED
+## 🔧 CRITICAL ISSUE: HNSW Graph Connectivity Problems
 
-### Current Performance (September 18, 2025 - SIMD BREAKTHROUGH)
+### Current Performance (September 19, 2025 - Recall Investigation)
 ```
-Architecture:     HNSW with SIMD-optimized distance computation
-Insertion Rate:   5,329 vec/s (6.15x SPEEDUP from SIMD fix!)
-Previous Rate:    867 vec/s (before SIMD optimization)
-Recall@10:        95.5% (excellent quality maintained)
+Architecture:     HNSW with sophisticated bulk construction
+Insertion Rate:   30,779 vec/s (with segmented HNSW, but broken recall)
+Stable Rate:      5,329 vec/s (with 95.5% recall using monolithic HNSW)
+Current Recall:   14% (CRITICAL: only 14/100 test vectors findable!)
 Memory Safety:    ✅ ZERO crashes at any batch size
 Migration:        ✅ FIXED - lazy SegmentedHNSW initialization
-SIMD Fix:         ✅ Fast kernels in distance() and distance_quantized()
-Status:           🚀 MAJOR PERFORMANCE BREAKTHROUGH
+Graph Issue:      ⚠️  Early nodes have sparse connections (only N-1 neighbors)
+Status:           🔴 RECALL CRISIS - Need connectivity fix
 ```
+
+### Recall Problem Analysis
+- **Symptom**: Only 14% of vectors are findable (14 out of 100)
+- **Pattern**: Findable indices: [0, 10, 20, 30, 60, 70, 100, 150, 200, 400, 600, 800]
+- **Root Cause**: Early nodes only connect to N-1 neighbors when inserted
+- **Example**: Node 3 only finds 3 neighbors, node 4 only finds 4 neighbors
+- **Impact**: Graph is poorly connected, search can't navigate to most nodes
+- **Attempted Fixes**:
+  - ✅ Re-enabled sophisticated bulk construction (improved 8% → 14%)
+  - ✅ Both individual + bulk insertion phases run
+  - ❌ Still only 14% recall - bulk construction not building enough connections
 
 ## 🚀 SIMD Performance Breakthrough
 
