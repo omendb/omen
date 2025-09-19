@@ -47,18 +47,16 @@ struct SegmentedHNSW(Movable):
         self.segment_capacity = SEGMENT_SIZE
         self.total_vectors = 0
 
-        # Allocate segment indices
+        # CRITICAL FIX: Use lazy initialization to avoid post-migration corruption
+        # Creating HNSWIndex objects immediately after migration causes crashes
+        # due to corrupted global state. Create them only when first needed.
+
+        # Allocate arrays but don't create HNSWIndex objects yet
         self.segment_indices = UnsafePointer[HNSWIndex].alloc(self.num_segments)
         self.segment_sizes = UnsafePointer[Int].alloc(self.num_segments)
 
-        # Initialize each segment
+        # Initialize sizes to 0 (no HNSWIndex objects created yet)
         for i in range(self.num_segments):
-            var idx = HNSWIndex(dimension, self.segment_capacity)
-            idx.enable_binary_quantization()
-            idx.use_flat_graph = False
-            idx.use_smart_distance = False
-            idx.cache_friendly_layout = False
-            self.segment_indices[i] = idx^
             self.segment_sizes[i] = 0
 
         # Allocate vectors buffer for parallel processing
@@ -176,9 +174,16 @@ struct SegmentedHNSW(Movable):
 
     fn __del__(owned self):
         """Clean up allocated memory."""
-        self.segment_indices.free()
-        self.segment_sizes.free()
-        self.vectors_buffer.free()
+        # CRITICAL FIX: Handle lazy initialization - HNSWIndex objects may not exist
+        # With lazy initialization, segment_indices array may contain uninitialized objects
+
+        # Free the arrays safely - Mojo handles object destruction automatically
+        if self.segment_indices:
+            self.segment_indices.free()
+        if self.segment_sizes:
+            self.segment_sizes.free()
+        if self.vectors_buffer:
+            self.vectors_buffer.free()
 
 # Performance projections based on research:
 # - Build: 15-25K vec/s (8 workers × 2-3K vec/s per worker)

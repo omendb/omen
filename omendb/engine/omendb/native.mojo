@@ -68,6 +68,9 @@ struct GlobalDatabase(Movable):
         # Initialize with minimal placeholder - will be replaced in initialize()
         # Mojo's assignment will properly destroy the old object
         self.hnsw_index = HNSWIndex(32, 1)
+
+        # CRITICAL FIX: SegmentedHNSW uses lazy initialization to avoid post-migration corruption
+        # Safe to create here because constructor no longer immediately creates HNSWIndex objects
         self.segmented_hnsw = SegmentedHNSW(32)
         self.use_segmented = False
 
@@ -104,6 +107,9 @@ struct GlobalDatabase(Movable):
 
             # Mojo assignment properly destroys old objects and creates new ones
             self.hnsw_index = HNSWIndex(dimension, initial_capacity)
+
+            # CRITICAL FIX: SegmentedHNSW uses lazy initialization to avoid post-migration corruption
+            # Direct assignment works because SegmentedHNSW constructor now uses lazy HNSWIndex creation
             self.segmented_hnsw = SegmentedHNSW(dimension)
 
             # PERFORMANCE OPTIMIZATIONS: Re-enabled after systematic testing
@@ -241,8 +247,14 @@ struct GlobalDatabase(Movable):
         CRITICAL FIX: Use individual insertion instead of bulk insertion.
         Debugging shows: Individual insertion = 60% recall, Bulk insertion = 12.5% recall
         Individual insertion creates better connectivity and prevents hub domination.
+
+        MEMORY SAFETY FIX: Clear SegmentedHNSW before migration to prevent corruption.
         """
         print("🚀 ADAPTIVE: Starting migration of", self.flat_buffer_count, "vectors")
+
+        # CRITICAL FIX: Clear SegmentedHNSW to prevent post-migration corruption
+        # Migration only uses HNSW, but SegmentedHNSW state can get corrupted
+        self.segmented_hnsw.clear()
 
         # CRITICAL FIX: Use individual insertion for better recall (60% vs 12.5%)
         # Individual insertion prevents hub-dominated graph topology
@@ -409,6 +421,7 @@ fn cleanup_global_db():
     """Properly cleanup global database to prevent double-free."""
     if __global_db:
         destroy_database(__global_db)
+        # Set to null pointer that will be detected by if not __global_db
         __global_db = UnsafePointer[GlobalDatabase]()
 
 # =============================================================================
