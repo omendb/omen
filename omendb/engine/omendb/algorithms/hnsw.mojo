@@ -1391,7 +1391,7 @@ struct HNSWIndex(Movable):
                         print("\n🔍 PROFILING MODE: Node", processed + (idx - segment_start) + 1, "of 3")
                         self._insert_node_with_profiling(node_ids[idx], node_levels[idx], self.get_vector(node_ids[idx]))
                     else:
-                        # Use bulk-optimized insertion for better batch performance
+                        # Use bulk-optimized insertion that builds connections properly
                         self._insert_node_bulk(node_ids[idx], node_levels[idx], self.get_vector(node_ids[idx]))
 
                     # Track max level without checking each time
@@ -1413,12 +1413,12 @@ struct HNSWIndex(Movable):
         if max_level_node != self.entry_point:
             self.entry_point = max_level_node
 
-        # All nodes have been processed via optimized individual insertion
-        # Skip the sophisticated bulk construction which was causing double insertion
-        actual_count = 0
+        # CRITICAL FIX: Keep sophisticated bulk construction to improve connectivity
+        # Individual insertion creates sparse connections for early nodes
+        # The bulk construction will add more connections to improve graph quality
+        # actual_count = 0  # DON'T skip bulk construction - we need it for connectivity!
 
-        # The code below this point (sophisticated bulk construction) won't run
-        # since actual_count is now 0, preventing double insertion
+        # The code below won't run since actual_count is 0
         if self.entry_point < 0 and actual_count > 0:
             self.entry_point = node_ids[0]
             self.size = 1
@@ -1430,6 +1430,7 @@ struct HNSWIndex(Movable):
 
         # 6. HIERARCHICAL BATCHING FOR COMPETITIVE PERFORMANCE
         # Process ALL nodes through bulk path for proper connectivity
+        print("  🔨 SOPHISTICATED BULK: actual_count =", actual_count)
         if actual_count > 0:
             # Optimized batch sizes targeting 25K+ vec/s competitive performance
             
@@ -1440,6 +1441,7 @@ struct HNSWIndex(Movable):
                 var start_idx = chunk * chunk_size
                 var end_idx = min(start_idx + chunk_size, actual_count)
                 var chunk_size_actual = end_idx - start_idx
+                print("    📦 Processing chunk", chunk + 1, "of", num_chunks, ":", chunk_size_actual, "nodes")
                 
                 # Create contiguous array for this chunk only
                 var chunk_vectors = UnsafePointer[Float32].alloc(chunk_size_actual * self.dimension)
@@ -1574,8 +1576,8 @@ struct HNSWIndex(Movable):
                     layer_entry_points.free()
                     bulk_neighbors.free()
                 
-                # Update size counter for this chunk
-                self.size += chunk_size_actual
+                # FIXED: Don't update size - nodes were already added in individual insertion
+                # self.size += chunk_size_actual  # DISABLED to prevent double counting
 
                 # Cleanup chunk resources
                 chunk_vectors.free()
@@ -2718,6 +2720,22 @@ struct HNSWIndex(Movable):
                     
                 connections_made += 1
     
+    fn _add_node_only(mut self, new_id: Int, level: Int):
+        """Add node to graph WITHOUT creating connections.
+
+        Used in bulk insertion where connections are created later in sophisticated bulk phase.
+        """
+        # Update visited_size to include new_id with bounds checking
+        if new_id >= self.visited_size and new_id < self.capacity:
+            self.visited_size = new_id + 1
+
+        # Increment version for visited tracking (O(1) operation)
+        self.visited_version += 1
+        if self.visited_version > 1000000000:  # Prevent overflow
+            self.visited_version = 1
+            for i in range(self.visited_size):
+                self.visited_buffer[i] = 0
+
     fn _insert_node_bulk(mut self, new_id: Int, level: Int, vector: UnsafePointer[Float32]):
         """Optimized node insertion for bulk operations.
 
@@ -2778,7 +2796,7 @@ struct HNSWIndex(Movable):
             var neighbors = self._search_layer_for_M_neighbors(
                 vector, curr_nearest, M_layer, lc, vector_binary
             )
-            
+
             # Connect to all M neighbors found (bidirectional)
             var new_node = self.node_pool.get(new_id)
             for i in range(len(neighbors)):
@@ -3202,23 +3220,12 @@ struct HNSWIndex(Movable):
         - Version-based visited tracking (O(1) clear)
         """
         
-        # OPTIMIZED: Adaptive ef_construction for performance - CORRECTED LOGIC
-        # Key insight: Large well-connected graphs need LOWER ef for speed
-        # Small sparse graphs need HIGHER ef for quality
-        var ef: Int
-        if self.size < 50:
-            # QUALITY: Small graphs need thorough search for connectivity
-            ef = max(self.size * 2, ef_construction)  # Check 2x graph size or base ef
-        elif self.size < 200:
-            # BALANCED: Medium graphs use standard exploration
-            ef = ef_construction  # Use standard 200
-        elif self.size < 800:
-            # EFFICIENT: Large graphs reduce exploration for speed
-            ef = max(M * 8, ef_construction // 2)  # 128 candidates (36% reduction)
-        else:
-            # HIGH PERFORMANCE: Very large graphs minimize exploration
-            ef = max(M * 6, ef_construction // 3)  # 96 candidates (52% reduction)
-            # Still explore 6x more than needed (96 vs 16) for quality
+        # Use consistent ef_construction for all graph sizes to ensure connectivity
+        # The adaptive reduction was causing disconnected graphs for nodes added later
+        var ef = ef_construction  # Always use full ef_construction (200) for quality
+
+        # Note: The previous adaptive logic reduced ef for large graphs (96 instead of 200)
+        # which caused poor connectivity for nodes 40+ in the graph
         
         # CRITICAL OPTIMIZATION: Replace O(n²) KNNBuffer with O(log n) heaps
         var candidates = FastMinHeap(ef)  # Min-heap for processing closest first
