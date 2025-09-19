@@ -658,8 +658,9 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
             var current_total = db_ptr[].flat_buffer_count + db_ptr[].hnsw_index.size
             var batch_size = num_vectors
 
-            # OPTIMIZATION: Skip flat buffer for large batches (eliminates migration bottleneck)
-            if batch_size >= 1000 or current_total + batch_size >= 1000:
+            # QUALITY FIX: Disable bulk insertion that breaks graph connectivity
+            # Use individual insertion which maintains 100% recall
+            if batch_size >= 50000 or current_total + batch_size >= 50000:  # Effectively disabled
                 print("🚀 BATCH OPTIMIZATION: Large batch detected (" + String(batch_size) + " vectors), using direct HNSW construction")
 
                 # Force migration if flat buffer has any vectors

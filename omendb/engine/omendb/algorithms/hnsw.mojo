@@ -1409,14 +1409,97 @@ struct HNSWIndex(Movable):
             if processed % 5000 == 0 or processed == actual_count:
                 print("  Progress:", processed, "/", actual_count, "vectors inserted")
 
-        # Update entry point once at the end
-        if max_level_node != self.entry_point:
-            self.entry_point = max_level_node
+        # CRITICAL FIX: Better entry point selection for search quality
+        # Instead of just highest level, find the node with best connectivity
+        print("  🔍 ENTRY POINT SELECTION: Finding best connected node...")
+        var best_entry_point = self.entry_point
+        var best_connectivity_score = 0
 
-        # CRITICAL FIX: Keep sophisticated bulk construction to improve connectivity
-        # Individual insertion creates sparse connections for early nodes
-        # The bulk construction will add more connections to improve graph quality
-        # actual_count = 0  # DON'T skip bulk construction - we need it for connectivity!
+        # Check the highest level nodes for best connectivity
+        for i in range(actual_count):
+            var node = self.node_pool.get(node_ids[i])
+            if node and node[].level >= max_level_seen - 1:  # Top 2 levels only
+                # Calculate connectivity score (layer 0 connections + higher layer connections)
+                var l0_connections = node[].get_connections_layer0()
+                var total_connections = len(l0_connections)
+
+                # Add higher layer connections
+                for layer in range(1, node[].level + 1):
+                    var higher_connections = node[].get_connections_higher(layer)
+                    total_connections += len(higher_connections)
+
+                if total_connections > best_connectivity_score:
+                    best_connectivity_score = total_connections
+                    best_entry_point = node_ids[i]
+
+        if best_entry_point != self.entry_point:
+            print("  📍 ENTRY POINT CHANGED: From", self.entry_point, "to", best_entry_point, "(", best_connectivity_score, "total connections)")
+            self.entry_point = best_entry_point
+        else:
+            print("  📍 ENTRY POINT KEPT:", self.entry_point, "(", best_connectivity_score, "total connections)")
+
+        # CRITICAL FIX: Post-process to repair sparse connections
+        # Early nodes (0-200) have sparse connections that break graph navigation
+        print("  🔧 CONNECTIVITY REPAIR: Fixing sparse early node connections...")
+        var repair_count = min(200, actual_count)  # Fix first 200 nodes
+        var repairs_made = 0
+
+        for node_id in range(repair_count):
+            var node = self.node_pool.get(node_id)
+            if node:
+                # Check layer 0 connectivity (most critical for search)
+                var current_connections = node[].get_connections_layer0()
+                var current_count = len(current_connections)
+                var target_connections = max_M0  # Should have 32 connections
+
+                if node_id < 5 or node_id > 995:  # Debug first and last nodes
+                    print("    🔍 Node", node_id, "has", current_count, "connections, target:", target_connections)
+
+                if current_count < target_connections // 2:  # Less than 16 connections
+                    # This node is under-connected - find better neighbors
+                    var node_vec = self.get_vector(node_id)
+                    if node_vec:
+                        # Search for best neighbors in full graph
+                        var dummy_ptr = UnsafePointer[Float32].alloc(self.dimension)
+                        for j in range(self.dimension):
+                            dummy_ptr[j] = 0.0
+                        var query_binary = BinaryQuantizedVector(dummy_ptr, self.dimension)
+
+                        var candidates = self._search_layer_for_M_neighbors(
+                            node_vec, self.entry_point, target_connections * 2, 0, query_binary
+                        )
+
+                        dummy_ptr.free()
+
+                        # Clear existing sparse connections and rebuild properly
+                        node[].connections_l0_count = 0  # Reset layer 0 connections
+
+                        # Add bidirectional connections to best candidates
+                        var connections_added = 0
+                        for i in range(min(target_connections, len(candidates))):
+                            var neighbor_id = candidates[i]
+                            if neighbor_id != node_id and connections_added < target_connections:
+                                # Add bidirectional connection
+                                var _ = node[].add_connection(0, neighbor_id)
+                                var neighbor_node = self.node_pool.get(neighbor_id)
+                                if neighbor_node:
+                                    var _ = neighbor_node[].add_connection(0, node_id)
+                                connections_added += 1
+
+                        repairs_made += 1
+                        if repairs_made % 50 == 0:
+                            print("    ✅ Repaired", repairs_made, "nodes so far...")
+
+        print("  ✅ CONNECTIVITY REPAIR COMPLETE: Fixed", repairs_made, "under-connected nodes")
+        print("  📍 Entry point:", self.entry_point, "- checking its connectivity...")
+
+        var entry_node = self.node_pool.get(self.entry_point)
+        if entry_node:
+            var entry_connections = entry_node[].get_connections_layer0()
+            print("  📍 Entry node has", len(entry_connections), "layer 0 connections")
+
+        # Skip sophisticated bulk construction - we've repaired connections
+        actual_count = 0
 
         # The code below won't run since actual_count is 0
         if self.entry_point < 0 and actual_count > 0:
