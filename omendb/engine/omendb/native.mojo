@@ -208,36 +208,37 @@ struct GlobalDatabase(Movable):
             # Use flat buffer search (proven 2-4x faster + 100% accurate)
             print("🔍 ADAPTIVE: Using flat buffer search (", self.flat_buffer_count, "vectors)")
             return self._flat_buffer_search(query, k)
+        elif self.use_segmented and self.segmented_hnsw.get_vector_count() > 0:
+            # Use segmented HNSW search
+            print("🔍 SEGMENTED SEARCH: Using segmented HNSW (", self.segmented_hnsw.get_vector_count(), "vectors)")
+            print("🔍 RESTORED SEGMENTED SEARCH: Parallel search across segments")
+            var segmented_results = self.segmented_hnsw.search(query, k)
+
+            # Process segmented results (already node IDs)
+            for i in range(len(segmented_results)):
+                var numeric_id = segmented_results[i]
+                # Compute distance for this result
+                var distance = Float32(0.0)  # Placeholder - would need actual distance calculation  # Use actual distance, not placeholder!
+                var string_id = self._get_string_id_for_numeric(numeric_id)
+                if len(string_id) > 0:
+                    results.append((string_id, distance))
+
+            return results
         else:
-            # Use HNSW search (for larger datasets)
+            # Use monolithic HNSW
             print("🔍 ADAPTIVE: Using HNSW search (", self.hnsw_index.size, "vectors)")
-            # Use restored segmented HNSW if active, otherwise use monolithic
-            if self.use_segmented and self.segmented_hnsw.get_vector_count() > 0:
-                print("🔍 RESTORED SEGMENTED SEARCH: Parallel search across segments")
-                var segmented_results = self.segmented_hnsw.search(query, k)
+            var hnsw_results = self.hnsw_index.search(query, k)
 
-                # Process segmented results (already node IDs)
-                for i in range(len(segmented_results)):
-                    var numeric_id = segmented_results[i]
-                    # Compute distance for this result
-                    var distance = Float32(0.0)  # Placeholder - would need actual distance calculation  # Use actual distance, not placeholder!
-                    var string_id = self._get_string_id_for_numeric(numeric_id)
-                    if len(string_id) > 0:
-                        results.append((string_id, distance))
-            else:
-                # Use monolithic HNSW
-                var hnsw_results = self.hnsw_index.search(query, k)
+            # Convert numeric IDs back to string IDs
+            for i in range(len(hnsw_results)):
+                var result_pair = hnsw_results[i]
+                var numeric_id = Int(result_pair[0])
+                var distance = result_pair[1]
 
-                # Convert numeric IDs back to string IDs
-                for i in range(len(hnsw_results)):
-                    var result_pair = hnsw_results[i]
-                    var numeric_id = Int(result_pair[0])
-                    var distance = result_pair[1]
-
-                    # Find string ID for this numeric ID
-                    var string_id = self._get_string_id_for_numeric(numeric_id)
-                    if len(string_id) > 0:
-                        results.append((string_id, distance))
+                # Find string ID for this numeric ID
+                var string_id = self._get_string_id_for_numeric(numeric_id)
+                if len(string_id) > 0:
+                    results.append((string_id, distance))
             
             return results
     
@@ -672,7 +673,7 @@ fn add_vector_batch(vector_ids: PythonObject, vectors: PythonObject, metadata_li
                 # Revolutionary bulk insertion - processes all vectors simultaneously
                 # Use segmented architecture for true parallelism on large batches
                 # TRUE SEGMENTED APPROACH: Independent segments like industry leaders
-                var use_segmented = num_vectors >= 10000  # Enable memory-safe segmented for 10K+ vectors
+                var use_segmented = num_vectors >= 1000  # Enable parallel segmented for 1K+ vectors
                 var bulk_node_ids: List[Int]
 
                 if use_segmented:

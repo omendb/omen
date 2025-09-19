@@ -71,6 +71,17 @@ struct SegmentedHNSW(Movable):
         """
         print("🚀 PARALLEL SEGMENTED: Processing", n_vectors, "vectors across", self.num_segments, "segments")
 
+        # CRITICAL FIX: Initialize HNSWIndex objects on first use (lazy initialization)
+        for i in range(self.num_segments):
+            if self.segment_sizes[i] == 0:  # Not initialized yet
+                print("  📦 Initializing segment", i, "with HNSWIndex")
+                var idx = HNSWIndex(self.dimension, self.segment_capacity)
+                idx.enable_binary_quantization()
+                idx.use_flat_graph = False
+                idx.use_smart_distance = False
+                idx.cache_friendly_layout = False
+                self.segment_indices[i] = idx^
+
         # Calculate vectors per segment
         var vectors_per_segment = (n_vectors + self.num_segments - 1) // self.num_segments
         var all_node_ids = List[Int]()
@@ -80,10 +91,11 @@ struct SegmentedHNSW(Movable):
         for i in range(copy_size):
             self.vectors_buffer[i] = vectors[i]
 
-        # Process segments in parallel
-        @parameter
-        fn process_segment(segment_id: Int):
-            """Process a single segment in parallel."""
+        # Process segments sequentially for now (parallel has memory safety issues)
+        # TODO: Fix thread-safe access to HNSWIndex objects for true parallelism
+        print("  📦 Processing", self.num_segments, "segments sequentially...")
+
+        for segment_id in range(self.num_segments):
             var start_idx = segment_id * vectors_per_segment
             var end_idx = start_idx + vectors_per_segment
             if end_idx > n_vectors:
@@ -91,25 +103,18 @@ struct SegmentedHNSW(Movable):
 
             var count = end_idx - start_idx
             if count <= 0:
-                return
+                continue
 
-            print("  🔄 Thread", segment_id, ": Processing", count, "vectors (", start_idx, "-", end_idx-1, ")")
+            print("  🔄 Segment", segment_id, ": Processing", count, "vectors (", start_idx, "-", end_idx-1, ")")
 
             # Get pointer to this segment's vectors
             var segment_vectors = self.vectors_buffer.offset(start_idx * self.dimension)
 
-            # Insert into this segment's HNSW index (use reference to avoid copy)
+            # Insert into this segment's HNSW index
             var local_ids = self.segment_indices[segment_id].insert_bulk(segment_vectors, count)
 
             # Update segment size
             self.segment_sizes[segment_id] += count
-
-            # Convert to global IDs (would need atomic operations for thread-safe append)
-            # For now, we'll collect results after parallel phase
-
-        # Run parallel insertion across segments
-        print("  🚀 Launching", self.num_segments, "parallel workers...")
-        parallelize[process_segment](self.num_segments)
 
         # Collect results from all segments (sequential for now)
         for segment_id in range(self.num_segments):
@@ -120,9 +125,11 @@ struct SegmentedHNSW(Movable):
 
             var count = end_idx - start_idx
             if count > 0:
-                # Generate global IDs for this segment
+                # Generate global IDs for this segment using consistent formula
+                # Must match search: segment_id * segment_capacity + local_node_id
                 for i in range(count):
-                    var global_id = self.total_vectors + start_idx + i
+                    var local_node_id = i  # Local ID within segment
+                    var global_id = segment_id * self.segment_capacity + local_node_id
                     all_node_ids.append(global_id)
 
         self.total_vectors += n_vectors
@@ -132,22 +139,51 @@ struct SegmentedHNSW(Movable):
 
     fn search(mut self, query: UnsafePointer[Float32], k: Int) -> List[Int]:
         """
-        PARALLEL SEARCH - Week 2 Day 3
-        Search all segments in parallel and merge results.
+        SEGMENTED SEARCH - Search all segments and merge results
         """
         print("🔍 PARALLEL SEARCH: Searching", self.num_segments, "segments for", k, "results")
 
-        # For now, search first segment only (parallel search needs result merging)
-        if self.segment_sizes[0] > 0:
-            var raw_results = self.segment_indices[0].search(query, k)
+        # Collect results from all segments with distances
+        var all_results = List[List[Float32]]()
 
-            # Return simplified results
-            var node_ids = List[Int]()
-            for i in range(min(k, self.segment_sizes[0])):
-                node_ids.append(i)
-            return node_ids
+        for segment_id in range(self.num_segments):
+            if self.segment_sizes[segment_id] > 0:
+                # Search this segment
+                var segment_results = self.segment_indices[segment_id].search(query, k)
 
-        return List[Int]()
+                # Add to combined results with global IDs
+                for i in range(len(segment_results)):
+                    if len(segment_results[i]) >= 2:
+                        var node_id = Int(segment_results[i][0])
+                        var distance = segment_results[i][1]
+                        # Convert to global ID
+                        var global_id = segment_id * self.segment_capacity + node_id
+
+                        # Create result with global ID and distance
+                        var result = List[Float32]()
+                        result.append(Float32(global_id))
+                        result.append(distance)
+                        all_results.append(result)
+
+        # Sort by distance and take top k
+        # Simple selection sort for now
+        for i in range(min(k, len(all_results))):
+            var min_idx = i
+            for j in range(i + 1, len(all_results)):
+                if all_results[j][1] < all_results[min_idx][1]:
+                    min_idx = j
+            if min_idx != i:
+                var temp = all_results[i]
+                all_results[i] = all_results[min_idx]
+                all_results[min_idx] = temp
+
+        # Extract top k node IDs
+        var final_results = List[Int]()
+        var count = min(k, len(all_results))
+        for i in range(count):
+            final_results.append(Int(all_results[i][0]))
+
+        return final_results
 
     fn get_vector_count(self) -> Int:
         """Get total number of vectors."""
@@ -162,9 +198,10 @@ struct SegmentedHNSW(Movable):
 
     fn clear(mut self):
         """Clear all data and reset to empty state."""
-        # Clear each segment's HNSW index
+        # Clear each segment's HNSW index (only if initialized)
         for i in range(self.num_segments):
-            self.segment_indices[i].clear()
+            if self.segment_sizes[i] > 0:  # Only clear if segment was initialized
+                self.segment_indices[i].clear()
             self.segment_sizes[i] = 0
 
         # Reset counters
