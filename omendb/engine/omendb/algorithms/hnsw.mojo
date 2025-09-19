@@ -812,7 +812,8 @@ struct HNSWIndex(Movable):
         var idx_b = self._vector_index_from_ptr(b)
 
         if idx_a >= 0 and idx_b >= 0:
-            return self._distance_between_nodes(idx_a, idx_b)
+            # CRITICAL SIMD FIX: Use fast SIMD kernels instead of slow scalar SoA loop
+            return self._fast_distance_between_nodes(idx_a, idx_b)
         elif idx_a >= 0:
             return self._distance_node_to_query(idx_a, b)
         elif idx_b >= 0:
@@ -913,7 +914,7 @@ struct HNSWIndex(Movable):
                     return binary_distance(binary_a, binary_b)
         
         # Fallback to full precision SIMD distance
-        return self._distance_between_nodes(idx_a, idx_b)
+        return self._fast_distance_between_nodes(idx_a, idx_b)
     
     @always_inline
     fn distance_to_query(self, query_binary: BinaryQuantizedVector, node_idx: Int, query: UnsafePointer[Float32]) -> Float32:
