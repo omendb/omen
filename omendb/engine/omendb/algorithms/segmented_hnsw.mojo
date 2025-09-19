@@ -15,8 +15,8 @@ from random import random_float64
 from sys.info import num_performance_cores
 
 # Configuration based on research
-alias SEGMENT_SIZE = 2500           # Larger segments for better graph connectivity
-alias MAX_SEGMENTS = 4              # Fewer segments = better recall per segment
+alias SEGMENT_SIZE = 5000           # Much larger segments for better graph connectivity
+alias MAX_SEGMENTS = 2              # Only 2 segments = better recall per segment
 alias PARALLEL_WORKERS = 8          # 8-16 optimal per Qdrant
 alias INDEXING_THRESHOLD = 1000     # Rebuild if >1K unindexed
 
@@ -110,8 +110,14 @@ struct SegmentedHNSW(Movable):
             # Get pointer to this segment's vectors
             var segment_vectors = self.vectors_buffer.offset(start_idx * self.dimension)
 
-            # Insert into this segment's HNSW index
-            var local_ids = self.segment_indices[segment_id].insert_bulk(segment_vectors, count)
+            # QUALITY FIX: Use individual insertion for perfect graph connectivity
+            # Bulk insertion creates disconnected graphs, individual insertion ensures quality
+            print("  🔨 QUALITY: Using individual insertion for", count, "vectors in segment", segment_id)
+            for i in range(count):
+                var vector_ptr = segment_vectors.offset(i * self.dimension)
+                var local_id = self.segment_indices[segment_id].insert(vector_ptr)
+                if local_id < 0:
+                    print("  ❌ Failed to insert vector", i, "in segment", segment_id)
 
             # Update segment size
             self.segment_sizes[segment_id] += count
@@ -144,27 +150,60 @@ struct SegmentedHNSW(Movable):
         """
         print("🔍 PARALLEL SEARCH: Searching", self.num_segments, "segments for", k, "results")
 
+        # DEBUG: Check segment sizes
+        for seg_id in range(self.num_segments):
+            if self.segment_sizes[seg_id] > 0:
+                print("  📊 Segment", seg_id, ":", self.segment_sizes[seg_id], "vectors")
+
         # Collect results from all segments with distances
         var all_results = List[List[Float32]]()
+        var best_distance = Float32(1000.0)  # Track best distance found
 
+        # First pass: find the best distance across all segments
         for segment_id in range(self.num_segments):
             if self.segment_sizes[segment_id] > 0:
-                # Search this segment
                 var segment_results = self.segment_indices[segment_id].search(query, k)
+                for i in range(len(segment_results)):
+                    if len(segment_results[i]) >= 2:
+                        var distance = segment_results[i][1]
+                        if distance < best_distance:
+                            best_distance = distance
 
-                # Add to combined results with global IDs
+        # Quality threshold: only accept results within reasonable range of best distance
+        # This prevents segments from contributing terrible matches
+        # Special handling: if best distance is very small, use absolute threshold
+        var quality_threshold: Float32
+        if best_distance < 0.01:  # Very close match found
+            quality_threshold = 0.1  # Allow matches within 0.1 distance
+        else:
+            quality_threshold = best_distance * 3.0  # 3x relative threshold
+        print("  🎯 Quality threshold:", quality_threshold, "(best distance:", best_distance, ")")
+
+        # Second pass: collect only quality results
+        for segment_id in range(self.num_segments):
+            if self.segment_sizes[segment_id] > 0:
+                var segment_results = self.segment_indices[segment_id].search(query, k)
+                var quality_count = 0
+
+                # Add to combined results with global IDs (only if quality match)
                 for i in range(len(segment_results)):
                     if len(segment_results[i]) >= 2:
                         var node_id = Int(segment_results[i][0])
                         var distance = segment_results[i][1]
-                        # Convert to global ID
-                        var global_id = segment_id * self.segment_capacity + node_id
 
-                        # Create result with global ID and distance
-                        var result = List[Float32]()
-                        result.append(Float32(global_id))
-                        result.append(distance)
-                        all_results.append(result)
+                        # QUALITY FILTER: Only include if distance is reasonable
+                        if distance <= quality_threshold:
+                            # Convert to global ID
+                            var global_id = segment_id * self.segment_capacity + node_id
+
+                            # Create result with global ID and distance
+                            var result = List[Float32]()
+                            result.append(Float32(global_id))
+                            result.append(distance)
+                            all_results.append(result)
+                            quality_count += 1
+
+                print("  🔍 Segment", segment_id, ": Found", len(segment_results), "results,", quality_count, "quality matches")
 
         # Sort by distance and take top k
         # Simple selection sort for now
