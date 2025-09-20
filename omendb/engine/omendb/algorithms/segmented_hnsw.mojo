@@ -112,30 +112,20 @@ struct SegmentedHNSW(Movable):
             # Get pointer to this segment's vectors
             var segment_vectors = self.vectors_buffer.offset(start_idx * self.dimension)
 
-            # OPTIMIZED STRATEGY: Balance speed and quality
-            # Use hybrid approach based on segment size
-            if count <= 500:
-                # Small segment: Use single bulk insertion for speed
-                print("    → Small segment: Single bulk insertion")
-                var segment_ids = self.segment_indices[segment_id].insert_bulk(segment_vectors, count)
-                if len(segment_ids) != count:
-                    print("    ⚠️ Expected", count, "insertions, got", len(segment_ids))
-            else:
-                # Large segment: Use batched bulk insertion for quality
-                print("    → Large segment: Batched bulk insertion (", BATCH_SIZE, "vectors/batch)")
-                var num_batches = (count + BATCH_SIZE - 1) // BATCH_SIZE
+            # TEMPORARY FIX: Use individual insertion for stability
+            # Bulk insertion has recursive issues with larger segments
+            print("    → Segment size:", count, "vectors")
 
-                for batch_idx in range(num_batches):
-                    var batch_start = batch_idx * BATCH_SIZE
-                    var batch_end = min(batch_start + BATCH_SIZE, count)
-                    var batch_count = batch_end - batch_start
+            # For now, use individual insertion which is stable
+            for i in range(count):
+                var vector_ptr = segment_vectors.offset(i * self.dimension)
+                var local_id = self.segment_indices[segment_id].insert(vector_ptr)
+                if local_id < 0:
+                    print("    ⚠️ Failed to insert vector", i, "in segment", segment_id)
 
-                    if batch_count > 0:
-                        var batch_vectors = segment_vectors.offset(batch_start * self.dimension)
-                        var batch_ids = self.segment_indices[segment_id].insert_bulk(batch_vectors, batch_count)
-
-                        if batch_idx % 10 == 0:  # Progress update every 10 batches
-                            print("      Batch", batch_idx + 1, "/", num_batches, "completed")
+                # Progress update for large segments
+                if count > 1000 and i % 500 == 0:
+                    print("      Progress:", i, "/", count, "vectors")
 
             print("  ✅ Segment", segment_id, ": Insertion complete")
 

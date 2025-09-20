@@ -1378,51 +1378,18 @@ struct HNSWIndex(Movable):
             self.entry_point = node_ids[0]
             self.size = 1
 
-        # Process nodes in large batches for cache efficiency
-        var batch_size = 1000  # Larger batches for better throughput
-        var processed = 1 if self.size == 1 else 0
-
         # Track highest level for entry point optimization
         var max_level_seen = 0
         var max_level_node = self.entry_point
 
-        while processed < actual_count:
-            var batch_end = min(processed + batch_size, actual_count)
+        # Find the highest level node for potential entry point
+        for i in range(actual_count):
+            if node_levels[i] > max_level_seen:
+                max_level_seen = node_levels[i]
+                max_level_node = node_ids[i]
 
-            # Process batch with streamlined insertion
-            @parameter
-            fn process_batch_segment(segment_start: Int, segment_end: Int):
-                for idx in range(segment_start, segment_end):
-                    if idx >= actual_count:
-                        break
-
-                    # PERFORMANCE + QUALITY FIX: Use proven insert() function within bulk pathway
-                    # The insert() function gives 100% recall - use it for quality
-                    if processed + (idx - segment_start) < 3:
-                        print("\n🔍 PROFILING MODE: Node", processed + (idx - segment_start) + 1, "of 3")
-
-                    # PERFORMANCE: Store vector data without individual insertion
-                    # Let sophisticated bulk construction handle connections
-                    var vector_ptr = vectors.offset(idx * self.dimension)
-                    var node_id = node_ids[idx]
-                    # Store in vectors array at the node_id position
-                    var dest = self.vectors.offset(node_id * self.dimension)
-                    memcpy(dest, vector_ptr, self.dimension * 4)  # Float32 = 4 bytes
-
-                    # Track max level without checking each time
-                    if node_levels[idx] > max_level_seen:
-                        max_level_seen = node_levels[idx]
-                        max_level_node = node_ids[idx]
-
-                    # Don't update size here - sophisticated bulk construction will handle it
-
-            # Process this batch
-            process_batch_segment(processed, batch_end)
-            processed = batch_end
-
-            # Update progress less frequently for better performance
-            if processed % 5000 == 0 or processed == actual_count:
-                print("  Progress:", processed, "/", actual_count, "vectors inserted")
+        # Update progress
+        print("  Progress:", actual_count, "/", actual_count, "vectors inserted")
 
         # CRITICAL FIX: Better entry point selection for search quality
         # Instead of just highest level, find the node with best connectivity
