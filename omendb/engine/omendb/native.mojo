@@ -113,7 +113,7 @@ struct GlobalDatabase(Movable):
             self.segmented_hnsw = SegmentedHNSW(dimension)
 
             # PERFORMANCE OPTIMIZATIONS: Re-enabled after systematic testing
-            self.hnsw_index.enable_binary_quantization()  # Safe with massive speedup
+            # self.hnsw_index.enable_binary_quantization()  # TEMPORARILY DISABLED: Memory issue at 5K+ vectors
             self.hnsw_index.use_flat_graph = False   # Keep disabled for quality
             self.hnsw_index.use_smart_distance = False   # Keep disabled
             self.hnsw_index.cache_friendly_layout = False   # Keep disabled

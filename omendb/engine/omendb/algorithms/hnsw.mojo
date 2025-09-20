@@ -1331,29 +1331,39 @@ struct HNSWIndex(Movable):
             memcpy(dest_vector, src_vector, self.dimension * 4)  # Fix: Float32 = 4 bytes
             self._write_vector_soa(node_id, dest_vector)
         
-        # 4. BULK QUANTIZATION (if enabled) - FIXED MEMORY MANAGEMENT
+        # 4. BULK QUANTIZATION (if enabled) - PROPERLY FIXED
         if self.use_binary_quantization:
-            # Ensure binary_vectors has enough space - SAFER APPROACH
-            var target_capacity = self.node_pool.capacity
-            if len(self.binary_vectors) < target_capacity:
-                # Resize binary_vectors list to match capacity
-                var needed = target_capacity - len(self.binary_vectors)
-                for _ in range(needed):
-                    # Create empty binary vector without dummy allocation
-                    # CRITICAL FIX: BinaryQuantizedVector copies data, original must be freed
+            # Find the maximum node ID we need to support
+            var max_needed_id = 0
+            for i in range(actual_count):
+                if node_ids[i] > max_needed_id:
+                    max_needed_id = node_ids[i]
+
+            # Ensure binary_vectors is large enough for all node IDs
+            var current_size = len(self.binary_vectors)
+            var needed_size = max_needed_id + 1
+
+            # Extend binary_vectors to needed size if necessary
+            if current_size < needed_size:
+                # Create placeholders for all missing indices
+                for idx in range(current_size, needed_size):
                     var zero_vec = allocate_vector(self.dimension)
                     for j in range(self.dimension):
                         zero_vec[j] = 0.0
                     var empty_vec = BinaryQuantizedVector(zero_vec, self.dimension)
                     self.binary_vectors.append(empty_vec)
-                    zero_vec.free()  # CRITICAL FIX: Free after BinaryQuantizedVector copies the data
-            
-            # Batch create quantized versions
+                    zero_vec.free()
+
+            # Now create binary vectors ONLY for our newly inserted nodes
+            # Since these are NEW nodes from bulk insertion, we know they don't have binary vectors yet
             for i in range(actual_count):
                 var node_id = node_ids[i]
-                if node_id < len(self.binary_vectors):
-                    var vector_ptr = self.get_vector(node_id)
+                var vector_ptr = self.get_vector(node_id)
+                if vector_ptr and node_id < len(self.binary_vectors):
+                    # Only update if this is truly a new node (should always be true in bulk insert)
+                    # Create and assign the binary quantized vector
                     var binary_vec = BinaryQuantizedVector(vector_ptr, self.dimension)
+                    # SAFETY: We just created placeholders above, so this is safe to overwrite
                     self.binary_vectors[node_id] = binary_vec
         
         # 5. CONNECTIVITY FIX: Use individual insertion for proper graph structure

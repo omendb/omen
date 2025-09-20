@@ -1,6 +1,34 @@
 # OmenDB Architectural Decision Log
 _Append-only - never delete past decisions_
 
+## 2025-09-20: Stay CPU-Only (No GPU) for Initial Market
+**Context**: Decide whether to pursue GPU acceleration for competitive performance
+**Decision**: Focus exclusively on CPU optimization, no GPU development
+**Rationale**:
+- **Mojo Limitation**: No GPU support currently available
+- **Market Differentiation**: CPU-first approach vs GPU-heavy competitors (Milvus)
+- **Deployment Advantage**: Universal deployment without GPU requirements
+- **Cost Positioning**: Lower operational costs for users
+- **Resource Focus**: Concentrate on perfecting CPU performance first
+**Consequences**: Target 20-40K vec/s with CPU-only, add GPU later if needed
+**Status**: Strategic focus decision
+
+---
+
+## 2025-09-20: Choose Qdrant Segmented HNSW over LanceDB Two-Phase
+**Context**: Need to choose architecture approach for 20K+ vec/s production performance
+**Decision**: Implement Qdrant's segmented HNSW approach, defer LanceDB's two-phase quantization
+**Rationale**:
+- **Performance**: Qdrant superior in-memory (250+ QPS vs LanceDB 178 QPS)
+- **Complexity**: Single-phase HNSW simpler than quantization pipeline
+- **Mojo Fit**: Parallel segments + SIMD perfect for CPU-only optimization
+- **Market Position**: In-memory first, disk scaling later
+- **Research Evidence**: Deep analysis of competitor architectures and benchmarks
+**Consequences**: 6-week roadmap to 20-40K vec/s, can add LanceDB optimizations later
+**Status**: Decisive strategic choice
+
+---
+
 ## 2025-09-19: Use ef_construction=50 instead of 200
 **Context**: HNSW construction was too slow, using ef_construction=200
 **Decision**: Reduce to ef_construction=50 (Qdrant benchmark setting)
