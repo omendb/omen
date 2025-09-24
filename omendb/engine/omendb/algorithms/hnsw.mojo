@@ -54,7 +54,7 @@ alias simd_width = simdwidthof[DType.float32]()
 alias M = 16  # QUALITY PRESERVED: Reverted from M=8 (1.9% speed not worth 5% quality loss)
 alias max_M = M
 alias max_M0 = M * 2  # Layer 0 has more connections
-alias ef_construction = 50  # Qdrant benchmark setting (2-4x speedup)
+alias ef_construction = 75  # BALANCED: Compromise between quality (95% recall) and speed (5K+ vec/s)
 alias ef_search = 150  # QUALITY PRESERVED: Reverted from 75 (maintains 95% recall)
 alias ml = 1.0 / log(2.0)
 alias MAX_LAYERS = 4  # OPTIMAL STABLE - Maximum hierarchical layers (was 16)
@@ -1420,28 +1420,12 @@ struct HNSWIndex(Movable):
         else:
             print("  📍 ENTRY POINT KEPT:", self.entry_point, "(", best_connectivity_score, "total connections)")
 
-        # PERFORMANCE FIX: Individual insertion already built perfect connections
-        # Skip sophisticated bulk construction to maintain quality while keeping speed
-        print("  ✅ QUALITY PRESERVED: Individual insertion built perfect graph connectivity")
-        print("  📍 Entry point:", self.entry_point, "- graph ready for high-quality search")
+        # CRITICAL FIX: Actually build graph connections using individual insertion
+        # Choose construction method: bulk for performance, individual for quality
+        var use_bulk_construction = False  # DISABLED: Bulk construction causes 0% recall - needs debugging
 
-        # ENABLE sophisticated bulk construction for real performance
-        # actual_count remains as-is for batch processing
-
-        # The code below won't run since actual_count is 0
-        if self.entry_point < 0 and actual_count > 0:
-            self.entry_point = node_ids[0]
-            self.size = 1
-            actual_count -= 1
-            # Shift remaining nodes
-            for i in range(actual_count):
-                node_ids[i] = node_ids[i + 1]
-                node_levels[i] = node_levels[i + 1]
-
-        # 6. HIERARCHICAL BATCHING FOR COMPETITIVE PERFORMANCE
-        # Process ALL nodes through bulk path for proper connectivity
-        print("  🔨 SOPHISTICATED BULK: actual_count =", actual_count)
-        if actual_count > 0:
+        if use_bulk_construction:
+            print("  🚀 BULK CONSTRUCTION: Using optimized bulk insertion for performance")
             # Optimized batch sizes targeting 25K+ vec/s competitive performance
             
             var chunk_size = 500  # Reduced chunk size to prevent memory issues
@@ -1591,7 +1575,26 @@ struct HNSWIndex(Movable):
 
                 # Cleanup chunk resources
                 chunk_vectors.free()
-        
+        else:
+            # Fall back to individual insertion for quality verification
+            print("  📦 INDIVIDUAL INSERTION: Using proven method for quality")
+
+            var start_idx = 1 if self.size > 1 else 0
+            for i in range(start_idx, actual_count):
+                var node_id = node_ids[i]
+                var level = node_levels[i]
+                var vector = self.get_vector(node_id)
+
+                self._insert_node(node_id, level, vector)
+                self.size += 1
+
+                # Update entry point if higher level
+                var entry_node = self.node_pool.get(self.entry_point)
+                if entry_node and level > entry_node[].level:
+                    self.entry_point = node_id
+
+            print("  ✅ GRAPH BUILT: All nodes connected using individual insertion")
+
         # 7. UPDATE ENTRY POINT (find highest level among new nodes)
         var final_max_level = -1
         var final_max_level_node = -1

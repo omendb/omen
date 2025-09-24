@@ -1,28 +1,28 @@
-# OmenDB Development Guidelines
+# OmenDB Development Context
 
-## 🚨 CRITICAL: Start Here
+## 🚨 Architecture: Pure Mojo + HNSW/IVF-Flat
 
-**Load these files FIRST for any task:**
-1. **`internal/TODO.md`** - 📋 Active tasks and priorities
-2. **`internal/STATUS.md`** - 📊 Current state (3.3K vec/s, 100% recall)
-3. **`internal/HNSW_CORRECTNESS_RULES.md`** - ⛔ What MUST NEVER be violated
+**Decision Date**: September 20, 2025
+**Status**: Ready to implement
 
-**For specific tasks, then load:**
-- **Algorithm work**: `internal/HNSW_DEVELOPMENT_GUIDE.md`
-- **Performance**: `internal/COMPETITIVE_ANALYSIS_2025.md`
-- **Research**: `internal/RESEARCH.md`
-- **Decisions**: `internal/DECISIONS.md`
+## Key Documents (Load in Order)
+
+1. **`internal/ARCHITECTURE.md`** - Complete architecture (START HERE)
+2. **`internal/STATUS.md`** - Current performance metrics
+3. **`internal/TODO.md`** - 4-week implementation plan
+4. **`internal/DECISIONS.md`** - Decision history
+5. **`internal/RESEARCH.md`** - Research findings
 
 ## Project Structure & Context
 
-### Current OmenDB Performance (September 19, 2025)
+### Architecture Summary (September 20, 2025)
 ```yaml
-Status: NOT PRODUCTION READY (need 20K+ vec/s for competition)
-Current: 3,332 vec/s with 100% recall (segmented HNSW)
-Peak: 5,329 vec/s with 95% recall (monolithic HNSW + SIMD)
-Broken: 27,604 vec/s with 1% recall (bulk insertion)
-Target: 20,000+ vec/s with 90%+ recall
-Gap: 6x performance improvement needed
+Decision: Pure Mojo (no FFI overhead)
+CPU Index: HNSW (95% recall, 2-3ms search)
+GPU Index: IVF-Flat (90-95% recall, <1ms search)
+Server: Python FastAPI wrapper (when needed)
+Target: 50K+ vec/s bulk load, 2-3ms search
+Timeline: 4 weeks to production
 ```
 
 ### Active Blockers

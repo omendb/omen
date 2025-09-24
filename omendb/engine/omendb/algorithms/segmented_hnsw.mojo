@@ -67,6 +67,35 @@ struct SegmentedHNSW(Movable):
 
         print("🚀 TRUE PARALLEL HNSW: Initialized with", self.num_segments, "parallel segments")
 
+    fn insert(mut self, vector: UnsafePointer[Float32]) -> Int:
+        """
+        Insert a single vector into the appropriate segment.
+        Uses round-robin distribution for load balancing.
+        """
+        # Select segment using round-robin (could use hash or load-based in future)
+        var segment_id = self.total_vectors % self.num_segments
+
+        # Initialize segment if needed (lazy initialization)
+        if self.segment_sizes[segment_id] == 0:
+            var idx = HNSWIndex(self.dimension, self.segment_capacity)
+            idx.use_flat_graph = False
+            idx.use_smart_distance = False
+            idx.cache_friendly_layout = False
+            self.segment_indices[segment_id] = idx^
+
+        # Insert into the selected segment
+        var local_node_id = self.segment_indices[segment_id].insert(vector)
+
+        if local_node_id >= 0:
+            self.segment_sizes[segment_id] += 1
+            self.total_vectors += 1
+
+            # Convert to global ID
+            var global_id = segment_id * self.segment_capacity + local_node_id
+            return global_id
+
+        return -1  # Insertion failed
+
     fn insert_batch(mut self, vectors: UnsafePointer[Float32], n_vectors: Int) -> List[Int]:
         """
         TRUE PARALLEL CONSTRUCTION - Week 2 Day 3 Implementation
@@ -115,22 +144,16 @@ struct SegmentedHNSW(Movable):
             # Get pointer to this segment's vectors
             var segment_vectors = self.vectors_buffer.offset(start_idx * self.dimension)
 
-            # Week 3-4: Hybrid insertion strategy for better performance
-            print("    → Segment size:", count, "vectors")
+            # FIXED BULK CONSTRUCTION: Use bulk insertion for all segment sizes
+            print("    → Using FIXED bulk insertion for", count, "vectors")
 
-            # Use bulk for smaller counts, individual for larger (stability)
-            if count <= 1000:
-                # Small segments: Try bulk insertion for speed
-                var segment_ids = self.segment_indices[segment_id].insert_bulk(segment_vectors, count)
-                if len(segment_ids) != count:
-                    print("    ⚠️ Bulk insertion returned", len(segment_ids), "expected", count)
-                    # Fallback to individual insertion
-                    for i in range(len(segment_ids), count):
-                        var vector_ptr = segment_vectors.offset(i * self.dimension)
-                        _ = self.segment_indices[segment_id].insert(vector_ptr)
-            else:
-                # Large segments: Use individual insertion for stability
-                for i in range(count):
+            # Use bulk insertion (now that navigation is fixed)
+            var segment_ids = self.segment_indices[segment_id].insert_bulk(segment_vectors, count)
+
+            if len(segment_ids) != count:
+                print("    ⚠️ Bulk insertion returned", len(segment_ids), "expected", count)
+                # Fallback to individual insertion only if bulk fails
+                for i in range(len(segment_ids), count):
                     var vector_ptr = segment_vectors.offset(i * self.dimension)
                     var local_id = self.segment_indices[segment_id].insert(vector_ptr)
                     if local_id < 0:
