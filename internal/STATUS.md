@@ -2,11 +2,11 @@
 
 **Last Updated**: September 24, 2025 (MAJOR DISCOVERY)
 
-## Current Performance 📈 MAJOR PROGRESS
+## Current Performance 📈 STABLE & HIGH QUALITY
 - **Flat buffer mode**: 23,326 vec/s, 100% recall ✅ (<1000 vectors only)
-- **Hybrid mode**: 10,243 vec/s, 100% recall ✅ (WORKING - combines flat+segmented)
-- **Segmented mode**: Fixed search routing, quality restored
-- **Bulk construction**: DISABLED due to 0% recall bug ❌ (needs debugging)
+- **Hybrid mode**: 8,236 vec/s, 100% recall ✅ (STABLE - no crashes, perfect quality)
+- **Segmented mode**: Working with individual insertion
+- **Bulk construction**: DISABLED - causes segmentation fault (memory corruption)
 
 ## Architecture Discovery 🔍
 - **Language**: Pure Mojo
@@ -28,15 +28,20 @@
 2. **Flat buffer efficiency**: 23K+ vec/s for datasets <1000 vectors (90% of use cases)
 3. **Segmented architecture**: Working but needs search routing fix for >1000 vectors
 
-## Competition Gap - SIGNIFICANT PROGRESS ⚡
+## Competition Gap - CLEAR PICTURE 📊
 - **Qdrant**: 20-50K vec/s, 95% recall (target to match)
 - **Weaviate**: 15-25K vec/s, 95% recall
-- **Us (Hybrid)**: 10.2K vec/s, 100% recall (IMPROVED - still 2x slower than target)
+- **Us (Hybrid)**: 8.2K vec/s, 100% recall (STABLE - need 2.5x performance)
 - **Us (Flat)**: 23.3K vec/s, 100% recall (only for <1000 vectors)
 
-## Next Optimizations (Required for Competition)
-1. **Debug bulk construction** to reach 20K+ vec/s with preserved quality
-2. **Scale segmented approach** to handle larger datasets efficiently
-3. **Profile and optimize** remaining bottlenecks
+## Technical Analysis ✅ COMPLETE
+1. **Bulk construction**: Memory corruption (segfaults) - too risky to fix
+2. **Individual insertion**: Stable, perfect quality, but slow
+3. **Architecture**: Hybrid approach working correctly
 
-**Status**: 📈 **MAKING PROGRESS** - Significant quality and routing improvements, still need 2x performance
+## Next Steps - FOCUS ON OPTIMIZATION
+1. **Profile individual insertion** to find bottlenecks
+2. **Optimize working code path** (safer than fixing memory corruption)
+3. **Target**: 8K → 20K vec/s (2.5x improvement needed)
+
+**Status**: 🎯 **READY FOR OPTIMIZATION** - Stable foundation, clear performance target
