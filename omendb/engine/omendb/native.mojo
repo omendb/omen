@@ -210,15 +210,56 @@ struct GlobalDatabase(Movable):
         if not self.initialized:
             return results
         
-        # ADAPTIVE SEARCH: Choose algorithm based on current data
-        if self.flat_buffer_count > 0:
-            # Use flat buffer search (proven 2-4x faster + 100% accurate)
+        # ADAPTIVE SEARCH: Combine all available data sources
+        var has_flat_buffer = self.flat_buffer_count > 0
+        var has_segmented = self.use_segmented and self.segmented_hnsw.get_vector_count() > 0
+
+        if has_flat_buffer and has_segmented:
+            # HYBRID SEARCH: Combine flat buffer + segmented HNSW results
+            print("🔍 HYBRID SEARCH: Combining flat buffer (", self.flat_buffer_count, ") + segmented (", self.segmented_hnsw.get_vector_count(), ") vectors")
+
+            # Get results from both sources
+            var flat_results = self._flat_buffer_search(query, k * 2)  # Get more candidates
+            var segmented_results = self.segmented_hnsw.search(query, k * 2)
+
+            # Combine and process segmented results
+            for i in range(len(segmented_results)):
+                if len(segmented_results[i]) >= 2:
+                    var numeric_id = Int(segmented_results[i][0])
+                    var distance = segmented_results[i][1]
+                    var string_id = self._get_string_id_for_numeric(numeric_id)
+                    if len(string_id) > 0:
+                        results.append((string_id, distance))
+
+            # Add flat buffer results
+            for i in range(len(flat_results)):
+                results.append(flat_results[i])
+
+            # Sort combined results by distance and take top k
+            # Simple selection sort for top k results
+            for i in range(min(k, len(results))):
+                var min_idx = i
+                for j in range(i + 1, len(results)):
+                    if results[j][1] < results[min_idx][1]:
+                        min_idx = j
+                if min_idx != i:
+                    var temp = results[i]
+                    results[i] = results[min_idx]
+                    results[min_idx] = temp
+
+            # Return top k results
+            var final_results = List[Tuple[String, Float32]]()
+            for i in range(min(k, len(results))):
+                final_results.append(results[i])
+            return final_results
+
+        elif has_flat_buffer:
+            # Use flat buffer search only
             print("🔍 ADAPTIVE: Using flat buffer search (", self.flat_buffer_count, "vectors)")
             return self._flat_buffer_search(query, k)
-        elif self.use_segmented and self.segmented_hnsw.get_vector_count() > 0:
-            # Use segmented HNSW search
+        elif has_segmented:
+            # Use segmented HNSW search only
             print("🔍 SEGMENTED SEARCH: Using segmented HNSW (", self.segmented_hnsw.get_vector_count(), "vectors)")
-            print("🔍 RESTORED SEGMENTED SEARCH: Parallel search across segments")
             var segmented_results = self.segmented_hnsw.search(query, k)
 
             # Process segmented results (now includes distances)
