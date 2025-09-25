@@ -141,14 +141,9 @@ struct SegmentedHNSW(Movable):
 
             print("  🔄 Segment", segment_id, ": Processing", count, "vectors")
 
-            # Get pointer to this segment's vectors
             var segment_vectors = self.vectors_buffer.offset(start_idx * self.dimension)
+            print("    → Using BULK insertion for", count, "vectors")
 
-            # FIXED APPROACH: Use proper bulk insertion per segment (like monolithic HNSW)
-            print("    → Using BULK insertion for", count, "vectors (same as monolithic HNSW)")
-
-            # Call the proven working bulk insertion method for this segment
-            # This is the SAME method that works perfectly in monolithic HNSW at 15.6K vec/s
             var segment_node_ids = self.segment_indices[segment_id].insert_bulk(segment_vectors, count)
 
             if len(segment_node_ids) != count:
@@ -156,21 +151,15 @@ struct SegmentedHNSW(Movable):
             else:
                 print("    ✅ Bulk insertion successful:", count, "vectors")
 
-            # CRITICAL FIX: Store actual returned node IDs as global IDs
-            # Convert local segment IDs to global IDs and add to results
             for local_id in range(len(segment_node_ids)):
                 var node_id = segment_node_ids[local_id]
                 if node_id >= 0:
-                    # Convert to global ID using segment offset
                     var global_id = segment_id * self.segment_capacity + node_id
                     all_node_ids.append(global_id)
                 else:
-                    # Failed insertion - add -1 to maintain index alignment
                     all_node_ids.append(-1)
 
             print("  ✅ Segment", segment_id, ": Insertion complete")
-
-            # Update segment size
             self.segment_sizes[segment_id] += count
 
         self.total_vectors += n_vectors

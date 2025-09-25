@@ -177,17 +177,11 @@ struct GlobalDatabase(Movable):
 
             return True
         else:
-            # Add to HNSW (for larger datasets)
-            # PERFORMANCE FIX: Use SegmentedHNSW for parallel insertion (15-25K vec/s)
             var numeric_id: Int
 
-            # FIXED: Use segmented HNSW consistently after migration
-            # After successful bulk migration, continue using segmented for individual insertions
             if self.use_segmented:
-                # Use segmented HNSW (consistent with migration)
                 numeric_id = self.segmented_hnsw.insert(vector)
             else:
-                # Use monolithic HNSW (fallback)
                 numeric_id = self.hnsw_index.insert(vector)
 
             if numeric_id < 0:
