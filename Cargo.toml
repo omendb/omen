@@ -1,0 +1,28 @@
+[package]
+name = "omendb"
+version = "0.1.0"
+edition = "2021"
+authors = ["Nick Russo <nijaru7@gmail.com>"]
+description = "The first production learned database - 10x faster than B-trees"
+license = "MIT"
+repository = "https://github.com/omendb/core"
+homepage = "https://github.com/omendb/core"
+keywords = ["database", "learned-index", "machine-learning", "rust"]
+
+[dependencies]
+# Core
+ndarray = "0.15"
+ordered-float = "4.0"
+
+# Utilities
+anyhow = "1.0"
+thiserror = "1.0"
+rand = "0.8"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+
+[profile.release]
+opt-level = 3
+lto = true

@@ -1,1 +1,0 @@
-# OmenDB native modules package

@@ -1,1 +1,0 @@
-# OmenDB Server Tests

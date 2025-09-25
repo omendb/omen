@@ -37,7 +37,6 @@ git clone git@github.com:omendb/core.git
 cd core
 
 # Build the learned index
-cd omendb/learned
 cargo build --release
 
 # Run benchmarks
@@ -58,14 +57,15 @@ Result: O(1) prediction + O(log n) refinement = 10x faster
 
 ```
 omendb/core/
-├── omendb/learned/       # Rust learned index implementation
-│   ├── src/
-│   │   ├── lib.rs       # Core traits and API
-│   │   ├── linear.rs    # LinearIndex implementation
-│   │   └── error.rs     # Error types
-│   └── Cargo.toml
+├── src/
+│   ├── lib.rs           # Core traits and API
+│   ├── linear.rs        # LinearIndex implementation
+│   ├── error.rs         # Error types
+│   └── bin/
+│       └── benchmark.rs # Performance benchmarks
+├── Cargo.toml           # Rust project configuration
 ├── internal/            # Architecture and research docs
-└── external/papers/     # Research papers (to be added)
+└── external/            # Research papers and references
 ```
 
 ## Project Status
@@ -103,11 +103,6 @@ Based on groundbreaking research:
 - **ML momentum**: Every database needs AI features
 - **Perfect timing**: Research mature, market ready
 
-## Legacy Projects (Archived)
-
-- `omendb/engine-legacy/` - Mojo vector database engine
-- `internal/archive/vector-db-legacy/` - Old server and web components
-- `zendb/` - Rust hybrid database experiment
 
 ## Contact
 
