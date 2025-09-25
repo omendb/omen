@@ -156,26 +156,22 @@ struct SegmentedHNSW(Movable):
             else:
                 print("    ✅ Bulk insertion successful:", count, "vectors")
 
+            # CRITICAL FIX: Store actual returned node IDs as global IDs
+            # Convert local segment IDs to global IDs and add to results
+            for local_id in range(len(segment_node_ids)):
+                var node_id = segment_node_ids[local_id]
+                if node_id >= 0:
+                    # Convert to global ID using segment offset
+                    var global_id = segment_id * self.segment_capacity + node_id
+                    all_node_ids.append(global_id)
+                else:
+                    # Failed insertion - add -1 to maintain index alignment
+                    all_node_ids.append(-1)
+
             print("  ✅ Segment", segment_id, ": Insertion complete")
 
             # Update segment size
             self.segment_sizes[segment_id] += count
-
-        # Collect results from all segments (sequential for now)
-        for segment_id in range(self.num_segments):
-            var start_idx = segment_id * vectors_per_segment
-            var end_idx = start_idx + vectors_per_segment
-            if end_idx > n_vectors:
-                end_idx = n_vectors
-
-            var count = end_idx - start_idx
-            if count > 0:
-                # Generate global IDs for this segment using consistent formula
-                # Must match search: segment_id * segment_capacity + local_node_id
-                for i in range(count):
-                    var local_node_id = i  # Local ID within segment
-                    var global_id = segment_id * self.segment_capacity + local_node_id
-                    all_node_ids.append(global_id)
 
         self.total_vectors += n_vectors
         print("✅ PARALLEL COMPLETE: Processed", n_vectors, "vectors across", self.num_segments, "segments")
