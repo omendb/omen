@@ -168,8 +168,11 @@ struct SparseMap(Copyable, Movable):
         var index = hash_val & (self.capacity - 1)  # Fast modulo for power of 2
         var distance = 0  # For quadratic probing
 
-        # FastDict optimization: Quadratic probing reduces clustering
-        while distance < self.capacity:
+        # Linear probing - guarantees visiting all slots exactly once
+        var original_index = index
+        var probed_slots = 0
+
+        while probed_slots < self.capacity:
             var entry_ptr = self.entries + index
             var entry = entry_ptr[]
 
@@ -179,13 +182,17 @@ struct SparseMap(Copyable, Movable):
                 self.size += 1
                 return True
             elif entry.is_occupied and entry.control_byte == control_byte and entry.key == key:
-                # FastDict optimization: Control byte fast-reject before string comparison
+                # Update existing key
                 entry_ptr[].value = value
                 return False
 
-            # FastDict optimization: Quadratic probing
-            distance += 1
-            index = (hash_val + distance * distance) & (self.capacity - 1)
+            # Linear probing: move to next slot
+            index = (index + 1) & (self.capacity - 1)
+            probed_slots += 1
+
+            # Safety: detect infinite loops
+            if index == original_index and probed_slots > 1:
+                break
 
         # Should never reach here with proper capacity management
         return False
@@ -205,20 +212,27 @@ struct SparseMap(Copyable, Movable):
         var index = hash_val & (self.capacity - 1)
         var distance = 0
         
-        # FastDict optimization: Quadratic probing with control byte fast-reject
-        while distance < self.capacity:
+        # Linear probing with control byte fast-reject
+        var original_index = index
+        var probed_slots = 0
+
+        while probed_slots < self.capacity:
             var entry = (self.entries + index)[]
-            
+
             if not entry.is_occupied and not entry.is_deleted:
                 # Empty slot - key not found
                 return None
             elif entry.is_occupied and entry.control_byte == control_byte and entry.key == key:
-                # FastDict optimization: Control byte fast-reject before string comparison
+                # Control byte fast-reject before string comparison
                 return entry.value
-            
-            # FastDict optimization: Quadratic probing
-            distance += 1
-            index = (hash_val + distance * distance) & (self.capacity - 1)
+
+            # Linear probing: move to next slot
+            index = (index + 1) & (self.capacity - 1)
+            probed_slots += 1
+
+            # Safety: detect infinite loops
+            if index == original_index and probed_slots > 1:
+                break
         
         # Exhausted search
         return None
