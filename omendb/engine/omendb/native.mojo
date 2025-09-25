@@ -149,16 +149,10 @@ struct GlobalDatabase(Movable):
                 return False  # ID already exists
         
         # ADAPTIVE STRATEGY: Check if we need to migrate before adding
-        # DEBUG: Log current state before migration check
-        print("🔍 DEBUG STATE: flat_buffer_count=", self.flat_buffer_count, "segmented_vectors=", self.segmented_hnsw.get_vector_count(), "use_segmented=", self.use_segmented)
-
         if self.flat_buffer_count >= Self.FLAT_BUFFER_THRESHOLD:
             # Time to migrate to HNSW
             print("🔄 ADAPTIVE: Threshold reached, migrating", self.flat_buffer_count, "vectors from flat buffer to HNSW")
             self._migrate_flat_buffer_to_hnsw()
-
-            # DEBUG: Confirm state after migration
-            print("🔍 DEBUG AFTER MIGRATION: flat_buffer_count=", self.flat_buffer_count, "segmented_vectors=", self.segmented_hnsw.get_vector_count(), "use_segmented=", self.use_segmented)
         
         # Determine total vectors across both systems
         var total_vectors = self.flat_buffer_count + self.hnsw_index.size
@@ -331,34 +325,14 @@ struct GlobalDatabase(Movable):
             numeric_ids = self.hnsw_index.insert_bulk(self.flat_buffer, self.flat_buffer_count)
         
         # Update ID mappings
-        print("🔍 DEBUG ID MAPPING: numeric_ids.len=", len(numeric_ids), "flat_buffer_count=", self.flat_buffer_count, "string_ids.len=", len(self.flat_buffer_string_ids))
-
         var migrated_count = 0
         for i in range(len(numeric_ids)):
             var numeric_id = numeric_ids[i]
-            print("🔍 DEBUG ID", i, ":", "numeric_id=", numeric_id, "flat_buffer_string_ids.len=", len(self.flat_buffer_string_ids))
-
             if numeric_id >= 0:
-                # SAFETY CHECK: Ensure we don't access out of bounds
-                if i >= len(self.flat_buffer_string_ids):
-                    print("  ❌ ERROR: Index", i, "out of bounds for string_ids (len=", len(self.flat_buffer_string_ids), ")")
-                    continue
-
                 var string_id = self.flat_buffer_string_ids[i]
-                print("  📝 Mapping:", string_id, "->", numeric_id)
-
-                # SAFETY: Try ID mapping with error checking
-                try:
-                    _ = self.id_mapper.insert(string_id, numeric_id)
-                    _ = self.reverse_id_mapper.insert(numeric_id, string_id)
-                    migrated_count += 1
-
-                    if i % 100 == 0:  # Progress update
-                        print("  ✅ ID mapping progress:", i, "/", len(numeric_ids))
-                except:
-                    print("  ❌ ID mapping failed for index", i, "string_id=", string_id, "numeric_id=", numeric_id)
-            else:
-                print("  ⚠️ Invalid numeric_id", numeric_id, "at index", i)
+                _ = self.id_mapper.insert(string_id, numeric_id)
+                _ = self.reverse_id_mapper.insert(numeric_id, string_id)
+                migrated_count += 1
         
         # Clear flat buffer
         self.flat_buffer_count = 0
