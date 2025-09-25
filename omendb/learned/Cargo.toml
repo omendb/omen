@@ -1,0 +1,25 @@
+[package]
+name = "omendb-learned"
+version = "0.1.0"
+edition = "2021"
+authors = ["Nick Russo <nijaru7@gmail.com>"]
+description = "Learned index structures - 10x faster than B-trees"
+license = "MIT"
+
+[dependencies]
+# Core
+ndarray = "0.15"
+ordered-float = "4.0"
+
+# Utilities
+anyhow = "1.0"
+thiserror = "1.0"
+rand = "0.8"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+
+[profile.release]
+opt-level = 3
+lto = true
