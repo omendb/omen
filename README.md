@@ -1,6 +1,10 @@
-# OmenDB Core Monorepo
+# OmenDB: The Learning Database
 
-Private workspace for the OmenDB vector engine (Mojo + Python) and the ZenDB hybrid database (Rust).
+**🚨 STRATEGIC PIVOT IN PROGRESS** (Sept 25, 2025)
+
+Building the first production learned database system - replacing 45-year-old B-trees with ML models for 10-100x faster queries.
+
+Previously: Vector database engine (Mojo). Now: Learned index structures (Rust).
 
 ## Repository Layout
 ```
