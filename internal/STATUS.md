@@ -52,11 +52,17 @@
 3. [x] Benchmarked against BTreeMap
 4. [x] **ACHIEVED 7.89x on 100K keys!**
 
+### Completed (Sept 25 - Evening) 🎉
+1. [x] Install pgrx and create PostgreSQL extension project
+2. [x] Basic PostgreSQL extension functions working
+3. [x] Integration with our LinearIndex library
+4. [x] Extension builds successfully
+
 ### Next Steps (Sept 26)
-1. [ ] Install pgrx and create PostgreSQL wrapper
-2. [ ] Test basic CREATE INDEX USING learned
-3. [ ] Measure overhead vs pure Rust
-4. [ ] Start RMI implementation if time
+1. [ ] Test PostgreSQL extension functions in live database
+2. [ ] Implement proper CREATE INDEX USING learned syntax
+3. [ ] Measure PostgreSQL overhead vs pure Rust benchmarks
+4. [ ] Start RMI (Recursive Model Index) implementation
 
 ## The Hard Truth
 

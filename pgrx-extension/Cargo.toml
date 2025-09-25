@@ -7,11 +7,16 @@ edition = "2021"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-pgrx = { version = "=0.16.1", features = ["pg14"] }
+pgrx = "=0.16.1"
 omendb = { path = ".." }
 
 [dev-dependencies]
 pgrx-tests = "=0.16.1"
 
 [features]
+default = ["pg14"]
 pg_test = []
+pg14 = ["pgrx/pg14"]
+pg15 = ["pgrx/pg15"]
+pg16 = ["pgrx/pg16"]
+pg17 = ["pgrx/pg17"]
