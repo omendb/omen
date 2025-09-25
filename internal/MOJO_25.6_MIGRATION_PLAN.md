@@ -4,15 +4,12 @@
 
 **Goal**: Migrate from Mojo 25.4 to 25.6 by eliminating global variables and adopting a handle-passing pattern for FFI.
 
-**Benefits**:
-- **83x capacity increase**: 600 → 50,000+ vectors
-- **Multiple DB support**: Each Python instance gets its own database
-- **Future-proof**: Works with all future Mojo versions
-- **Better architecture**: Testable, thread-safe, standard practice
+**Status**: ❌ **CANCELLED** - Handle pattern not viable in current Mojo
+**Findings**: Integer-to-pointer conversion unsupported in Mojo 25.6 (by design)
+**Alternative**: Focus on Dict capacity optimization and algorithm improvements
+**Impact**: Continue with single-database architecture (26K+ vec/s performance maintained)
 
-**Timeline**: 2-3 days
-**Risk**: Low (reversible, incremental)
-**Performance Impact**: Negligible (<0.0001% overhead)
+**CRITICAL UPDATE**: Handle pattern testing completed in Mojo 25.6. FFI limitations persist due to language design prioritizing memory safety. See `MOJO_25.6_FFI_LIMITATIONS.md` for technical details.
 
 ## Background
 
