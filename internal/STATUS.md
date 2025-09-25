@@ -1,6 +1,15 @@
 # OmenDB Current Status
 
-**Last Updated**: September 25, 2025 (Dict Migration + 25.6 Plan)
+## 🚨 STRATEGIC PIVOT IN PROGRESS
+**Date**: September 25, 2025
+**Direction**: Learned Database Systems (10-100x faster than B-trees)
+**Reason**: Zero competition vs 30+ vector DB competitors
+**Timeline**: 2-week prototype, then full commitment
+**Details**: See `PIVOT_DECISION.md`
+
+---
+
+**Last Updated**: September 25, 2025 (Strategic Pivot to Learned Databases)
 
 ## Current Performance 🚀 BULK CONSTRUCTION FIXED
 - **Flat buffer mode**: 26,000+ vec/s, 100% recall ✅ (<1000 vectors only)
