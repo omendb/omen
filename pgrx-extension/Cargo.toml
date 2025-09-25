@@ -1,0 +1,17 @@
+[package]
+name = "omendb_pg"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+pgrx = { version = "=0.16.1", features = ["pg14"] }
+omendb = { path = ".." }
+
+[dev-dependencies]
+pgrx-tests = "=0.16.1"
+
+[features]
+pg_test = []
