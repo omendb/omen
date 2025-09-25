@@ -4,111 +4,109 @@
 
 **Pivot Date**: September 25, 2025
 **Target**: 10x faster than B-trees via PostgreSQL extension
-**Deadline**: Oct 7 - Go/No-Go decision
+**Deadline**: Oct 7 - Go/No-Go decision (12 days)
 **YC Application**: November 10, 2025 (45 days)
 
 ---
 
-**Last Updated**: September 25, 2025 (15:30 PST)
+**Last Updated**: September 25, 2025 (16:00 PST)
 
-## Current State
+## Today's Progress ✅
 
-### ✅ Completed
-- Strategic pivot to learned databases
-- Documentation consolidated (5 core files)
-- Research papers organized (external/papers/)
-- Monetization strategy defined
-- Architecture focused on PG extension only
+### Completed (Sept 25)
+- ✅ Strategic pivot from vector DB to learned indexes
+- ✅ Merged pivot branch to main (committed to new direction)
+- ✅ Cleaned up old branches (codex, mojo-25.6)
+- ✅ Documentation consolidated to 5 core files
+- ✅ Research papers organized (external/papers/)
+- ✅ Clear monetization strategy defined
 
-### 🚧 In Progress
-- [ ] Simple linear RMI implementation
-- [ ] PostgreSQL extension setup (pgrx)
-- [ ] Benchmark vs BTreeMap
+### Reality Check 🎯
 
-### 🎯 Next 48 Hours
-1. Implement linear model on sorted array
-2. Achieve 5x performance or pivot
-3. Start PostgreSQL wrapper if successful
+**Honest Success Probability**: 30-40%
+- **10x performance**: Possible but challenging with PG overhead
+- **More likely**: 3-5x initially (still valuable!)
+- **Timeline**: Aggressive but achievable if we start NOW
 
-## Key Decisions Made
+**Why it could work**:
+- Research proves 10x in ideal conditions
+- PostgreSQL extension = fast adoption
+- Zero competition in production
+- Even 3x is worth building
 
-### Architecture
-- **PostgreSQL Extension ONLY** (no embedded/server modes)
-- **Linear models first** (neural networks later)
-- **Delta buffer** for updates (ALEX approach)
+**Why it might not**:
+- pgrx learning curve (3-4 days)
+- PostgreSQL overhead (20-30%)
+- No ML co-founder yet
+- Very tight timeline
 
-### Monetization
-- **Free tier**: Basic learned indexes
-- **Enterprise**: $50-200K/year (monitoring, auto-retrain)
-- **Cloud**: Future SaaS after traction
+## Next 24 Hours (Critical)
 
-### Performance Targets
-- **Minimum viable**: 5x faster than B-tree
-- **YC demo**: 10x faster
-- **Extension overhead**: ~20% (acceptable)
+### Must Do (Sept 26)
+1. [ ] Create Rust project with pgrx
+2. [ ] Implement simplest possible linear model
+3. [ ] Benchmark against BTreeMap
+4. [ ] Achieve 3x or re-evaluate
 
-## Success Metrics
+### Commands to Run
+```bash
+# Create project
+cargo new omendb-learned --lib
+cd omendb-learned
+cargo add pgrx ndarray criterion
 
-### Oct 7 Checkpoint (Go/No-Go)
-- [ ] 10x performance demonstrated
-- [ ] PostgreSQL CREATE INDEX working
-- [ ] Benchmark results documented
+# Simple linear index
+# Just 100 lines of code
+# If not 3x faster by end of day, pivot
+```
 
-### Nov 1 Target (YC Submit)
-- [ ] Demo video showing 10x
-- [ ] 100+ GitHub stars
-- [ ] Application submitted early
+## The Hard Truth
 
-### Nov 10 Deadline (YC Final)
-- [ ] Polished application
-- [ ] Working prototype public
-- [ ] Community momentum
+**What we're really building**: A PostgreSQL extension that uses linear regression to predict where data lives instead of tree traversal.
+
+**Minimum viable demo**:
+- 1M sorted integers
+- Linear model training
+- 3-5x faster lookups
+- That's it
+
+**If we can't achieve 3x in 48 hours**, learned indexes aren't the answer.
+
+## Decision Points
+
+### Sept 27 (Day 2)
+- **Continue if**: 3x achieved on simple data
+- **Pivot if**: Can't beat B-tree by meaningful margin
+
+### Sept 30 (Day 5)
+- **Continue if**: PostgreSQL wrapper started
+- **Pivot if**: pgrx too complex
+
+### Oct 7 (Day 12)
+- **YC path if**: 5-10x demo ready
+- **Alternative if**: 3x with clear roadmap
 
 ## Current Blockers
 
-### Technical
-- Need to prove 10x performance (no code yet)
-- PostgreSQL integration complexity unknown
-- Update handling strategy unclear
+1. **No code written yet** (starting today)
+2. **No co-founder** (post on HN today)
+3. **Unknown pgrx complexity** (will know by day 5)
 
-### Business
-- No ML co-founder identified
-- No customer validation yet
-- Limited runway (self-funded)
+## Metrics That Matter
 
-## Daily Log
+| Metric | Current | Target | Deadline |
+|--------|---------|--------|----------|
+| Lookup Speed | 0 (no code) | 40ns | Oct 7 |
+| vs B-tree | N/A | 5-10x | Oct 7 |
+| Lines of Code | 0 | <1000 | Sept 30 |
+| GitHub Stars | 0 | 50+ | Oct 15 |
 
-### Sept 25, 2025
-- ✅ Pivoted from vector DB to learned indexes
-- ✅ Consolidated 15+ docs to 5 core files
-- ✅ Defined PostgreSQL extension focus
-- ✅ Created research paper repository
-- ⏳ Started RMI implementation (pending)
+## The One Thing
 
-### Sept 26, 2025
-- [ ] Complete linear model prototype
-- [ ] Run first benchmarks
-- [ ] Make go/no-go on continuing
+**By end of tomorrow (Sept 26), we must have a working linear index that's 3x faster than BTreeMap, or we pivot.**
 
-## Resource Allocation
-
-### Time (Daily)
-- 50% coding (RMI implementation)
-- 20% benchmarking
-- 20% PostgreSQL integration
-- 10% documentation
-
-### Mental Energy
-- Morning: Core algorithm (hardest)
-- Afternoon: Integration work
-- Evening: Research papers
-
-## The One Metric That Matters
-
-**Lookup latency: Must be <40ns (10x faster than 200ns B-tree)**
-
-If we can't hit this, everything else is irrelevant.
+Everything else is secondary.
 
 ---
 
-*"Ship PostgreSQL extension with 10x demo by Oct 7 or pivot."*
+*"Stop planning. Start coding. 12 days to prove it works."*
