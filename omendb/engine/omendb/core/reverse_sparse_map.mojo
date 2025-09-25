@@ -116,15 +116,19 @@ struct ReverseSparseMap(Copyable, Movable):
         """Insert key-value pair into map."""
         if self._should_resize():
             self._resize()
-        
+
+        return self._insert_without_resize(key, value)
+
+    fn _insert_without_resize(mut self, key: Int, value: String) -> Bool:
+        """Insert key-value pair without triggering resize. Used internally during resize."""
         var hash_val = self._hash(key)
         var index = hash_val & (self.capacity - 1)
         var original_index = index
-        
+
         while True:
             var entry_ptr = self.entries + index
             var entry = entry_ptr[]
-            
+
             if entry.is_available():
                 entry_ptr.init_pointee_copy(ReverseEntry(key, value))
                 self.size += 1
@@ -132,12 +136,12 @@ struct ReverseSparseMap(Copyable, Movable):
             elif entry.key == key:
                 entry_ptr[].value = value
                 return False
-            
+
             index = (index + 1) & (self.capacity - 1)
-            
+
             if index == original_index:
-                self._resize()
-                return self.insert(key, value)
+                # Table full - should not happen with proper capacity management
+                return False
 
     fn get(self, key: Int) -> Optional[String]:
         """Get value for given key."""
@@ -240,7 +244,7 @@ struct ReverseSparseMap(Copyable, Movable):
         for i in range(old_capacity):
             var entry = (old_entries + i)[]
             if entry.is_occupied:
-                _ = self.insert(entry.key, entry.value)
+                _ = self._insert_without_resize(entry.key, entry.value)
         
         for i in range(old_capacity):
             (old_entries + i).destroy_pointee()

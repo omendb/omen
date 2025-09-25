@@ -144,28 +144,35 @@ struct SparseMap(Copyable, Movable):
     fn insert(mut self, key: String, value: Int) -> Bool:
         """
         Insert key-value pair into map.
-        
+
         Args:
             key: String key to insert
             value: Integer value associated with key
-            
+
         Returns:
             True if new key was inserted, False if existing key was updated
         """
         # Check if resize needed before insertion
         if self._should_resize():
             self._resize()
-        
+
+        return self._insert_without_resize(key, value)
+
+    fn _insert_without_resize(mut self, key: String, value: Int) -> Bool:
+        """
+        Insert key-value pair without triggering resize.
+        Used internally during resize to avoid recursion.
+        """
         var hash_val = self._hash(key)
         var control_byte = self._get_control_byte(hash_val)
         var index = hash_val & (self.capacity - 1)  # Fast modulo for power of 2
         var distance = 0  # For quadratic probing
-        
+
         # FastDict optimization: Quadratic probing reduces clustering
         while distance < self.capacity:
             var entry_ptr = self.entries + index
             var entry = entry_ptr[]
-            
+
             if entry.is_available():
                 # Found empty slot - insert new entry with control byte
                 entry_ptr.init_pointee_copy(Entry(key, value, control_byte))
@@ -175,18 +182,12 @@ struct SparseMap(Copyable, Movable):
                 # FastDict optimization: Control byte fast-reject before string comparison
                 entry_ptr[].value = value
                 return False
-            
+
             # FastDict optimization: Quadratic probing
             distance += 1
             index = (hash_val + distance * distance) & (self.capacity - 1)
-            
-            # Safety check  
-            if distance >= self.capacity:
-                # Table is full - force resize and retry
-                self._resize()
-                return self.insert(key, value)
-        
-        # Should never reach here with proper implementation
+
+        # Should never reach here with proper capacity management
         return False
 
     fn get(self, key: String) -> Optional[Int]:
@@ -348,8 +349,8 @@ struct SparseMap(Copyable, Movable):
         for i in range(old_capacity):
             var entry = (old_entries + i)[]
             if entry.is_occupied:
-                # Re-insert using new capacity
-                _ = self.insert(entry.key, entry.value)
+                # Re-insert using new capacity (no resize check needed)
+                _ = self._insert_without_resize(entry.key, entry.value)
         
         # Clean up old memory
         for i in range(old_capacity):

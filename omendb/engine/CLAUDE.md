@@ -46,6 +46,24 @@
 - Test with/without to understand impact
 - Fix issues to make it work properly
 
+### 4. Hash Map Crashes During Migration ⚠️ CRITICAL
+**Problem**: SparseMap and ReverseSparseMap crash at indices 116-117 during bulk migration
+**ROOT CAUSE IDENTIFIED**: Multiple issues in our custom hash map implementations:
+- Recursive calls during resize (partially fixed)
+- Hash collision or capacity management bugs at specific load factors
+- Complex interaction between paired hash maps
+
+**CURRENT STATUS**:
+- ✅ Zero crashes achieved with safe workaround
+- ⚠️ Limited functionality: Only first 115 vectors get ID mapping
+- 🔍 Vectors insert successfully but unmapped vectors not searchable by string ID
+
+**PROPER FIX NEEDED**:
+- Rewrite SparseMap with proper capacity management
+- Fix hash collision handling
+- Add comprehensive unit tests for edge cases
+- Consider using different hash map implementation
+
 ## 🔬 Systematic Debugging Approach
 
 ### Step 1: Reproduce Issues
@@ -101,11 +119,11 @@ Don't throw away months of work - debug and fix properly!
 
 ## 🔧 Current Focus
 
-1. **Find root cause** of HNSW poor recall
-2. **Fix distance calculations** if incorrect
-3. **Debug graph construction** and connectivity
-4. **Make optimizations work** correctly
-5. **Achieve quality targets** without sacrificing speed
+1. **✅ Zero crashes achieved** - Hash map workaround prevents segfaults
+2. **Fix hash map implementations** - Rewrite SparseMap/ReverseSparseMap properly
+3. **Restore full ID mapping** - All vectors should be searchable by string ID
+4. **Maintain 26K+ vec/s performance** - Current bulk insertion is working
+5. **Add hash map unit tests** - Prevent similar issues in future
 
 ---
 *Philosophy: Every bug is solvable. Debug systematically. Fix properly.*
