@@ -1422,7 +1422,7 @@ struct HNSWIndex(Movable):
 
         # CRITICAL FIX: Actually build graph connections using individual insertion
         # Choose construction method: bulk for performance, individual for quality
-        var use_bulk_construction = False  # DISABLED: Bulk construction causes segmentation fault
+        var use_bulk_construction = True  # ENABLED: Test bulk construction in isolation (monolithic only)
 
         if use_bulk_construction:
             print("  🚀 BULK CONSTRUCTION: Using optimized bulk insertion for performance")

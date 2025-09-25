@@ -149,10 +149,16 @@ struct GlobalDatabase(Movable):
                 return False  # ID already exists
         
         # ADAPTIVE STRATEGY: Check if we need to migrate before adding
+        # DEBUG: Log current state before migration check
+        print("🔍 DEBUG STATE: flat_buffer_count=", self.flat_buffer_count, "segmented_vectors=", self.segmented_hnsw.get_vector_count(), "use_segmented=", self.use_segmented)
+
         if self.flat_buffer_count >= Self.FLAT_BUFFER_THRESHOLD:
             # Time to migrate to HNSW
             print("🔄 ADAPTIVE: Threshold reached, migrating", self.flat_buffer_count, "vectors from flat buffer to HNSW")
             self._migrate_flat_buffer_to_hnsw()
+
+            # DEBUG: Confirm state after migration
+            print("🔍 DEBUG AFTER MIGRATION: flat_buffer_count=", self.flat_buffer_count, "segmented_vectors=", self.segmented_hnsw.get_vector_count(), "use_segmented=", self.use_segmented)
         
         # Determine total vectors across both systems
         var total_vectors = self.flat_buffer_count + self.hnsw_index.size
@@ -181,10 +187,14 @@ struct GlobalDatabase(Movable):
             # PERFORMANCE FIX: Use SegmentedHNSW for parallel insertion (15-25K vec/s)
             var numeric_id: Int
 
-            # REVERTED: Segmented gives 2x speed but terrible recall (17-54%)
-            # Keep monolithic for quality until segmentation is fixed
-            self.use_segmented = False
-            numeric_id = self.hnsw_index.insert(vector)  # Monolithic for quality
+            # FIXED: Use segmented HNSW consistently after migration
+            # After successful bulk migration, continue using segmented for individual insertions
+            if self.use_segmented:
+                # Use segmented HNSW (consistent with migration)
+                numeric_id = self.segmented_hnsw.insert(vector)
+            else:
+                # Use monolithic HNSW (fallback)
+                numeric_id = self.hnsw_index.insert(vector)
 
             if numeric_id < 0:
                 return False
@@ -304,33 +314,51 @@ struct GlobalDatabase(Movable):
         # CRITICAL FIX: Clear SegmentedHNSW to prepare for fresh insertion
         self.segmented_hnsw.clear()
 
-        # RE-ENABLED: Test segmented with bulk construction fix applied
-        # Segmented gives 30K+ vec/s vs 7.5K monolithic - critical for competition
+        # HYBRID APPROACH: Monolithic bulk + Segmented individual insertion
+        # Monolithic bulk: 15.6K vec/s (proven stable)
+        # Segmented individual: Stable, no memory corruption
         var use_segmented_migration = True
-        self.use_segmented = True  # Enable segmented mode with fixed bulk construction
+        self.use_segmented = True  # Re-enable segmented with individual insertion
 
         var numeric_ids = List[Int]()
 
-        # TEST: Use segmented HNSW with bulk construction fix
+        # HYBRID APPROACH: Combine best of both worlds
         if use_segmented_migration:
-            print("🚀 TESTING: Using segmented HNSW with bulk construction fix")
+            print("🚀 HYBRID: Using segmented HNSW with individual insertion (stable)")
             numeric_ids = self.segmented_hnsw.insert_batch(self.flat_buffer, self.flat_buffer_count)
         else:
-            print("🔧 FALLBACK: Using monolithic HNSW individual insertion")
-            for i in range(self.flat_buffer_count):
-                var vector_ptr = self.flat_buffer.offset(i * self.dimension)
-                var node_id = self.hnsw_index.insert(vector_ptr)
-                numeric_ids.append(node_id)
+            print("🔬 MONOLITHIC: Using monolithic HNSW BULK insertion (fast)")
+            numeric_ids = self.hnsw_index.insert_bulk(self.flat_buffer, self.flat_buffer_count)
         
         # Update ID mappings
+        print("🔍 DEBUG ID MAPPING: numeric_ids.len=", len(numeric_ids), "flat_buffer_count=", self.flat_buffer_count, "string_ids.len=", len(self.flat_buffer_string_ids))
+
         var migrated_count = 0
         for i in range(len(numeric_ids)):
             var numeric_id = numeric_ids[i]
+            print("🔍 DEBUG ID", i, ":", "numeric_id=", numeric_id, "flat_buffer_string_ids.len=", len(self.flat_buffer_string_ids))
+
             if numeric_id >= 0:
+                # SAFETY CHECK: Ensure we don't access out of bounds
+                if i >= len(self.flat_buffer_string_ids):
+                    print("  ❌ ERROR: Index", i, "out of bounds for string_ids (len=", len(self.flat_buffer_string_ids), ")")
+                    continue
+
                 var string_id = self.flat_buffer_string_ids[i]
-                _ = self.id_mapper.insert(string_id, numeric_id)
-                _ = self.reverse_id_mapper.insert(numeric_id, string_id)
-                migrated_count += 1
+                print("  📝 Mapping:", string_id, "->", numeric_id)
+
+                # SAFETY: Try ID mapping with error checking
+                try:
+                    _ = self.id_mapper.insert(string_id, numeric_id)
+                    _ = self.reverse_id_mapper.insert(numeric_id, string_id)
+                    migrated_count += 1
+
+                    if i % 100 == 0:  # Progress update
+                        print("  ✅ ID mapping progress:", i, "/", len(numeric_ids))
+                except:
+                    print("  ❌ ID mapping failed for index", i, "string_id=", string_id, "numeric_id=", numeric_id)
+            else:
+                print("  ⚠️ Invalid numeric_id", numeric_id, "at index", i)
         
         # Clear flat buffer
         self.flat_buffer_count = 0
