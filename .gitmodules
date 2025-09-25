@@ -1,21 +1,6 @@
 [submodule "agent-contexts"]
 	path = external/agent-contexts
 	url = https://github.com/nijaru/agent-contexts.git
-[submodule "external/diskann"]
-	path = external/diskann
-	url = https://github.com/microsoft/DiskANN.git
-[submodule "external/modular"]
-	path = external/modular
-	url = https://github.com/modular/modular.git
-[submodule "external/competitors/lancedb"]
-	path = external/competitors/lancedb
-	url = https://github.com/lancedb/lancedb.git
-[submodule "external/benchmarks/ann-benchmarks"]
-	path = external/benchmarks/ann-benchmarks
-	url = https://github.com/erikbern/ann-benchmarks.git
 [submodule "external/agent-contexts"]
 	path = external/agent-contexts
 	url = https://github.com/nijaru/agent-contexts.git
-[submodule "external/competitors/chroma"]
-	path = external/competitors/chroma
-	url = https://github.com/chroma-core/chroma.git
