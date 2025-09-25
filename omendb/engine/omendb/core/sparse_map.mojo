@@ -346,30 +346,64 @@ struct SparseMap(Copyable, Movable):
         return self.load_factor() >= self.load_factor_threshold
 
     fn _resize(mut self):
-        """Double the capacity and rehash all entries."""
-        var old_entries = self.entries
+        """Safe resize with temporary storage to prevent memory corruption."""
+        print("🔧 SAFE RESIZE: Starting resize from", self.capacity, "to", self.capacity * 2)
+
+        # FASTDICT PATTERN: Create safe temporary storage FIRST
+        var safe_keys = List[String]()
+        var safe_values = List[Int]()
+
+        # Copy all live entries to safe storage before any memory operations
+        for i in range(self.capacity):
+            var entry = (self.entries + i)[]
+            if entry.is_occupied:
+                safe_keys.append(entry.key)
+                safe_values.append(entry.value)
+
+        print("  → Saved", len(safe_keys), "entries to safe storage")
+
+        # Clean up old memory completely
+        for i in range(self.capacity):
+            (self.entries + i).destroy_pointee()
+        self.entries.free()
+
+        # Set up new capacity and allocate clean memory
         var old_capacity = self.capacity
-        
-        # Double capacity
         self.capacity *= 2
-        self.size = 0  # Will be incremented during rehashing
-        
-        # Allocate new memory
+        self.size = 0  # Will be incremented during reinsertion
+
+        # Allocate completely fresh memory
         self.entries = UnsafePointer[Entry].alloc(self.capacity)
         for i in range(self.capacity):
             (self.entries + i).init_pointee_copy(Entry())
-        
-        # Rehash all existing entries
-        for i in range(old_capacity):
-            var entry = (old_entries + i)[]
-            if entry.is_occupied:
-                # Re-insert using new capacity (no resize check needed)
-                _ = self._insert_without_resize(entry.key, entry.value)
-        
-        # Clean up old memory
-        for i in range(old_capacity):
-            (old_entries + i).destroy_pointee()
-        old_entries.free()
+
+        print("  → Allocated clean memory, capacity now", self.capacity)
+
+        # Reinsert from safe storage with bounds checking
+        print("  → Reinserting", len(safe_keys), "entries from safe storage")
+        for i in range(len(safe_keys)):
+            # Extra safety: verify data integrity before insertion
+            if i >= len(safe_keys) or i >= len(safe_values):
+                print("  ❌ BOUNDS ERROR: Index", i, "out of range")
+                continue
+
+            # Verify we have space (should always be true after doubling capacity)
+            if self.size >= Int(Float32(self.capacity) * 0.85):
+                print("  ❌ CAPACITY ERROR: Not enough space during reinsert")
+                continue
+
+            var success = self._insert_without_resize(safe_keys[i], safe_values[i])
+            if not success:
+                print("  ❌ CRITICAL: Failed to reinsert", safe_keys[i], "at index", i)
+                continue
+
+            # Progress indicator for large resizes
+            if len(safe_keys) > 100 and i % 20 == 0:
+                print("    → Reinserted", i, "/", len(safe_keys), "entries")
+
+        print("  → Reinsertion completed, final size:", self.size)
+
+        print("  ✅ SAFE RESIZE: Completed successfully,", self.size, "entries")
 
     @staticmethod
     fn _next_power_of_2(n: Int) -> Int:

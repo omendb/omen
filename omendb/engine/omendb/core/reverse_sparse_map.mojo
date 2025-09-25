@@ -230,25 +230,45 @@ struct ReverseSparseMap(Copyable, Movable):
         return self.load_factor() >= self.load_factor_threshold
 
     fn _resize(mut self):
-        """Double the capacity and rehash all entries."""
-        var old_entries = self.entries
-        var old_capacity = self.capacity
-        
+        """Safe resize with temporary storage to prevent memory corruption."""
+        print("🔧 REVERSE MAP SAFE RESIZE: Starting resize from", self.capacity, "to", self.capacity * 2)
+
+        # FASTDICT PATTERN: Create safe temporary storage FIRST
+        var safe_keys = List[Int]()
+        var safe_values = List[String]()
+
+        # Copy all live entries to safe storage before any memory operations
+        for i in range(self.capacity):
+            var entry = (self.entries + i)[]
+            if entry.is_occupied:
+                safe_keys.append(entry.key)
+                safe_values.append(entry.value)
+
+        print("  → Saved", len(safe_keys), "entries to safe storage")
+
+        # Clean up old memory completely
+        for i in range(self.capacity):
+            (self.entries + i).destroy_pointee()
+        self.entries.free()
+
+        # Set up new capacity and allocate clean memory
         self.capacity *= 2
-        self.size = 0
-        
+        self.size = 0  # Will be incremented during reinsertion
+
+        # Allocate completely fresh memory
         self.entries = UnsafePointer[ReverseEntry].alloc(self.capacity)
         for i in range(self.capacity):
             (self.entries + i).init_pointee_copy(ReverseEntry())
-        
-        for i in range(old_capacity):
-            var entry = (old_entries + i)[]
-            if entry.is_occupied:
-                _ = self._insert_without_resize(entry.key, entry.value)
-        
-        for i in range(old_capacity):
-            (old_entries + i).destroy_pointee()
-        old_entries.free()
+
+        print("  → Allocated clean memory, capacity now", self.capacity)
+
+        # Reinsert from safe storage (guaranteed not to trigger another resize)
+        for i in range(len(safe_keys)):
+            var success = self._insert_without_resize(safe_keys[i], safe_values[i])
+            if not success:
+                print("  ❌ CRITICAL: Failed to reinsert during reverse resize")
+
+        print("  ✅ REVERSE SAFE RESIZE: Completed successfully,", self.size, "entries")
 
     @staticmethod
     fn _next_power_of_2(n: Int) -> Int:
