@@ -42,31 +42,29 @@
 
 ## Go-to-Market Strategy
 
-### Phase 1: Developer Adoption (Months 1-6)
-**Product**: PostgreSQL extension
-**Price**: Free open source
-**Goal**: 1000 production deployments
-
+### Phase 1: PostgreSQL Extension (Months 1-6)
+**Free Tier**:
 ```sql
--- One-line adoption
 CREATE EXTENSION omendb_learned;
 CREATE INDEX learned_idx ON table USING learned(column);
 ```
 
-### Phase 2: Enterprise Validation (Months 7-12)
-**Product**: Support contracts + monitoring
-**Price**: $50K-200K/year
-**Goal**: 10 enterprise customers
+**Enterprise** ($50-200K/year):
+- Automatic retraining
+- Production monitoring
+- Priority support
+- GPU acceleration
 
-### Phase 3: Cloud Service (Year 2)
-**Product**: Managed OmenDB Cloud
-**Price**: $0.10/GB/month + compute
-**Goal**: $5M ARR
+### Phase 2: Cloud Service (Year 2+)
+**After 100+ customers on extension**
+- Fully managed service
+- $0.10/GB/month
+- 70% gross margins
 
-### Phase 4: Database Platform (Year 3+)
-**Product**: Full SQL database
-**Price**: Competitive with PostgreSQL/MySQL
-**Goal**: IPO candidate
+### Why This Works
+- **Zero migration**: Works with existing PostgreSQL
+- **Clear value**: 10x performance = obvious ROI
+- **Land & expand**: Free → Enterprise → Cloud
 
 ## Revenue Model
 

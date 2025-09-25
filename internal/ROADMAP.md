@@ -19,28 +19,28 @@
 3. **Late (4-6pm)**: Research & learning
 4. **Evening (6-8pm)**: Community & writing
 
-## Phase 1: Prototype Sprint (Sept 25 - Oct 7)
+## Phase 1: PostgreSQL Extension MVP (Sept 25 - Oct 7)
 
-### Week 1: Core Implementation
-**Goal**: Prove 5x performance improvement
+### Week 1: Prove It Works
+**Goal**: 10x faster lookups or pivot
 
 #### Day 1-2 (Sept 25-26) ✅
 - [x] Strategic pivot decision
-- [x] Documentation restructure
-- [ ] Set up Rust project
-- [ ] Implement linear model RMI
+- [x] Documentation consolidation
+- [x] Research papers organized
+- [ ] Simple linear model implementation
 
 #### Day 3-4 (Sept 27-28)
-- [ ] Basic lookup functionality
-- [ ] Memory-mapped storage
-- [ ] First benchmark vs BTreeMap
-- [ ] Achieve 3x improvement
+- [ ] Cargo new with pgrx
+- [ ] Linear regression on sorted data
+- [ ] Benchmark vs BTreeMap
+- [ ] **Must achieve 5x or pivot**
 
 #### Day 5-7 (Sept 29-Oct 1)
-- [ ] Error bounds implementation
-- [ ] Two-stage model (root + leaf)
-- [ ] TPC-H data loading
-- [ ] Achieve 5x improvement
+- [ ] PostgreSQL CREATE INDEX support
+- [ ] Error bounds (±100 positions)
+- [ ] TPC-H single table test
+- [ ] **Must achieve 10x or pivot**
 
 ### Week 2: PostgreSQL Integration
 **Goal**: Working extension with demo

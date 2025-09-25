@@ -1,178 +1,110 @@
 # OmenDB AI Agent Context
 
-**Quick Load**: This file provides essential context for AI agents helping with OmenDB.
+**One Line**: Building PostgreSQL extension with learned indexes (ML replaces B-trees) for 10x faster lookups.
 
-## What We're Building
+## Current Focus (Sept 25, 2025)
 
-**Product**: First production learned database system
-**Innovation**: Replace B-trees (1979) with ML models (2025)
-**Performance**: 10-100x faster lookups than traditional indexes
-**Language**: Rust (not Mojo anymore - we pivoted Sept 25)
-**Timeline**: YC application due Nov 10, 2025
+**What**: PostgreSQL extension ONLY (not standalone DB)
+**Language**: Rust with pgrx
+**Algorithm**: Linear RMI (Recursive Model Index)
+**Timeline**: Oct 7 go/no-go, Nov 10 YC deadline
+**Status**: Just pivoted, no code yet
 
-## Current Status (Sept 25, 2025)
-
-- **Just pivoted** from vector database to learned database
-- **Starting** prototype implementation in Rust
-- **Goal**: Working demo in 2 weeks
-- **Blocker**: Need ML co-founder
-
-## Technical Approach
+## The Technical Approach
 
 ```rust
-// Traditional B-tree: O(log n) = 20 operations for 1M records
-btree.get(key)  // 200ns, 20+ cache misses
+// B-tree: O(log n) with 20+ cache misses
+btree.get(key) // 200ns
 
-// Learned index: O(1) = 2 operations regardless of size
-learned.get(key)  // 20ns, 2 cache misses
+// Learned: O(1) with 2 cache misses
+learned.predict_position(key) // 20ns goal, 40ns acceptable
 ```
 
-**Key Insight**: Position = CDF(key) × N
-- Learn data distribution with ML models
-- Predict location instead of traversing
+**Key Insight**: Learn CDF of data, predict position directly
 
-## Architecture Summary
-
-1. **Recursive Model Index (RMI)**: Two-stage prediction
-   - Root model: Predicts segment (neural net, 32KB)
-   - Leaf models: Predicts position (linear regression)
-   - Data pages: Sorted arrays with binary search
-
-2. **Deployment Modes**:
-   - PostgreSQL extension (priority 1)
-   - Embedded library like SQLite (priority 2)
-   - Standalone server (future)
-
-3. **Update Strategy**:
-   - Delta buffer for recent changes
-   - Background retraining
-   - Eventual consistency
-
-## File Structure
+## Files You Need
 
 ```
 internal/
-├── ARCHITECTURE.md   # Technical design details
-├── BUSINESS.md      # Strategy, market, pitch
-├── ROADMAP.md       # Timeline, milestones
+├── ARCHITECTURE.md  # Technical design
 ├── STATUS.md        # Current progress
-└── CONTEXT.md       # This file (AI instructions)
+├── ROADMAP.md       # Deadlines
+└── MONETIZATION.md  # Business model
+
+external/papers/     # Research papers
+external/learned-systems/ # Reference code
 ```
 
-## How to Help
+## Critical Success Metrics
 
-### When Implementing Features
-1. Check ARCHITECTURE.md for design
-2. Follow Rust best practices
-3. Optimize for cache efficiency
-4. Benchmark everything
+- **Must achieve**: 10x faster than B-tree
+- **Acceptable**: 5x with clear path to 10x
+- **Deadline**: Oct 7 for go/no-go decision
 
-### When Answering Questions
-1. We're building learned indexes, NOT vector search
-2. Target is 10x performance, not incremental
-3. PostgreSQL extension first, then embedded
-4. YC deadline is Nov 10 (45 days)
+## Implementation Priority
 
-### Code Style
+1. **Linear model on sorted array** (today)
+2. **Benchmark vs BTreeMap** (tomorrow)
+3. **PostgreSQL wrapper** (if 5x achieved)
+4. **Demo video** (if 10x achieved)
+
+## Code Pattern
+
 ```rust
-// Use clear names
-pub struct RecursiveModelIndex<K, V> { }
+// Start dead simple
+struct LinearIndex {
+    slope: f64,
+    intercept: f64,
+    data: Vec<(i64, Vec<u8>)>,
+}
 
-// Document complex algorithms
-/// Predicts data location using learned CDF
-fn predict_position(key: f64) -> usize { }
-
-// Benchmark everything
-#[bench]
-fn bench_lookup(b: &mut Bencher) { }
+impl LinearIndex {
+    fn lookup(&self, key: i64) -> Option<Vec<u8>> {
+        let pos = (self.slope * key as f64 + self.intercept) as usize;
+        // Binary search ±100 positions
+        self.data[pos-100..pos+100].binary_search_by_key(&key, |k| k.0)
+    }
+}
 ```
 
-## Current Priorities
+## What NOT to Build
 
-### This Week (Sept 25-Oct 1)
-1. Basic RMI implementation
-2. Linear models only
-3. Prove 5x speedup
-4. PostgreSQL skeleton
+- ❌ Standalone database
+- ❌ Embedded mode
+- ❌ Server mode
+- ❌ Complex neural networks
+- ❌ Multi-dimensional indexes
+- ❌ Distributed system
 
-### This Month (October)
-1. Full RMI with error bounds
-2. PostgreSQL extension working
-3. Demo video for YC
-4. Find ML co-founder
-
-## Important Context
-
-### What Changed (Sept 25)
-- **From**: Vector database in Mojo (30+ competitors)
-- **To**: Learned database in Rust (0 competitors)
-- **Why**: Greenfield opportunity, better economics
-
-### Technical Decisions Made
-- **Language**: Rust (not Mojo - too immature)
-- **First Model**: Linear regression (simple, fast)
-- **Storage**: Memory-mapped files
-- **Updates**: Delta buffer approach
-
-### Open Questions
-1. Optimal retraining frequency?
-2. Handling adversarial patterns?
-3. Multi-dimensional indexes?
-4. GPU worth it for inference?
-
-## Key Metrics
-
-### Performance Targets
-- Point lookup: <20ns (vs 200ns B-tree)
-- Memory usage: <2% of data size
-- Training time: <100ms
-- Correctness: 100%
-
-### Business Targets
-- GitHub stars: 100+ by Nov 1
-- Working demo: Oct 15
-- YC application: Nov 1
-- First user: Nov 30
-
-## Common Commands
+## Commands
 
 ```bash
-# Build and test
-cargo build --release
-cargo test
+# Create project
+cargo new learned --lib
+cargo add pgrx ndarray
+
+# Test performance
 cargo bench
 
 # PostgreSQL extension
+cargo pgrx init
 cargo pgrx run
-cargo pgrx test
-
-# Benchmarking
-cargo run --release --bin benchmark
-
-# Quick demo
-cargo run --example demo
 ```
 
-## Research References
+## If Asked About...
 
-Essential papers:
-1. "The Case for Learned Index Structures" (2018)
-2. "SOSD: A Benchmark for Learned Indexes" (2021)
-3. "RadixSpline: A Single-Pass Learned Index" (2020)
+**Updates**: Delta buffer (like ALEX paper)
+**Retraining**: Every 1M inserts initially
+**Models**: Linear only, no neural nets yet
+**Storage**: Memory-mapped sorted arrays
+**Language**: Rust, not Mojo (we pivoted)
 
-## Don't Forget
+## The One Thing
 
-1. **We pivoted** - Old vector DB code is archived
-2. **YC deadline** - Nov 10, not Oct 15
-3. **Performance** - 10x minimum, not incremental
-4. **Simplicity** - PostgreSQL extension for adoption
-5. **Competition** - We have none (yet)
+**We must ship a PostgreSQL extension showing 10x faster lookups by Oct 7 or pivot.**
 
-## For Quick Context
-
-If you need to understand one thing:
-> We're replacing 45-year-old B-trees with ML models that learn your data distribution and predict where records are in 1-2 CPU cycles instead of 20+ tree traversals.
+Everything else is noise.
 
 ---
 
-*Load ARCHITECTURE.md for technical details, BUSINESS.md for strategy, ROADMAP.md for timeline.*
+*Load STATUS.md for current state, ARCHITECTURE.md for technical details.*

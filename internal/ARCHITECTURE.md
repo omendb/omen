@@ -71,28 +71,36 @@ pub struct RecursiveModelIndex<K, V> {
 | Memory Usage | 10-20% | 1-2% | 10x |
 | Build Time | O(n log n) | O(n) | Better scaling |
 
-## Deployment Modes
+## Deployment Mode: PostgreSQL Extension ONLY
 
-### 1. PostgreSQL Extension (Priority 1)
+### Why PostgreSQL Extension
+- **Fastest adoption**: One SQL command to enable
+- **Production trust**: Leverages PostgreSQL reliability
+- **Good enough performance**: 5-10x faster (40ns vs 200ns)
+- **2 months to ship**: vs 2+ years for standalone
+
+### Usage
 ```sql
+-- Installation
 CREATE EXTENSION omendb_learned;
+
+-- Create learned index (free tier)
 CREATE INDEX learned_idx ON users USING learned(id);
--- Drop-in replacement, 10x faster
+
+-- Enterprise features ($50-200K/year)
+CREATE INDEX learned_idx ON users USING learned(id)
+  WITH (auto_retrain=true, monitoring=true, gpu=true);
 ```
 
-### 2. Embedded Mode (Priority 2)
-```rust
-use omendb::DB;
-let db = DB::open("data.omen")?;
-let result = db.get(key)?;
-// Like SQLite/DuckDB for analytics
-```
+### Performance Expectations
+- **B-tree in PostgreSQL**: 200ns per lookup
+- **Learned in PostgreSQL**: 40ns per lookup (5x faster)
+- **Theoretical minimum**: 20ns (in-memory overhead)
 
-### 3. Server Mode (Future)
-```bash
-omendb-server --port 5432
-# PostgreSQL wire protocol compatible
-```
+### Future Considerations (Post-Traction Only)
+- **Standalone**: Only if 100+ customers demand >10x
+- **Embedded**: Only if data science market demands
+- **Cloud Service**: Natural evolution of extension
 
 ## Update Handling
 

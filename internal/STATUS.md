@@ -1,76 +1,114 @@
 # OmenDB Current Status
 
-## 🚨 STRATEGIC PIVOT IN PROGRESS
-**Date**: September 25, 2025
-**Direction**: Learned Database Systems (10-100x faster than B-trees)
-**Reason**: Zero competition vs 30+ vector DB competitors
-**Timeline**: 2-week prototype, then full commitment
-**Details**: See `PIVOT_DECISION.md`
+## 🎯 FOCUS: PostgreSQL Extension with Learned Indexes
+
+**Pivot Date**: September 25, 2025
+**Target**: 10x faster than B-trees via PostgreSQL extension
+**Deadline**: Oct 7 - Go/No-Go decision
+**YC Application**: November 10, 2025 (45 days)
 
 ---
 
-**Last Updated**: September 25, 2025 (Strategic Pivot to Learned Databases)
+**Last Updated**: September 25, 2025 (15:30 PST)
 
-## Current Performance 🚀 BULK CONSTRUCTION FIXED
-- **Flat buffer mode**: 26,000+ vec/s, 100% recall ✅ (<1000 vectors only)
-- **Segmented bulk mode**: 26,734 vec/s, 100% recall ✅ (BREAKTHROUGH - no crashes!)
-- **Bulk construction**: ✅ FIXED - Memory corruption eliminated, 8x performance improvement
-- **Previous individual**: 3,332 vec/s (now obsolete)
+## Current State
 
-## Architecture Discovery 🔍
-- **Language**: Pure Mojo
-- **Actual Algorithm**: **Monolithic HNSW** (NOT SegmentedHNSW as expected!)
-- **Mode**: Embedded database with adaptive flat→HNSW migration
+### ✅ Completed
+- Strategic pivot to learned databases
+- Documentation consolidated (5 core files)
+- Research papers organized (external/papers/)
+- Monetization strategy defined
+- Architecture focused on PG extension only
 
-## Root Cause Analysis ✅ BREAKTHROUGH SOLUTION
-1. **Problem identified**: Segmented HNSW was using individual insertion, NOT bulk construction
-2. **Solution applied**: Fixed each segment to call proper `insert_bulk()` method
-3. **Result**: 8x performance improvement (3.3K → 26.7K vec/s), memory corruption eliminated
+### 🚧 In Progress
+- [ ] Simple linear RMI implementation
+- [ ] PostgreSQL extension setup (pgrx)
+- [ ] Benchmark vs BTreeMap
 
-## Test Results (Sept 24 - BREAKTHROUGH ACHIEVED)
-- **Segmented bulk construction**: 26,734 vec/s with 100% exact match recall ✅
-- **All 8 segments**: Using proper `HNSWIndex.insert_bulk()` method
-- **System behavior**: Flat buffer (1000 threshold) → segmented HNSW bulk migration
-- **Stability**: Zero crashes - memory corruption completely fixed
+### 🎯 Next 48 Hours
+1. Implement linear model on sorted array
+2. Achieve 5x performance or pivot
+3. Start PostgreSQL wrapper if successful
 
-## Breakthrough Technical Fix 🚀
-1. **segmented_hnsw.mojo**: Changed from individual insertion loop to `insert_bulk()` call per segment
-2. **native.mojo**: Fixed state consistency - use segmented mode after migration
-3. **Performance**: Each segment processes 125 vectors with optimized bulk construction
-4. **Quality**: 100% recall maintained with 8x speed improvement
+## Key Decisions Made
 
-## Competition Gap - NOW COMPETITIVE 📊
-- **Qdrant**: 20-50K vec/s, 95% recall
-- **Weaviate**: 15-25K vec/s, 95% recall
-- **Us (Segmented)**: 26.7K vec/s, 100% recall ✅ **COMPETITIVE ACHIEVED**
-- **Us (Flat <1K)**: 26K+ vec/s, 100% recall ✅ **BEST IN CLASS**
+### Architecture
+- **PostgreSQL Extension ONLY** (no embedded/server modes)
+- **Linear models first** (neural networks later)
+- **Delta buffer** for updates (ALEX approach)
 
-## Technical Analysis ✅ MISSION ACCOMPLISHED
-1. **Bulk construction**: ✅ FIXED - Proper bulk methods, no memory corruption
-2. **Performance**: ✅ ACHIEVED - 26K+ vec/s competitive with industry leaders
-3. **Quality**: ✅ PERFECT - 100% recall maintained throughout
-4. **Architecture**: ✅ OPTIMAL - Segmented HNSW with proper bulk construction
+### Monetization
+- **Free tier**: Basic learned indexes
+- **Enterprise**: $50-200K/year (monitoring, auto-retrain)
+- **Cloud**: Future SaaS after traction
 
-## Hash Map Migration (Sept 25) ✅
-- **Problem**: Custom SparseMap crashed at index 115-117
-- **Solution**: Migrated to stdlib Dict
-- **Result**: 115 → 600 vectors (5x improvement)
-- **Performance**: 27K+ vec/s with ID mapping working
-- **Limitation**: Dict on Mojo 25.4 limited to ~600 vectors
+### Performance Targets
+- **Minimum viable**: 5x faster than B-tree
+- **YC demo**: 10x faster
+- **Extension overhead**: ~20% (acceptable)
 
-## Mojo 25.6 Analysis Complete ✅🚀
-- **Goal**: Eliminate global vars, upgrade to Mojo 25.6
-- **Status**: ✅ Architecture validated by Mojo roadmap analysis
-- **Finding**: Handle pattern temporarily blocked, but support coming in Phase 2
-- **Roadmap**: 🚧 "Unsafe programming: Refine UnsafePointer" directly addresses our needs
-- **Impact**: Current architecture aligns with Mojo's systems programming vision
-- **Performance**: 26K+ vec/s competitive, zero technical debt
-- **Strategy**: Continue optimization, monitor Phase 2 UnsafePointer improvements
+## Success Metrics
 
-## Next Steps - OPTIMIZATION FOCUS
-1. **Test Dict capacity in Mojo 25.6** - Does stdlib Dict handle more vectors?
-2. **Algorithm optimization** - HNSW parameter tuning, bulk operations
-3. **Memory-mapped storage** - Alternative to Dict for large capacity
-4. **Production deployment** - Current architecture ready (26K+ vec/s)
+### Oct 7 Checkpoint (Go/No-Go)
+- [ ] 10x performance demonstrated
+- [ ] PostgreSQL CREATE INDEX working
+- [ ] Benchmark results documented
 
-**Status**: 🎯 **ARCHITECTURE ANALYSIS COMPLETE** - Focus on performance optimization within constraints
+### Nov 1 Target (YC Submit)
+- [ ] Demo video showing 10x
+- [ ] 100+ GitHub stars
+- [ ] Application submitted early
+
+### Nov 10 Deadline (YC Final)
+- [ ] Polished application
+- [ ] Working prototype public
+- [ ] Community momentum
+
+## Current Blockers
+
+### Technical
+- Need to prove 10x performance (no code yet)
+- PostgreSQL integration complexity unknown
+- Update handling strategy unclear
+
+### Business
+- No ML co-founder identified
+- No customer validation yet
+- Limited runway (self-funded)
+
+## Daily Log
+
+### Sept 25, 2025
+- ✅ Pivoted from vector DB to learned indexes
+- ✅ Consolidated 15+ docs to 5 core files
+- ✅ Defined PostgreSQL extension focus
+- ✅ Created research paper repository
+- ⏳ Started RMI implementation (pending)
+
+### Sept 26, 2025
+- [ ] Complete linear model prototype
+- [ ] Run first benchmarks
+- [ ] Make go/no-go on continuing
+
+## Resource Allocation
+
+### Time (Daily)
+- 50% coding (RMI implementation)
+- 20% benchmarking
+- 20% PostgreSQL integration
+- 10% documentation
+
+### Mental Energy
+- Morning: Core algorithm (hardest)
+- Afternoon: Integration work
+- Evening: Research papers
+
+## The One Metric That Matters
+
+**Lookup latency: Must be <40ns (10x faster than 200ns B-tree)**
+
+If we can't hit this, everything else is irrelevant.
+
+---
+
+*"Ship PostgreSQL extension with 10x demo by Oct 7 or pivot."*
