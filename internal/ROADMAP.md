@@ -1,17 +1,23 @@
-# OmenDB Execution Roadmap - The Realistic Path
+# OmenDB Execution Roadmap
 
-**Last Updated**: September 25, 2025 (Final)
-**Current Status**: ✅ Tech validated, ⚠️ Business model uncertain
-**Decision**: Proprietary DBaaS with PostgreSQL extension for marketing
+**Last Updated**: September 25, 2025
+**Strategic Decision**: Proprietary DBaaS (like Pinecone)
+**Target Market**: Time-series data (financial, IoT)
+**Success Probability**: 25% (realistic assessment)
 
-## The Chosen Path: Proprietary Learned Database
+## Business Model Decision
 
-Based on research showing:
-- **Pinecone**: $750M valuation, fully proprietary
-- **ClickHouse**: $6.35B valuation, started proprietary
-- **MongoDB**: SSPL didn't stop AWS competition
+### Proprietary DBaaS Strategy
+- **PostgreSQL Extension**: MIT licensed (marketing/validation tool)
+- **Standalone Database**: Fully proprietary
+- **Revenue Model**: DBaaS subscriptions ($19-999/month)
+- **Why**: Pinecone proved $750M valuation with zero open source
 
-**Our Strategy**: PostgreSQL extension for credibility, proprietary database for revenue.
+### Target: Time-Series Data
+- **Initial Vertical**: Financial tick data ($100K+ deals)
+- **Expansion**: IoT sensors, monitoring, gaming
+- **Competition**: TimescaleDB, InfluxDB (both have weaknesses)
+- **Advantage**: Learned indexes perfect for time-series patterns
 
 ---
 
