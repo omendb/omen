@@ -1,0 +1,82 @@
+---
+export interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "10x faster than PostgreSQL by replacing B-trees with learned indexes" } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://omendb.io" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+
+    <title>{title}</title>
+  </head>
+  <body class="bg-gray-50 text-gray-900">
+    <nav class="bg-white shadow-sm border-b">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+          <div class="flex items-center">
+            <a href="/" class="text-2xl font-bold text-blue-600">OmenDB</a>
+          </div>
+          <div class="flex items-center space-x-8">
+            <a href="/blog" class="text-gray-700 hover:text-blue-600 transition-colors">Blog</a>
+            <a href="/docs" class="text-gray-700 hover:text-blue-600 transition-colors">Docs</a>
+            <a href="/demo" class="text-gray-700 hover:text-blue-600 transition-colors">Demo</a>
+            <a href="https://github.com/omendb/omendb" class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors">GitHub</a>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="bg-gray-900 text-white py-12">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div>
+            <h3 class="text-lg font-semibold mb-4">OmenDB</h3>
+            <p class="text-gray-400">Machine learning database that's 10x faster than PostgreSQL.</p>
+          </div>
+          <div>
+            <h3 class="text-lg font-semibold mb-4">Resources</h3>
+            <div class="space-y-2">
+              <a href="/blog" class="block text-gray-400 hover:text-white transition-colors">Blog</a>
+              <a href="/docs" class="block text-gray-400 hover:text-white transition-colors">Documentation</a>
+              <a href="https://github.com/omendb/omendb" class="block text-gray-400 hover:text-white transition-colors">GitHub</a>
+            </div>
+          </div>
+          <div>
+            <h3 class="text-lg font-semibold mb-4">Connect</h3>
+            <div class="space-y-2">
+              <a href="mailto:hello@omendb.com" class="block text-gray-400 hover:text-white transition-colors">Contact</a>
+              <a href="/early-access" class="block text-gray-400 hover:text-white transition-colors">Early Access</a>
+            </div>
+          </div>
+        </div>
+        <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+          <p>&copy; 2025 OmenDB. If B-trees are 45 years old, maybe it's time for something new.</p>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

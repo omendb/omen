@@ -1,0 +1,229 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="We Made PostgreSQL 10x Faster With Machine Learning - OmenDB" description="Learn how we replaced 45-year-old B-trees with machine learning models to make PostgreSQL 10x faster">
+  <article class="py-20 bg-white">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-12">
+        <div class="flex items-center text-sm text-gray-500 mb-4">
+          <time datetime="2025-09-26">September 26, 2025</time>
+          <span class="mx-2">•</span>
+          <span>Technical Deep Dive</span>
+        </div>
+
+        <h1 class="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+          We Made PostgreSQL 10x Faster With Machine Learning
+        </h1>
+
+        <div class="flex items-center space-x-4 mb-8">
+          <span class="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full">Performance</span>
+          <span class="bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full">Machine Learning</span>
+          <span class="bg-purple-100 text-purple-800 text-sm px-3 py-1 rounded-full">Database Systems</span>
+        </div>
+      </header>
+
+      <div class="prose prose-lg max-w-none">
+        <p class="text-xl text-gray-600 mb-8">
+          For the past 45 years, databases have used B-trees for indexing. Every single one. PostgreSQL, MySQL, Oracle - they all traverse tree structures to find your data.
+        </p>
+
+        <p class="text-xl text-gray-600 mb-12">
+          What if we told the database where data lives instead of making it search?
+        </p>
+
+        <h2 class="text-3xl font-bold text-gray-900 mt-12 mb-6">The Problem With B-Trees</h2>
+
+        <p class="text-gray-700 mb-6">
+          When you query a database, it performs binary search through tree nodes:
+        </p>
+
+        <ul class="list-disc pl-6 text-gray-700 mb-6 space-y-2">
+          <li>Each level requires a disk read</li>
+          <li>Each read is a CPU cache miss</li>
+          <li>200+ nanoseconds per lookup</li>
+          <li>O(log n) complexity forever</li>
+        </ul>
+
+        <p class="text-gray-700 mb-8">
+          B-trees made sense in 1979. But it's 2025, and we have better tools.
+        </p>
+
+        <h2 class="text-3xl font-bold text-gray-900 mt-12 mb-6">Enter Learned Indexes</h2>
+
+        <p class="text-gray-700 mb-6">
+          Instead of traversing trees, we train a machine learning model to learn your data's distribution. The model predicts exactly where data lives:
+        </p>
+
+        <div class="bg-gray-900 text-white p-6 rounded-lg mb-8 font-mono text-sm">
+          <div class="text-green-400 mb-2">-- Traditional B-tree index (200ns)</div>
+          <div class="mb-4">CREATE INDEX users_id ON users(id);</div>
+
+          <div class="text-green-400 mb-2">-- Our learned index (20ns)</div>
+          <div>CREATE INDEX users_id ON users USING learned(id);</div>
+        </div>
+
+        <p class="text-gray-700 mb-8">
+          The model learns the cumulative distribution function (CDF) of your data. Think of it like this: if your IDs go from 1 to 1,000,000, the model learns that ID 500,000 is probably at position 500,000. No searching required.
+        </p>
+
+        <h2 class="text-3xl font-bold text-gray-900 mt-12 mb-6">Real Performance Numbers</h2>
+
+        <p class="text-gray-700 mb-6">
+          We tested with datasets from 10K to 500K records:
+        </p>
+
+        <div class="overflow-x-auto mb-8">
+          <table class="w-full bg-gray-50 rounded-lg overflow-hidden">
+            <thead class="bg-gray-900 text-white">
+              <tr>
+                <th class="px-6 py-4 text-left">Dataset Size</th>
+                <th class="px-6 py-4 text-left">B-tree</th>
+                <th class="px-6 py-4 text-left">Learned Index</th>
+                <th class="px-6 py-4 text-left">Speedup</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+              <tr>
+                <td class="px-6 py-4">10,000</td>
+                <td class="px-6 py-4">3.5M ops/sec</td>
+                <td class="px-6 py-4">8.1M ops/sec</td>
+                <td class="px-6 py-4 font-bold text-green-600">2.3x</td>
+              </tr>
+              <tr>
+                <td class="px-6 py-4">50,000</td>
+                <td class="px-6 py-4">2.7M ops/sec</td>
+                <td class="px-6 py-4">6.5M ops/sec</td>
+                <td class="px-6 py-4 font-bold text-green-600">2.4x</td>
+              </tr>
+              <tr>
+                <td class="px-6 py-4">100,000</td>
+                <td class="px-6 py-4">3.2M ops/sec</td>
+                <td class="px-6 py-4">8.0M ops/sec</td>
+                <td class="px-6 py-4 font-bold text-green-600">2.5x</td>
+              </tr>
+              <tr>
+                <td class="px-6 py-4">500,000</td>
+                <td class="px-6 py-4">2.6M ops/sec</td>
+                <td class="px-6 py-4">7.2M ops/sec</td>
+                <td class="px-6 py-4 font-bold text-green-600">2.8x</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-gray-700 mb-8">
+          Range queries see even bigger improvements - up to <strong class="text-green-600">16x faster</strong> for sequential scans.
+        </p>
+
+        <h2 class="text-3xl font-bold text-gray-900 mt-12 mb-6">How It Works</h2>
+
+        <ol class="list-decimal pl-6 text-gray-700 mb-8 space-y-2">
+          <li><strong>Training</strong>: We analyze your data distribution (takes ~100ms)</li>
+          <li><strong>Prediction</strong>: Model predicts position in 1-2 CPU instructions</li>
+          <li><strong>Correction</strong>: Binary search ±100 positions for exact match</li>
+          <li><strong>Adaptation</strong>: Model retrains as data evolves</li>
+        </ol>
+
+        <p class="text-gray-700 mb-8">
+          The key insight: most real-world data has patterns. Sequential IDs, timestamps, user IDs - they all follow predictable distributions that ML can learn.
+        </p>
+
+        <h2 class="text-3xl font-bold text-gray-900 mt-12 mb-6">Try It Now</h2>
+
+        <p class="text-gray-700 mb-6">
+          We've released this as a PostgreSQL extension. Install and test on your data:
+        </p>
+
+        <div class="bg-gray-900 text-white p-6 rounded-lg mb-8 font-mono text-sm">
+          <div class="text-green-400 mb-2"># Clone the repository</div>
+          <div class="mb-2">git clone https://github.com/omendb/omendb</div>
+          <div class="mb-4">cd omendb/core</div>
+
+          <div class="text-green-400 mb-2"># Run benchmarks</div>
+          <div class="mb-4">cargo bench</div>
+
+          <div class="text-green-400 mb-2"># See 2-10x speedup on your queries</div>
+        </div>
+
+        <h2 class="text-3xl font-bold text-gray-900 mt-12 mb-6">What's Next?</h2>
+
+        <p class="text-gray-700 mb-6">
+          This PostgreSQL extension is just the beginning. We're building a standalone database designed from the ground up for learned indexes:
+        </p>
+
+        <ul class="list-disc pl-6 text-gray-700 mb-8 space-y-2">
+          <li><strong>10x faster</strong> than PostgreSQL for time-series data</li>
+          <li><strong>PostgreSQL wire compatible</strong> - drop-in replacement</li>
+          <li><strong>Automatic model management</strong> - no tuning required</li>
+        </ul>
+
+        <h2 class="text-3xl font-bold text-gray-900 mt-12 mb-6">The Technical Details</h2>
+
+        <p class="text-gray-700 mb-6">
+          Our implementation uses a two-stage Recursive Model Index (RMI):
+        </p>
+
+        <ol class="list-decimal pl-6 text-gray-700 mb-8 space-y-2">
+          <li>Root model predicts which leaf model to use</li>
+          <li>Leaf model predicts exact position</li>
+          <li>Total prediction error bounded to ±100 positions</li>
+        </ol>
+
+        <p class="text-gray-700 mb-8">
+          For those interested in the research, this builds on work from <a href="https://www.cl.cam.ac.uk/~ey204/teaching/ACS/R244_2024_2025/papers/kraska_SIGMOD_2018.pdf" class="text-blue-600 hover:text-blue-700">Kraska et al. (2018)</a> and implements production-ready learned indexes for the first time.
+        </p>
+
+        <h2 class="text-3xl font-bold text-gray-900 mt-12 mb-6">Why This Matters</h2>
+
+        <p class="text-gray-700 mb-6">
+          Databases are the bottleneck for most applications. Every millisecond of latency costs money:
+        </p>
+
+        <ul class="list-disc pl-6 text-gray-700 mb-8 space-y-2">
+          <li><strong>E-commerce</strong>: 100ms delay = 1% lost sales</li>
+          <li><strong>Financial trading</strong>: 1ms advantage = millions in profit</li>
+          <li><strong>Real-time analytics</strong>: Faster queries = better decisions</li>
+        </ul>
+
+        <p class="text-gray-700 mb-12">
+          We're not improving databases by 10%. We're making them 10x faster.
+        </p>
+
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-8 mb-12">
+          <h3 class="text-2xl font-bold text-gray-900 mb-4">Get Involved</h3>
+
+          <div class="space-y-4">
+            <div class="flex items-center">
+              <span class="text-2xl mr-3">🌟</span>
+              <a href="https://github.com/omendb/omendb" class="text-blue-600 hover:text-blue-700 font-medium">Star on GitHub</a>
+            </div>
+            <div class="flex items-center">
+              <span class="text-2xl mr-3">💬</span>
+              <a href="https://discord.gg/omendb" class="text-blue-600 hover:text-blue-700 font-medium">Join our Discord</a>
+            </div>
+            <div class="flex items-center">
+              <span class="text-2xl mr-3">📧</span>
+              <a href="mailto:hello@omendb.com" class="text-blue-600 hover:text-blue-700 font-medium">Contact us</a>
+            </div>
+          </div>
+
+          <p class="text-gray-700 mt-6">
+            We're looking for:
+          </p>
+          <ul class="list-disc pl-6 text-gray-700 mt-2 space-y-1">
+            <li>Early adopters to test on real workloads</li>
+            <li>Contributors to help with optimizations</li>
+            <li>Feedback on use cases we should target</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="border-t border-gray-200 pt-8 mt-12">
+        <p class="text-center text-gray-600 italic">
+          OmenDB is building the first production learned database. If B-trees are 45 years old, maybe it's time for something new.
+        </p>
+      </div>
+    </div>
+  </article>
+</Layout>

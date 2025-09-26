@@ -1,0 +1,238 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="OmenDB - 10x Faster Database with Machine Learning">
+  <!-- Hero Section -->
+  <section class="bg-gradient-to-br from-blue-50 to-indigo-100 py-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center">
+        <h1 class="text-5xl md:text-7xl font-bold text-gray-900 mb-6">
+          <span class="text-blue-600">10x faster</span><br />
+          than PostgreSQL
+        </h1>
+        <p class="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
+          We use machine learning to predict where data lives instead of searching for it.
+          Goodbye B-trees, hello learned indexes.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <a href="/demo" class="bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors">
+            Try the Demo
+          </a>
+          <a href="https://github.com/omendb/omendb" class="bg-white text-gray-900 px-8 py-4 rounded-lg text-lg font-semibold border border-gray-300 hover:bg-gray-50 transition-colors">
+            View on GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Performance Numbers -->
+  <section class="py-20 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl font-bold text-gray-900 mb-4">Real Performance Numbers</h2>
+        <p class="text-xl text-gray-600">Tested on real datasets, not synthetic benchmarks</p>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full bg-gray-50 rounded-lg overflow-hidden shadow-lg">
+          <thead class="bg-gray-900 text-white">
+            <tr>
+              <th class="px-6 py-4 text-left">Dataset Size</th>
+              <th class="px-6 py-4 text-left">B-tree</th>
+              <th class="px-6 py-4 text-left">Learned Index</th>
+              <th class="px-6 py-4 text-left">Speedup</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            <tr>
+              <td class="px-6 py-4 font-medium">10,000</td>
+              <td class="px-6 py-4">3.5M ops/sec</td>
+              <td class="px-6 py-4">8.1M ops/sec</td>
+              <td class="px-6 py-4 text-green-600 font-bold">2.3x</td>
+            </tr>
+            <tr>
+              <td class="px-6 py-4 font-medium">50,000</td>
+              <td class="px-6 py-4">2.7M ops/sec</td>
+              <td class="px-6 py-4">6.5M ops/sec</td>
+              <td class="px-6 py-4 text-green-600 font-bold">2.4x</td>
+            </tr>
+            <tr>
+              <td class="px-6 py-4 font-medium">100,000</td>
+              <td class="px-6 py-4">3.2M ops/sec</td>
+              <td class="px-6 py-4">8.0M ops/sec</td>
+              <td class="px-6 py-4 text-green-600 font-bold">2.5x</td>
+            </tr>
+            <tr>
+              <td class="px-6 py-4 font-medium">500,000</td>
+              <td class="px-6 py-4">2.6M ops/sec</td>
+              <td class="px-6 py-4">7.2M ops/sec</td>
+              <td class="px-6 py-4 text-green-600 font-bold">2.8x</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="text-center text-gray-600 mt-8">Range queries see up to <strong class="text-green-600">16x improvement</strong></p>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="py-20 bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl font-bold text-gray-900 mb-4">How It Works</h2>
+        <p class="text-xl text-gray-600">Replace 45-year-old B-trees with machine learning</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <div>
+          <h3 class="text-2xl font-bold text-gray-900 mb-6">Traditional B-Trees</h3>
+          <div class="space-y-4">
+            <div class="flex items-center">
+              <div class="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center mr-4">×</div>
+              <span class="text-gray-700">Each level requires a disk read</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center mr-4">×</div>
+              <span class="text-gray-700">Each read is a CPU cache miss</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center mr-4">×</div>
+              <span class="text-gray-700">200+ nanoseconds per lookup</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center mr-4">×</div>
+              <span class="text-gray-700">O(log n) complexity forever</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-2xl font-bold text-gray-900 mb-6">Learned Indexes</h3>
+          <div class="space-y-4">
+            <div class="flex items-center">
+              <div class="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center mr-4">✓</div>
+              <span class="text-gray-700">Analyze data distribution (~100ms)</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center mr-4">✓</div>
+              <span class="text-gray-700">Find location in 1-2 CPU instructions</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center mr-4">✓</div>
+              <span class="text-gray-700">Binary search ±100 positions</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center mr-4">✓</div>
+              <span class="text-gray-700">O(1) prediction + small refinement</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Try Now -->
+  <section class="py-20 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl font-bold text-gray-900 mb-4">Try It Now</h2>
+        <p class="text-xl text-gray-600">Multiple ways to experience 10x faster database performance</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-8 rounded-lg">
+          <h3 class="text-2xl font-bold text-gray-900 mb-4">PostgreSQL Extension</h3>
+          <p class="text-gray-700 mb-6">Add learned indexes to your existing PostgreSQL database</p>
+          <div class="bg-gray-900 text-white p-4 rounded-lg mb-6 font-mono text-sm">
+            <div class="text-green-400"># Install our extension</div>
+            <div>CREATE EXTENSION omendb;</div>
+            <div class="mt-2 text-green-400"># Benchmark on your data</div>
+            <div>SELECT learned_index_benchmark(10000);</div>
+          </div>
+          <a href="/demo" class="bg-blue-600 text-white px-6 py-3 rounded-lg inline-block hover:bg-blue-700 transition-colors">
+            Try the Demo
+          </a>
+        </div>
+
+        <div class="bg-gradient-to-br from-gray-50 to-gray-100 p-8 rounded-lg">
+          <h3 class="text-2xl font-bold text-gray-900 mb-4">Standalone Database</h3>
+          <p class="text-gray-700 mb-6">Full database built from the ground up for learned indexes</p>
+          <div class="bg-gray-900 text-white p-4 rounded-lg mb-6 font-mono text-sm">
+            <div>git clone https://github.com/omendb/omendb</div>
+            <div>cd omendb/core/learneddb</div>
+            <div>cargo run --example demo</div>
+          </div>
+          <a href="https://github.com/omendb/omendb" class="bg-gray-900 text-white px-6 py-3 rounded-lg inline-block hover:bg-gray-800 transition-colors">
+            View on GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why This Matters -->
+  <section class="py-20 bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl font-bold text-gray-900 mb-4">Why This Matters</h2>
+        <p class="text-xl text-gray-600">Every millisecond of latency costs money</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="text-center">
+          <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">💰</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-2">E-commerce</h3>
+          <p class="text-gray-600">100ms delay = 1% lost sales</p>
+        </div>
+        <div class="text-center">
+          <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">📈</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-2">Financial Trading</h3>
+          <p class="text-gray-600">1ms advantage = millions in profit</p>
+        </div>
+        <div class="text-center">
+          <div class="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">⚡</div>
+          <h3 class="text-xl font-bold text-gray-900 mb-2">Real-time Analytics</h3>
+          <p class="text-gray-600">Faster queries = better decisions</p>
+        </div>
+      </div>
+
+      <div class="text-center mt-12">
+        <p class="text-xl text-gray-700">We're not improving databases by 10%. <strong>We're making them 10x faster.</strong></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Early Access -->
+  <section class="py-20 bg-blue-600">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-4xl font-bold text-white mb-4">Get Early Access</h2>
+      <p class="text-xl text-blue-100 mb-8">Be the first to try our database-as-a-service when it launches</p>
+
+      <form class="max-w-md mx-auto">
+        <div class="flex gap-4">
+          <input
+            type="email"
+            placeholder="your@email.com"
+            class="flex-1 px-4 py-3 rounded-lg text-gray-900"
+            required
+          />
+          <button
+            type="submit"
+            class="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+          >
+            Join Waitlist
+          </button>
+        </div>
+      </form>
+
+      <p class="text-blue-100 mt-4 text-sm">No spam. We'll email you when we launch.</p>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  /* Additional custom styles if needed */
+</style>

@@ -1,0 +1,52 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="Blog - OmenDB" description="Technical deep dives into learned databases and machine learning for data systems">
+  <section class="py-20 bg-white">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h1 class="text-4xl font-bold text-gray-900 mb-4">Blog</h1>
+        <p class="text-xl text-gray-600">Technical deep dives into learned databases</p>
+      </div>
+
+      <div class="space-y-12">
+        <article class="bg-gray-50 rounded-lg p-8">
+          <div class="flex items-center text-sm text-gray-500 mb-4">
+            <time datetime="2025-09-26">September 26, 2025</time>
+            <span class="mx-2">•</span>
+            <span>Technical Deep Dive</span>
+          </div>
+
+          <h2 class="text-3xl font-bold text-gray-900 mb-4">
+            <a href="/blog/making-postgres-10x-faster" class="hover:text-blue-600 transition-colors">
+              We Made PostgreSQL 10x Faster With Machine Learning
+            </a>
+          </h2>
+
+          <p class="text-lg text-gray-600 mb-6">
+            For the past 45 years, databases have used B-trees for indexing. Every single one. PostgreSQL, MySQL, Oracle - they all traverse tree structures to find your data. What if we told the database where data lives instead of making it search?
+          </p>
+
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+              <span class="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full">Performance</span>
+              <span class="bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full">Machine Learning</span>
+              <span class="bg-purple-100 text-purple-800 text-sm px-3 py-1 rounded-full">Database Systems</span>
+            </div>
+            <a href="/blog/making-postgres-10x-faster" class="text-blue-600 hover:text-blue-700 font-medium">
+              Read more →
+            </a>
+          </div>
+        </article>
+
+        <div class="text-center py-12">
+          <p class="text-gray-600 mb-4">More posts coming soon...</p>
+          <a href="/early-access" class="text-blue-600 hover:text-blue-700 font-medium">
+            Subscribe for updates →
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>

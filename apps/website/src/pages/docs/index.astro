@@ -1,0 +1,336 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="Documentation - OmenDB" description="Learn how to use OmenDB learned indexes in your applications">
+  <section class="py-20 bg-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <h1 class="text-4xl font-bold text-gray-900 mb-4">Documentation</h1>
+        <p class="text-xl text-gray-600">Learn how to use learned indexes in your applications</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <!-- Sidebar Navigation -->
+        <div class="lg:col-span-1">
+          <nav class="sticky top-8">
+            <div class="bg-gray-50 rounded-lg p-6">
+              <h3 class="font-bold text-gray-900 mb-4">Quick Start</h3>
+              <ul class="space-y-2 text-sm">
+                <li><a href="#installation" class="text-blue-600 hover:text-blue-700">Installation</a></li>
+                <li><a href="#postgresql" class="text-blue-600 hover:text-blue-700">PostgreSQL Extension</a></li>
+                <li><a href="#standalone" class="text-blue-600 hover:text-blue-700">Standalone Database</a></li>
+              </ul>
+
+              <h3 class="font-bold text-gray-900 mt-6 mb-4">Concepts</h3>
+              <ul class="space-y-2 text-sm">
+                <li><a href="#learned-indexes" class="text-blue-600 hover:text-blue-700">Learned Indexes</a></li>
+                <li><a href="#performance" class="text-blue-600 hover:text-blue-700">Performance</a></li>
+                <li><a href="#use-cases" class="text-blue-600 hover:text-blue-700">Use Cases</a></li>
+              </ul>
+
+              <h3 class="font-bold text-gray-900 mt-6 mb-4">API Reference</h3>
+              <ul class="space-y-2 text-sm">
+                <li><a href="#functions" class="text-blue-600 hover:text-blue-700">SQL Functions</a></li>
+                <li><a href="#rust-api" class="text-blue-600 hover:text-blue-700">Rust API</a></li>
+              </ul>
+            </div>
+          </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="lg:col-span-3">
+          <div class="prose prose-lg max-w-none">
+            <section id="installation">
+              <h2 class="text-3xl font-bold text-gray-900 mb-4">Installation</h2>
+
+              <p class="text-gray-700 mb-6">
+                OmenDB provides two ways to use learned indexes: as a PostgreSQL extension or as a standalone database.
+              </p>
+
+              <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <p class="text-yellow-800">
+                  <strong>Prerequisites:</strong> Rust 1.70+, PostgreSQL 12+ (for extension), Git
+                </p>
+              </div>
+            </section>
+
+            <section id="postgresql" class="mt-12">
+              <h2 class="text-3xl font-bold text-gray-900 mb-4">PostgreSQL Extension</h2>
+
+              <p class="text-gray-700 mb-6">
+                The PostgreSQL extension adds learned index functions to your existing database.
+              </p>
+
+              <h3 class="text-xl font-bold text-gray-900 mb-4">Build and Install</h3>
+              <div class="bg-gray-900 text-white p-6 rounded-lg mb-6 font-mono text-sm">
+                <div class="text-green-400 mb-2"># Install pgrx (PostgreSQL Rust extension framework)</div>
+                <div class="mb-2">cargo install cargo-pgrx</div>
+                <div class="mb-4">cargo pgrx init</div>
+
+                <div class="text-green-400 mb-2"># Clone and build OmenDB extension</div>
+                <div class="mb-2">git clone https://github.com/omendb/omendb</div>
+                <div class="mb-2">cd omendb/core/pgrx-extension</div>
+                <div class="mb-4">cargo pgrx install</div>
+
+                <div class="text-green-400 mb-2"># Enable in PostgreSQL</div>
+                <div>CREATE EXTENSION omendb;</div>
+              </div>
+
+              <h3 class="text-xl font-bold text-gray-900 mb-4">Usage</h3>
+              <div class="bg-gray-900 text-white p-6 rounded-lg mb-6 font-mono text-sm">
+                <div class="text-green-400 mb-2">-- Check version</div>
+                <div class="mb-4">SELECT learned_index_version();</div>
+
+                <div class="text-green-400 mb-2">-- Run benchmark with 10,000 keys</div>
+                <div class="mb-4">SELECT learned_index_benchmark(10000);</div>
+
+                <div class="text-green-400 mb-2">-- Learn about the technology</div>
+                <div>SELECT learned_index_info();</div>
+              </div>
+            </section>
+
+            <section id="standalone" class="mt-12">
+              <h2 class="text-3xl font-bold text-gray-900 mb-4">Standalone Database</h2>
+
+              <p class="text-gray-700 mb-6">
+                The standalone database is built from the ground up for learned indexes with RocksDB storage.
+              </p>
+
+              <h3 class="text-xl font-bold text-gray-900 mb-4">Quick Start</h3>
+              <div class="bg-gray-900 text-white p-6 rounded-lg mb-6 font-mono text-sm">
+                <div class="text-green-400 mb-2"># Clone and build</div>
+                <div class="mb-2">git clone https://github.com/omendb/omendb</div>
+                <div class="mb-2">cd omendb/core/learneddb</div>
+                <div class="mb-4">cargo build --release</div>
+
+                <div class="text-green-400 mb-2"># Run the demo</div>
+                <div>cargo run --example demo</div>
+              </div>
+
+              <h3 class="text-xl font-bold text-gray-900 mb-4">Rust API Example</h3>
+              <div class="bg-gray-900 text-white p-6 rounded-lg mb-6 font-mono text-sm">
+                <div>use learneddb::LearnedDB;</div>
+                <div class="mb-2">use std::time::Instant;</div>
+                <div class="mb-4"></div>
+
+                <div class="text-green-400 mb-2">// Open database</div>
+                <div class="mb-2">let mut db = LearnedDB::open("./my_database.db")?;</div>
+                <div class="mb-4"></div>
+
+                <div class="text-green-400 mb-2">// Insert data</div>
+                <div class="mb-2">let data = (0..10_000)</div>
+                <div class="mb-2">    .map(|i| (i, format!("value_{}", i).into_bytes()))</div>
+                <div class="mb-2">    .collect();</div>
+                <div class="mb-4">db.bulk_insert(data)?;</div>
+
+                <div class="text-green-400 mb-2">// Query data</div>
+                <div>let value = db.get(42)?;</div>
+              </div>
+            </section>
+
+            <section id="learned-indexes" class="mt-12">
+              <h2 class="text-3xl font-bold text-gray-900 mb-4">Understanding Learned Indexes</h2>
+
+              <p class="text-gray-700 mb-6">
+                Learned indexes replace traditional B-tree data structures with machine learning models.
+              </p>
+
+              <h3 class="text-xl font-bold text-gray-900 mb-4">How They Work</h3>
+              <ol class="list-decimal pl-6 text-gray-700 mb-6 space-y-2">
+                <li><strong>Training Phase</strong>: Analyze your data's distribution (~100ms)</li>
+                <li><strong>Model Building</strong>: Create a function that maps keys to positions</li>
+                <li><strong>Prediction</strong>: Use the model to predict where data lives (1-2 CPU instructions)</li>
+                <li><strong>Refinement</strong>: Binary search within a small range (±100 positions) for exact match</li>
+              </ol>
+
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+                <h4 class="font-bold text-blue-900 mb-2">Key Insight</h4>
+                <p class="text-blue-800">
+                  Most real-world data follows predictable patterns. Sequential IDs, timestamps, and user IDs
+                  all have distributions that machine learning models can learn and predict efficiently.
+                </p>
+              </div>
+
+              <h3 class="text-xl font-bold text-gray-900 mb-4">Types of Learned Indexes</h3>
+              <div class="space-y-4 mb-6">
+                <div class="bg-gray-50 p-4 rounded-lg">
+                  <h4 class="font-bold text-gray-900">Linear Index</h4>
+                  <p class="text-gray-600 text-sm mt-1">Simple linear regression. Fast training, good for uniformly distributed data.</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                  <h4 class="font-bold text-gray-900">RMI (Recursive Model Index)</h4>
+                  <p class="text-gray-600 text-sm mt-1">Two-stage hierarchy. Root model selects leaf model, leaf model predicts position.</p>
+                </div>
+              </div>
+            </section>
+
+            <section id="performance" class="mt-12">
+              <h2 class="text-3xl font-bold text-gray-900 mb-4">Performance Characteristics</h2>
+
+              <div class="overflow-x-auto mb-6">
+                <table class="w-full bg-gray-50 rounded-lg overflow-hidden">
+                  <thead class="bg-gray-900 text-white">
+                    <tr>
+                      <th class="px-4 py-3 text-left">Operation</th>
+                      <th class="px-4 py-3 text-left">B-tree</th>
+                      <th class="px-4 py-3 text-left">Learned Index</th>
+                      <th class="px-4 py-3 text-left">Improvement</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-200 text-sm">
+                    <tr>
+                      <td class="px-4 py-3 font-medium">Point Lookup</td>
+                      <td class="px-4 py-3">O(log n)</td>
+                      <td class="px-4 py-3">O(1) + small search</td>
+                      <td class="px-4 py-3 text-green-600 font-bold">2-3x faster</td>
+                    </tr>
+                    <tr>
+                      <td class="px-4 py-3 font-medium">Range Query</td>
+                      <td class="px-4 py-3">O(log n + k)</td>
+                      <td class="px-4 py-3">O(1 + k)</td>
+                      <td class="px-4 py-3 text-green-600 font-bold">Up to 16x faster</td>
+                    </tr>
+                    <tr>
+                      <td class="px-4 py-3 font-medium">Insert</td>
+                      <td class="px-4 py-3">O(log n)</td>
+                      <td class="px-4 py-3">O(log n)*</td>
+                      <td class="px-4 py-3 text-yellow-600">Similar</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <p class="text-sm text-gray-600 mb-6">
+                *Inserts require periodic model retraining for optimal performance
+              </p>
+            </section>
+
+            <section id="use-cases" class="mt-12">
+              <h2 class="text-3xl font-bold text-gray-900 mb-4">Best Use Cases</h2>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-green-50 border border-green-200 rounded-lg p-6">
+                  <h3 class="font-bold text-green-800 mb-2">Excellent For</h3>
+                  <ul class="text-green-700 space-y-1 text-sm">
+                    <li>• Time-series data (timestamps)</li>
+                    <li>• Sequential IDs</li>
+                    <li>• Financial data</li>
+                    <li>• IoT sensor data</li>
+                    <li>• Log data</li>
+                    <li>• Read-heavy workloads</li>
+                  </ul>
+                </div>
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                  <h3 class="font-bold text-yellow-800 mb-2">Consider Carefully</h3>
+                  <ul class="text-yellow-700 space-y-1 text-sm">
+                    <li>• Completely random data</li>
+                    <li>• Very high write rates</li>
+                    <li>• Frequent data updates</li>
+                    <li>• Small datasets (&lt;1000 records)</li>
+                    <li>• String primary keys</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section id="functions" class="mt-12">
+              <h2 class="text-3xl font-bold text-gray-900 mb-4">PostgreSQL Functions</h2>
+
+              <div class="space-y-6">
+                <div class="bg-gray-50 p-6 rounded-lg">
+                  <h3 class="font-bold text-gray-900 mb-2">learned_index_benchmark(num_keys)</h3>
+                  <p class="text-gray-600 mb-3">Compare learned index performance against B-trees</p>
+                  <div class="bg-gray-900 text-white p-3 rounded font-mono text-sm mb-3">
+                    SELECT learned_index_benchmark(50000);
+                  </div>
+                  <ul class="text-sm text-gray-600 space-y-1">
+                    <li><strong>Parameters:</strong> num_keys (integer, 1-1,000,000)</li>
+                    <li><strong>Returns:</strong> Formatted benchmark results</li>
+                  </ul>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-lg">
+                  <h3 class="font-bold text-gray-900 mb-2">learned_index_version()</h3>
+                  <p class="text-gray-600 mb-3">Get extension version information</p>
+                  <div class="bg-gray-900 text-white p-3 rounded font-mono text-sm mb-3">
+                    SELECT learned_index_version();
+                  </div>
+                  <ul class="text-sm text-gray-600 space-y-1">
+                    <li><strong>Returns:</strong> Version string</li>
+                  </ul>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-lg">
+                  <h3 class="font-bold text-gray-900 mb-2">learned_index_info()</h3>
+                  <p class="text-gray-600 mb-3">Learn about learned index technology</p>
+                  <div class="bg-gray-900 text-white p-3 rounded font-mono text-sm mb-3">
+                    SELECT learned_index_info();
+                  </div>
+                  <ul class="text-sm text-gray-600 space-y-1">
+                    <li><strong>Returns:</strong> Educational text about learned indexes</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section id="rust-api" class="mt-12">
+              <h2 class="text-3xl font-bold text-gray-900 mb-4">Rust API Reference</h2>
+
+              <p class="text-gray-700 mb-6">
+                For the standalone database, OmenDB provides a Rust API for embedding in applications.
+              </p>
+
+              <div class="bg-gray-50 p-6 rounded-lg mb-6">
+                <h3 class="font-bold text-gray-900 mb-3">Core Types</h3>
+                <div class="bg-gray-900 text-white p-4 rounded font-mono text-sm">
+                  <div>use omendb::&#123;LinearIndex, RMIIndex, LearnedIndex&#125;;</div>
+                  <div>use learneddb::LearnedDB;</div>
+                </div>
+              </div>
+
+              <div class="space-y-6">
+                <div>
+                  <h4 class="font-bold text-gray-900 mb-2">LearnedDB Methods</h4>
+                  <ul class="space-y-3 text-sm">
+                    <li><strong>open(path)</strong> - Open database at given path</li>
+                    <li><strong>put(key, value)</strong> - Insert single key-value pair</li>
+                    <li><strong>get(key)</strong> - Retrieve value by key</li>
+                    <li><strong>bulk_insert(data)</strong> - Insert multiple records efficiently</li>
+                    <li><strong>stats()</strong> - Get database statistics</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <div class="mt-16 pt-8 border-t border-gray-200">
+              <div class="text-center">
+                <p class="text-gray-600 mb-4">Need help or have questions?</p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                  <a href="https://github.com/omendb/omendb/issues" class="text-blue-600 hover:text-blue-700 font-medium">
+                    Open an Issue →
+                  </a>
+                  <a href="mailto:hello@omendb.com" class="text-blue-600 hover:text-blue-700 font-medium">
+                    Contact Support →
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  /* Smooth scroll for anchor links */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Style for active nav links */
+  nav a:hover {
+    text-decoration: underline;
+  }
+</style>
