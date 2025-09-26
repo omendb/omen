@@ -1,18 +1,17 @@
-# OmenDB Strategic Roadmap - Three Paths Forward
+# OmenDB Execution Roadmap - The Realistic Path
 
-**Last Updated**: September 25, 2025 (Evening)
-**Current Status**: ✅ Technical validation complete
-**Key Achievement**: 2x performance improvement vs PostgreSQL B-trees proven
+**Last Updated**: September 25, 2025 (Final)
+**Current Status**: ✅ Tech validated, ⚠️ Business model uncertain
+**Decision**: Proprietary DBaaS with PostgreSQL extension for marketing
 
-## Executive Summary
+## The Chosen Path: Proprietary Learned Database
 
-We've successfully proven the core technology works:
-- ✅ RMI achieving 1.5-2x speedup vs PostgreSQL B-tree
-- ✅ LinearIndex achieving 2-8x speedup vs B-tree
-- ✅ PostgreSQL extension working with full benchmarking
-- ✅ 100% recall maintained across all implementations
+Based on research showing:
+- **Pinecone**: $750M valuation, fully proprietary
+- **ClickHouse**: $6.35B valuation, started proprietary
+- **MongoDB**: SSPL didn't stop AWS competition
 
-**Next Decision**: Choose business strategy for maximum impact.
+**Our Strategy**: PostgreSQL extension for credibility, proprietary database for revenue.
 
 ---
 

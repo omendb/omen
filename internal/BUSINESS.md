@@ -1,8 +1,8 @@
-# OmenDB Business Strategy - REALISTIC EDITION
+# OmenDB Business Strategy - BRUTAL REALITY EDITION
 
 **Company**: OmenDB Inc. (to be incorporated)
-**Mission**: Accelerate database performance through learned indexes
-**Reality Check**: This is a good business, not a unicorn
+**Mission**: Build the learned database that makes others obsolete
+**Reality Check**: We're competing against $100B+ incumbents with zero moat
 
 ## Market Opportunity - BRUTAL HONESTY
 
