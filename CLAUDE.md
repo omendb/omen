@@ -1,51 +1,46 @@
-# OmenDB Development Context
+# OmenDB Core Development Context
 
-## 🚀 Current Status: Ready for Launch
+## 🎯 Strategy: Open Source Extension + Proprietary Database
 
 **Date**: September 26, 2025
-**Status**: Stable PostgreSQL extension + production website ready
-**Next**: Launch on GitHub/HackerNews, validate market demand
+**Mission**: Build state-of-the-art learned database using latest research
+**Business Model**: PostgreSQL extension (free tier) → Full database (paid SaaS)
 
-## What We've Built
-
-### 1. Stable PostgreSQL Extension
-✅ **Error-free benchmark function** showing 2-8x speedup
-✅ **Safe for production testing** (no crashes, proper validation)
-✅ **Working SQL functions** demonstrating learned index technology
-
-### 2. Production Website (omendb.io)
-✅ **Professional landing page** with clear value proposition
-✅ **Interactive demo** of PostgreSQL extension
-✅ **Complete documentation** and blog posts
-✅ **Early access signup** for DBaaS beta
-
-### 3. Standalone Database Foundation
-✅ **RocksDB-based LearnedDB** with working learned indexes
-✅ **10K records in 19ms** bulk insertion performance
-✅ **Ready for enhancement** with advanced algorithms
-
-## Repository Structure
+## Repository Structure (CORRECT)
 
 ```
-omendb/core/
-├── src/                      # Core learned index library (Rust)
-│   ├── linear.rs            # LinearIndex (2-8x speedup)
-│   ├── rmi.rs               # RMI (Recursive Model Index)
-│   └── lib.rs               # Main exports and traits
-├── apps/                     # Applications and services
-│   └── website/             # Marketing website (Astro)
-│       ├── src/pages/       # Landing, blog, docs, demo
-│       └── README.md        # Website documentation
-├── docs/                     # Organized documentation
-│   ├── internal/            # AI agent and development docs
-│   ├── extension/           # PostgreSQL extension docs
-│   ├── database/            # Standalone database docs
-│   └── website/             # Website strategy and content
-├── learneddb/               # Standalone database (Rust + RocksDB)
-├── pgrx-extension/          # PostgreSQL extension (stable)
-├── benchmarks/              # Performance tests
-└── .github/workflows/       # Automated deployment
+omendb/ (GitHub Organization)
+├── pg-learned/        # PUBLIC - PostgreSQL extension (marketing/free tier)
+├── website/           # PRIVATE - Marketing site at omendb.io
+└── core/              # PRIVATE - THIS REPO - Learned DB development
 ```
+
+### THIS Repository (core)
+```
+core/
+├── src/               # Core learned index algorithms (Rust)
+│   ├── linear.rs      # LinearIndex implementation
+│   ├── rmi.rs         # RMI (Recursive Model Index)
+│   └── lib.rs         # Library exports
+├── learneddb/         # Standalone database foundation
+│   ├── src/           # Database implementation
+│   └── examples/      # Demo code
+├── docs/              # Internal documentation
+│   └── internal/      # Strategy, roadmap, research
+└── website/           # IGNORE - moved to separate repo
+```
+
+## Key Facts to Remember
+
+### Repositories
+- **pg-learned**: Public PostgreSQL extension (NOT postgresql-extension)
+- **website**: Separate private repo, deployed to Cloudflare Pages
+- **core**: This repo - where we build the full learned database
+
+### Development Strategy
+1. **pg-learned extension**: Open source marketing tool (already exists)
+2. **Learned database**: Build here in core using Rust + latest research
+3. **Website**: Marketing site, evolves to SaaS platform later
 
 ## Key Documentation (Load in Order)
 
@@ -58,17 +53,17 @@ omendb/core/
 
 ### Build Commands
 ```bash
-# Core library
+# Core library (learned indexes)
 cargo build --release && cargo test
 
-# PostgreSQL extension
-cd pgrx-extension && cargo build
-
-# Standalone database
+# Standalone database (in progress)
 cd learneddb && cargo run --example demo
 
-# Website
-cd apps/website && npm run build
+# PostgreSQL extension (separate repo)
+cd ../pg-learned && cargo pgrx run
+
+# Website (separate repo)
+cd ../website && npm run build
 ```
 
 ### Testing Commands
@@ -91,13 +86,19 @@ cd apps/website && npm run preview
 - **Range queries**: Up to 16x improvement
 - **Bulk insertion**: 10K records in 19ms
 
-### PostgreSQL Extension Functions
+### PostgreSQL Extension (pg-learned repo)
 ```sql
--- Working and safe functions:
+-- Functions in PUBLIC pg-learned repo:
 SELECT learned_index_version();           -- Extension info
 SELECT learned_index_benchmark(10000);    -- Performance demo
 SELECT learned_index_info();              -- Educational content
 ```
+
+### Learned Database Plan (THIS repo)
+- Use learneddb/ as foundation
+- Add persistence, query engine, wire protocol
+- Incorporate latest research (RadixSpline, PGM-Index, etc.)
+- Target: PostgreSQL wire compatible learned database
 
 ## Launch Strategy
 

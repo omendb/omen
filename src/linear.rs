@@ -24,6 +24,21 @@ pub struct LinearIndex<V: Clone> {
 }
 
 impl<V: Clone> LinearIndex<V> {
+    /// Get model slope for statistics
+    pub fn slope(&self) -> f64 {
+        self.slope
+    }
+
+    /// Get model intercept for statistics
+    pub fn intercept(&self) -> f64 {
+        self.intercept
+    }
+
+    /// Get max error bound for statistics
+    pub fn max_error(&self) -> usize {
+        self.max_error
+    }
+
     /// Train a linear model on the data
     fn train_linear_model(keys: &[i64]) -> (f64, f64, usize) {
         let n = keys.len() as f64;

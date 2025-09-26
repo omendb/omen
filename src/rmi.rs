@@ -41,6 +41,16 @@ pub struct LeafModel {
 }
 
 impl<V: Clone> RMIIndex<V> {
+    /// Get max error bound for statistics
+    pub fn max_error(&self) -> usize {
+        self.max_error
+    }
+
+    /// Get number of leaf models for statistics
+    pub fn num_leaf_models(&self) -> usize {
+        self.leaf_models.len()
+    }
+
     /// Train the two-stage RMI model
     fn train_rmi(keys: &[i64], num_leaf_models: usize) -> (f64, f64, Vec<LeafModel>, usize) {
         let n = keys.len();
