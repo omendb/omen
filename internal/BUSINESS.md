@@ -1,16 +1,59 @@
-# OmenDB Business Strategy
+# OmenDB Business Strategy - REALISTIC EDITION
 
 **Company**: OmenDB Inc. (to be incorporated)
-**Mission**: Replace 45-year-old database technology with machine learning
-**Vision**: Every database query answered by intelligence, not traversal
+**Mission**: Accelerate database performance through learned indexes
+**Reality Check**: This is a good business, not a unicorn
 
-## Market Opportunity
+## Market Opportunity - BRUTAL HONESTY
 
-### TAM Analysis
-- **Database Market**: $80B (2025), growing 15% YoY
-- **Index Market**: ~$50B (estimated 60% of database operations)
-- **Learned Index Addressable**: $10B initially (performance-critical)
-- **5-Year Target**: $1B revenue potential
+### Realistic TAM Analysis
+- **Total Database Market**: $80B (true, but we're not capturing this)
+- **PostgreSQL Extension Market**: ~$100M (our actual addressable market)
+- **Performance-Critical Subset**: ~$20M (enterprises paying premium for speed)
+- **Realistic 5-Year Target**: $10-50M revenue (not $1B)
+
+### Two Paths Forward
+
+**PATH A: PostgreSQL Extension (Safe, Limited Upside)**
+- Market: ~$20M addressable
+- Max ARR: $5-10M
+- Exit: $50-100M acquisition
+- Timeline: 2-3 years
+
+**PATH B: Specialized Full Database (Risky, Venture Scale)**
+- Market: $10B+ if we nail specific verticals
+- Max ARR: $100M+ potential
+- Exit: IPO or $1B+ acquisition
+- Timeline: 3-5 years
+
+### Why Full Database Might Be Better
+1. **Venture scale**: MongoDB ($20B), Snowflake ($60B) prove it works
+2. **Higher margins**: Own entire stack, not just extension layer
+3. **Differentiation**: Completely new architecture vs incremental
+4. **Pricing power**: $100K-1M per deployment vs $10K-50K
+
+### Specialized Database Target Verticals
+
+**🎯 TIER 1: Financial Trading (Highest ROI)**
+- **Pain**: Microseconds = millions in profit/loss
+- **Willingness to pay**: $1M+ per deployment
+- **Data characteristics**: Sequential prices, perfect for learned indexes
+- **Examples**: Citadel, Jane Street, Two Sigma
+- **Market size**: $5B+ in trading infrastructure
+
+**🎯 TIER 2: Real-time Analytics**
+- **Pain**: Query latency kills user experience
+- **Willingness to pay**: $100K-500K per deployment
+- **Data characteristics**: Time-series, highly predictable patterns
+- **Examples**: Datadog, New Relic, monitoring companies
+- **Market size**: $2B+ in real-time data platforms
+
+**🎯 TIER 3: Gaming/Leaderboards**
+- **Pain**: Need sub-millisecond leaderboard updates
+- **Willingness to pay**: $50K-200K per deployment
+- **Data characteristics**: Score sequences, read-heavy
+- **Examples**: Epic Games, Riot, mobile game companies
+- **Market size**: $1B+ in gaming infrastructure
 
 ### Why Now?
 1. **Technology Inflection**: ML infrastructure mature (2025 vs 2018)
@@ -223,31 +266,25 @@ CREATE INDEX learned_idx ON table USING learned(column);
 - Developer community
 - Enterprise relationships
 
-## Financial Projections
+## Realistic Financial Projections
 
-### Year 1 (2026)
-- Revenue: $100K (support contracts)
-- Expenses: $500K (2 people + infrastructure)
-- Burn: $400K
-- Runway: Post-YC funding
+### PATH A: PostgreSQL Extension (Conservative)
+**Year 1**: $50K revenue, $400K expenses
+**Year 2**: $500K revenue, $1.5M expenses
+**Year 3**: $2M revenue, $3M expenses
+**Year 5**: $5M revenue, $4M expenses (profitable)
+**Exit**: $50-100M acquisition
 
-### Year 2 (2027)
-- Revenue: $1M ARR
-- Expenses: $3M (10 people)
-- Burn: $2M
-- Key: Product-market fit
+### PATH B: Specialized Database (Aggressive)
+**Year 1**: $100K revenue, $2M expenses (higher team cost)
+**Year 2**: $2M revenue, $8M expenses (Series A funded)
+**Year 3**: $10M revenue, $15M expenses
+**Year 5**: $50M revenue, $40M expenses
+**Exit**: $500M-1B acquisition or IPO path
 
-### Year 3 (2028)
-- Revenue: $5M ARR
-- Expenses: $8M (25 people)
-- Burn: $3M
-- Key: Series A metrics
-
-### Year 5 (2030)
-- Revenue: $50M ARR
-- Expenses: $40M
-- Profit: $10M
-- Key: IPO ready
+### Funding Requirements
+**Extension Path**: $1-2M total (bootstrappable)
+**Database Path**: $15-30M total (venture-backed)
 
 ## Decision Log
 
