@@ -1,5 +1,5 @@
 use pgrx::prelude::*;
-use omendb::{LinearIndex, LearnedIndex};
+use omendb::{LinearIndex, RMIIndex, LearnedIndex};
 use std::collections::HashMap;
 use std::sync::{Mutex, LazyLock};
 
@@ -96,6 +96,73 @@ fn benchmark_learned_vs_btree(num_keys: i32) -> String {
     )
 }
 
+#[pg_extern]
+fn benchmark_rmi_postgres(num_keys: i32) -> String {
+    use std::collections::BTreeMap;
+    use std::time::Instant;
+
+    // Generate test data
+    let mut data = Vec::new();
+    let mut btree = BTreeMap::new();
+
+    for i in 0..num_keys {
+        let key = i as i64 * 2; // Even keys
+        let value = format!("value_{}", i);
+        data.push((key, value.clone()));
+        btree.insert(key, value);
+    }
+
+    // Train RMI and Linear indexes
+    let rmi_index = match RMIIndex::train(data.clone()) {
+        Ok(index) => index,
+        Err(e) => return format!("Failed to train RMI index: {:?}", e)
+    };
+
+    let linear_index = match LinearIndex::train(data) {
+        Ok(index) => index,
+        Err(e) => return format!("Failed to train Linear index: {:?}", e)
+    };
+
+    let num_queries = 1000;
+    let test_keys: Vec<i64> = (0..num_queries).map(|i| (i % num_keys) as i64 * 2).collect();
+
+    // Benchmark RMI
+    let start = Instant::now();
+    for &key in &test_keys {
+        let _ = rmi_index.get(&key);
+    }
+    let rmi_time = start.elapsed();
+
+    // Benchmark Linear
+    let start = Instant::now();
+    for &key in &test_keys {
+        let _ = linear_index.get(&key);
+    }
+    let linear_time = start.elapsed();
+
+    // Benchmark B-tree
+    let start = Instant::now();
+    for &key in &test_keys {
+        let _ = btree.get(&key);
+    }
+    let btree_time = start.elapsed();
+
+    let rmi_qps = num_queries as f64 / rmi_time.as_secs_f64();
+    let linear_qps = num_queries as f64 / linear_time.as_secs_f64();
+    let btree_qps = num_queries as f64 / btree_time.as_secs_f64();
+
+    format!(
+        "PostgreSQL RMI Benchmark ({} keys, {} queries):\n\
+         RMI Index:    {:.0} q/s\n\
+         Linear Index: {:.0} q/s\n\
+         BTreeMap:     {:.0} q/s\n\
+         RMI vs BTree: {:.2}x speedup\n\
+         Linear vs BTree: {:.2}x speedup",
+        num_keys, num_queries, rmi_qps, linear_qps, btree_qps,
+        rmi_qps / btree_qps, linear_qps / btree_qps
+    )
+}
+
 /// SQL function to demonstrate learned index performance
 #[pg_extern]
 fn hello_omendb() -> &'static str {
@@ -117,6 +184,12 @@ mod tests {
     fn test_benchmark() {
         let result = crate::benchmark_learned_vs_btree(100);
         assert!(result.contains("Speedup"));
+    }
+
+    #[pg_test]
+    fn test_rmi_benchmark() {
+        let result = crate::benchmark_rmi_postgres(100);
+        assert!(result.contains("speedup"));
     }
 }
 

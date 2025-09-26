@@ -1,9 +1,11 @@
 //! OmenDB Learned Index - ML-powered indexing that's 10x faster than B-trees
 
 pub mod linear;
+pub mod rmi;
 pub mod error;
 
 pub use linear::LinearIndex;
+pub use rmi::RMIIndex;
 pub use error::{Error, Result};
 
 /// Core trait for all learned index implementations
