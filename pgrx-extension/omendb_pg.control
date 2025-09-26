@@ -1,8 +1,0 @@
-# OmenDB PostgreSQL Extension
-comment = 'OmenDB Learned Index - 10x faster than B-trees through machine learning'
-default_version = '0.1.0'
-module_pathname = '$libdir/omendb_pg'
-relocatable = false
-requires = ''
-superuser = false
-trusted = false
