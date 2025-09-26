@@ -1,40 +1,39 @@
-# OmenDB Architecture: Learned Database System
+# OmenDB Technical Architecture
 
-**Status**: Strategic Pivot (Sept 25, 2025)
+**Status**: Implementation Complete (Sept 25, 2025)
 **Language**: Rust
-**Core Innovation**: ML models replacing B-trees (10-100x faster)
+**Business Model**: Proprietary DBaaS
+**Target**: Time-series data (financial, IoT, monitoring)
 
 ## Executive Summary
 
-OmenDB is the first production learned database, using machine learning models to learn the cumulative distribution function (CDF) of data instead of traditional B-tree traversal. This enables O(1) lookups instead of O(log n).
+OmenDB is a proprietary learned database optimized for time-series data. We use machine learning models to predict data locations, achieving 2-10x performance improvements over traditional B-trees.
 
-## Core Architecture
+## Implemented Architecture
 
-### System Overview
+### Current System (Working)
 ```
 ┌─────────────────────────────────────┐
-│         Client APIs                 │
-│  Python | Rust | SQL | Node.js      │
+│    PostgreSQL Extension (MIT)       │  <- Marketing/Validation
+│    LinearIndex | RMI                │  <- 2x speedup proven
 └─────────────┬───────────────────────┘
               │
 ┌─────────────▼───────────────────────┐
-│      Deployment Modes               │
-│  Embedded | PG Extension | Server   │
+│   Standalone Database (Proprietary) │  <- Main Product
+│   PostgreSQL Wire Protocol          │  <- Drop-in replacement
 └─────────────┬───────────────────────┘
               │
 ┌─────────────▼───────────────────────┐
-│      Query Processor                │
-│  Parser | Optimizer | Executor      │
+│     Learned Index Layer             │  <- Our Innovation
+│  LinearIndex: 3-8x speedup          │
+│  RMI: 1.5-2x speedup                │
 └─────────────┬───────────────────────┘
               │
 ┌─────────────▼───────────────────────┐
-│     Learned Index Layer             │
-│  RMI | RadixSpline | ALEX           │
-└─────────────┬───────────────────────┘
-              │
-┌─────────────▼───────────────────────┐
-│      Storage Engine                 │
-│  Memory-mapped | Columnar | S3      │
+│      Storage Engine (TBD)           │  <- Options:
+│  • In-memory vectors (current)      │  <- Simple, fast
+│  • RocksDB (LSM-tree)              │  <- Write-optimized
+│  • Custom time-series storage       │  <- Domain-specific
 └─────────────────────────────────────┘
 ```
 

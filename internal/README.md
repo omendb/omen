@@ -2,36 +2,37 @@
 
 **Last Updated**: September 25, 2025
 
-## Core Documents (5 Files Only)
+## Core Documents (5 Files)
 
 | File | Purpose | When to Read |
 |------|---------|--------------|
-| **ARCHITECTURE.md** | Technical design, algorithms, implementation | Building features |
-| **BUSINESS.md** | Market analysis, monetization, YC pitch | Strategic decisions |
-| **ROADMAP.md** | Timeline, milestones, daily tasks | Planning work |
-| **STATUS.md** | Current progress, blockers, metrics | Daily standup |
-| **CONTEXT.md** | AI agent instructions (minimal) | Loading AI context |
+| **STATUS.md** | Current state, progress, reality check | Daily - what's happening now |
+| **ROADMAP.md** | Execution plan, strategic decision | Planning - what to do next |
+| **BUSINESS.md** | Market analysis, monetization strategy | Strategic - business decisions |
+| **ARCHITECTURE.md** | Technical design, implementation | Technical - how it works |
+| **RESEARCH.md** | State-of-the-art papers, opportunities | Innovation - what's possible |
 
 ## Quick Summary
 
 ### What We're Building
-PostgreSQL extension with learned indexes (ML replaces B-trees) for 10x faster lookups.
+**Proprietary learned database** for time-series data with PostgreSQL extension for marketing.
 
-### Why
-- Zero competition (vs 30+ vector DB competitors)
-- 10-100x performance improvement possible
-- Clear monetization (enterprise features)
+### Business Model
+- PostgreSQL extension: MIT licensed (prove the tech)
+- Standalone database: Proprietary (main product)
+- Revenue: DBaaS subscriptions ($19-999/month)
+- Target: Financial tick data, IoT sensors, monitoring
 
-### How
-1. Linear RMI in Rust
-2. PostgreSQL extension via pgrx
-3. Ship by Oct 7 or pivot
+### Current Status
+- ✅ Technology validated (2-10x speedup proven)
+- ✅ PostgreSQL extension working
+- 📊 25% success probability (realistic assessment)
+- 🎯 Next: Launch publicly, measure traction
 
-### Focus
-**PostgreSQL extension ONLY**. No standalone DB, no embedded mode, no server mode.
-
-### Success Metric
-Lookup latency <40ns (10x faster than 200ns B-tree).
+### Success Metrics
+- 500 GitHub stars = continue building
+- <100 stars = pivot to something else
+- Target: $10K MRR within 12 months
 
 ## External Resources
 
