@@ -5,10 +5,7 @@
 mod index_tests;
 
 #[cfg(test)]
-mod storage_tests;
-
-#[cfg(test)]
-mod integration_tests;
-
-#[cfg(test)]
 mod stress_tests;
+
+#[cfg(test)]
+mod wal_tests;

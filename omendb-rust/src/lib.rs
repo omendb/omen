@@ -4,6 +4,7 @@
 pub mod storage;
 pub mod index;
 pub mod concurrent;
+pub mod wal;
 
 #[cfg(test)]
 mod tests;

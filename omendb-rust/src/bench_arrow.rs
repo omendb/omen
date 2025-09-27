@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 fn main() {
     println!("🚀 OmenDB Week 3: Arrow Storage + Range Queries");
-    println!("=" .repeat(60));
+    println!("{}", "=".repeat(60));
 
     // Test at different scales
     for num_keys in [10_000, 100_000, 1_000_000] {

@@ -243,7 +243,7 @@ fn test_time_series_pattern() {
         } else {
             1000  // Regular interval
         };
-        data.push((base_ts + i * gap, i));
+        data.push((base_ts + i as i64 * gap, i));
     }
 
     index.train(data.clone());
@@ -251,7 +251,7 @@ fn test_time_series_pattern() {
     // Verify we can find time-series points
     for i in [0, 100, 500, 900] {
         let (key, expected_pos) = data[i];
-        assert_eq!(index.search(key), Some(expected_pos));
+        assert_eq!(index.search(key), Some(expected_pos as usize));
     }
 }
 

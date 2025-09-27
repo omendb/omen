@@ -1,12 +1,13 @@
-//! Arrow-based columnar storage for OmenDB
+//! Arrow-based columnar storage for OmenDB with WAL support
 //! Week 3: Integration with learned indexes for time-series data
 
+use crate::wal::{WalManager, WalOperation};
 use arrow::array::{ArrayRef, Int64Array, Float64Array, TimestampMicrosecondArray};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
-use parquet::arrow::arrow_writer::ArrowWriter;
-use parquet::arrow::ArrowReader;
-use parquet::arrow::ParquetFileArrowReader;
+use parquet::arrow::ArrowWriter;
+use parquet::file::reader::FileReader;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::file::properties::WriterProperties;
 use std::collections::HashMap;
 use std::fs::File;
@@ -14,7 +15,7 @@ use std::path::Path;
 use std::sync::Arc;
 use anyhow::Result;
 
-/// Time-series optimized columnar storage
+/// Time-series optimized columnar storage with durability
 pub struct ArrowStorage {
     /// Schema for time-series data
     schema: SchemaRef,
@@ -27,6 +28,12 @@ pub struct ArrowStorage {
 
     /// Learned index for timestamp column
     timestamp_index: Option<Box<dyn LearnedIndexTrait>>,
+
+    /// Write-ahead log for durability
+    wal: Option<Arc<WalManager>>,
+
+    /// Data directory path
+    data_dir: Option<String>,
 }
 
 /// Trait for learned indexes to integrate with storage
@@ -52,18 +59,76 @@ impl ArrowStorage {
             hot_batches: Vec::new(),
             cold_files: Vec::new(),
             timestamp_index: None,
+            wal: None,
+            data_dir: None,
         }
     }
 
-    /// Insert time-series data (integrated with learned index)
-    pub fn insert(&mut self, timestamp: i64, value: f64, series_id: i64) -> Result<()> {
-        // Create arrays for the batch
+    /// Create storage with persistence and WAL
+    pub fn with_persistence<P: AsRef<Path>>(data_dir: P) -> Result<Self> {
+        let data_path = data_dir.as_ref();
+        std::fs::create_dir_all(&data_path)?;
+
+        // Initialize WAL
+        let wal_dir = data_path.join("wal");
+        let wal = WalManager::new(wal_dir)?;
+        wal.open()?;
+
+        let schema = Schema::new(vec![
+            Field::new("timestamp", DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None), false),
+            Field::new("value", DataType::Float64, false),
+            Field::new("series_id", DataType::Int64, false),
+            Field::new("tags", DataType::Utf8, true),
+        ]);
+
+        let mut storage = Self {
+            schema: Arc::new(schema),
+            hot_batches: Vec::new(),
+            cold_files: Vec::new(),
+            timestamp_index: None,
+            wal: Some(Arc::new(wal)),
+            data_dir: Some(data_path.to_string_lossy().to_string()),
+        };
+
+        // Recover from WAL
+        storage.recover_from_wal()?;
+
+        Ok(storage)
+    }
+
+    /// Recover data from WAL on startup
+    fn recover_from_wal(&mut self) -> Result<()> {
+        // Collect operations first to avoid borrow checker issues
+        let mut operations_to_apply = Vec::new();
+
+        if let Some(wal) = &self.wal {
+            let stats = wal.recover(|op| {
+                match op {
+                    WalOperation::Insert { timestamp, value, series_id } => {
+                        operations_to_apply.push((*timestamp, *value, *series_id));
+                    }
+                    _ => {} // Handle other operations as needed
+                }
+                Ok(())
+            })?;
+
+            // Now apply the operations
+            for (timestamp, value, series_id) in operations_to_apply {
+                self.insert_without_wal(timestamp, value, series_id)?;
+            }
+
+            println!("WAL recovery complete: {} entries applied", stats.applied_entries);
+        }
+        Ok(())
+    }
+
+    /// Internal insert without WAL logging (used during recovery)
+    fn insert_without_wal(&mut self, timestamp: i64, value: f64, series_id: i64) -> Result<()> {
         let timestamps = TimestampMicrosecondArray::from(vec![timestamp]);
         let values = Float64Array::from(vec![value]);
         let series_ids = Int64Array::from(vec![series_id]);
         let tags = arrow::array::StringArray::from(vec![Some("")]);
 
-        // Create record batch
         let batch = RecordBatch::try_new(
             self.schema.clone(),
             vec![
@@ -75,6 +140,22 @@ impl ArrowStorage {
         )?;
 
         self.hot_batches.push(batch);
+        Ok(())
+    }
+
+    /// Insert time-series data with WAL logging
+    pub fn insert(&mut self, timestamp: i64, value: f64, series_id: i64) -> Result<()> {
+        // Write to WAL first for durability
+        if let Some(wal) = &self.wal {
+            wal.write(WalOperation::Insert {
+                timestamp,
+                value,
+                series_id,
+            })?;
+        }
+
+        // Then update in-memory data
+        self.insert_without_wal(timestamp, value, series_id)?;
 
         // Retrain index periodically (every 1000 inserts)
         if self.hot_batches.len() % 1000 == 0 {
@@ -124,7 +205,7 @@ impl ArrowStorage {
         for batch in batches {
             if let Some(values) = batch.column(1).as_any().downcast_ref::<Float64Array>() {
                 for i in 0..values.len() {
-                    if !values.is_null(i) {
+                    {
                         sum += values.value(i);
                     }
                 }
@@ -142,7 +223,7 @@ impl ArrowStorage {
         for batch in batches {
             if let Some(values) = batch.column(1).as_any().downcast_ref::<Float64Array>() {
                 for i in 0..values.len() {
-                    if !values.is_null(i) {
+                    {
                         sum += values.value(i);
                         count += 1;
                     }
@@ -153,7 +234,7 @@ impl ArrowStorage {
         Ok(if count > 0 { sum / count as f64 } else { 0.0 })
     }
 
-    /// Flush hot data to Parquet files
+    /// Flush hot data to Parquet files with checkpoint
     pub fn flush_to_parquet(&mut self, path: &Path) -> Result<()> {
         if self.hot_batches.is_empty() {
             return Ok(());
@@ -169,6 +250,11 @@ impl ArrowStorage {
 
         writer.close()?;
 
+        // Create WAL checkpoint after successful Parquet write
+        if let Some(wal) = &self.wal {
+            wal.checkpoint()?;
+        }
+
         // Move to cold storage
         self.cold_files.push(path.to_string_lossy().to_string());
         self.hot_batches.clear();
@@ -176,13 +262,21 @@ impl ArrowStorage {
         Ok(())
     }
 
+    /// Force sync WAL to disk
+    pub fn sync(&self) -> Result<()> {
+        if let Some(wal) = &self.wal {
+            wal.sync()?;
+        }
+        Ok(())
+    }
+
     /// Load data from Parquet files
     pub fn load_from_parquet(&mut self, path: &Path) -> Result<()> {
         let file = File::open(path)?;
-        let reader = ParquetFileArrowReader::new(Arc::new(file));
-        let mut arrow_reader = reader.get_record_reader(2048)?;
+        let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+        let mut reader = builder.build()?;
 
-        while let Some(batch) = arrow_reader.next() {
+        while let Some(batch) = reader.next() {
             self.hot_batches.push(batch?);
         }
 

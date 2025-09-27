@@ -170,9 +170,9 @@ fn test_worst_case_distribution() {
     let mut data = Vec::new();
 
     // Create clusters with gaps
-    for cluster in 0..10 {
-        let base = cluster * 1_000_000;
-        for i in 0..1000 {
+    for cluster in 0..10usize {
+        let base = cluster as i64 * 1_000_000;
+        for i in 0..1000usize {
             data.push((base + i as i64, cluster * 1000 + i));
         }
     }

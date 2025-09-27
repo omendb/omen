@@ -1,8 +1,9 @@
-//! Concurrency support for production OmenDB
-//! Thread-safe wrappers with read-write locking
+//! Concurrency support for production OmenDB with durability
+//! Thread-safe wrappers with read-write locking and WAL integration
 
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::path::Path;
 use anyhow::{Result, Context};
 use crate::index::RecursiveModelIndex;
 use crate::storage::ArrowStorage;
@@ -37,6 +38,19 @@ impl ConcurrentOmenDB {
         }
     }
 
+    /// Create with persistence and WAL support
+    pub fn with_persistence<P: AsRef<Path>>(expected_size: usize, data_dir: P) -> Result<Self> {
+        let storage = ArrowStorage::with_persistence(data_dir)?;
+
+        Ok(Self {
+            index: Arc::new(RwLock::new(RecursiveModelIndex::new(expected_size))),
+            storage: Arc::new(RwLock::new(storage)),
+            active_connections: AtomicUsize::new(0),
+            query_count: AtomicUsize::new(0),
+            write_count: AtomicUsize::new(0),
+        })
+    }
+
     /// Get read access to index
     pub fn read_index(&self) -> Result<RwLockReadGuard<RecursiveModelIndex>> {
         self.index.read()
@@ -61,11 +75,11 @@ impl ConcurrentOmenDB {
             .map_err(|e| anyhow::anyhow!("Failed to acquire storage write lock: {}", e))
     }
 
-    /// Thread-safe insert
+    /// Thread-safe insert with WAL support
     pub fn insert(&self, timestamp: i64, value: f64, series_id: i64) -> Result<()> {
         self.write_count.fetch_add(1, Ordering::Relaxed);
 
-        // First update storage
+        // First update storage (includes WAL write)
         {
             let mut storage = self.write_storage()?;
             storage.insert(timestamp, value, series_id)?;
@@ -78,6 +92,12 @@ impl ConcurrentOmenDB {
         }
 
         Ok(())
+    }
+
+    /// Sync data to disk
+    pub fn sync(&self) -> Result<()> {
+        let storage = self.read_storage()?;
+        storage.sync()
     }
 
     /// Thread-safe point query
@@ -146,7 +166,7 @@ impl ConnectionPool {
     }
 
     /// Get connection from pool
-    pub fn get_connection(&self) -> Result<PooledConnection> {
+    pub fn get_connection(&self) -> Result<PooledConnection<'_>> {
         let metrics = self.db.metrics();
 
         if metrics.active_connections >= self.max_connections {
@@ -165,12 +185,12 @@ impl ConnectionPool {
 }
 
 /// Pooled connection wrapper
-pub struct PooledConnection {
+pub struct PooledConnection<'a> {
     db: Arc<ConcurrentOmenDB>,
-    _guard: ConnectionGuard<'static>,
+    _guard: ConnectionGuard<'a>,
 }
 
-impl PooledConnection {
+impl<'a> PooledConnection<'a> {
     pub fn search(&self, key: i64) -> Result<Option<usize>> {
         self.db.search(key)
     }
