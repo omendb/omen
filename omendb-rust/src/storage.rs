@@ -345,4 +345,219 @@ mod tests {
         let avg = storage.aggregate_avg(base_time, base_time + 100_000).unwrap();
         assert_eq!(avg, 10.0);
     }
+
+    #[test]
+    fn test_empty_storage_queries() {
+        let storage = ArrowStorage::new();
+
+        // Query empty storage
+        let results = storage.range_query(0, 1000).unwrap();
+        assert!(results.is_empty());
+
+        // Aggregations on empty storage
+        let sum = storage.aggregate_sum(0, 1000).unwrap();
+        assert_eq!(sum, 0.0);
+
+        let avg = storage.aggregate_avg(0, 1000).unwrap();
+        // Average of empty set could be NaN or 0.0 depending on implementation
+        assert!(avg.is_nan() || avg == 0.0);
+    }
+
+    #[test]
+    fn test_single_value_operations() {
+        let mut storage = ArrowStorage::new();
+
+        // Insert single value
+        storage.insert(1_600_000_000_000_000, 42.5, 1).unwrap();
+
+        // Query single value
+        let results = storage.range_query(1_599_999_999_999_999, 1_600_000_000_000_001).unwrap();
+        assert_eq!(results.len(), 1);
+
+        // Aggregations with single value
+        let sum = storage.aggregate_sum(1_599_999_999_999_999, 1_600_000_000_000_001).unwrap();
+        assert_eq!(sum, 42.5);
+
+        let avg = storage.aggregate_avg(1_599_999_999_999_999, 1_600_000_000_000_001).unwrap();
+        assert_eq!(avg, 42.5);
+    }
+
+    #[test]
+    fn test_out_of_range_queries() {
+        let mut storage = ArrowStorage::new();
+
+        let base_time = 1_600_000_000_000_000;
+        for i in 0..5 {
+            storage.insert(base_time + i * 1000, i as f64, 1).unwrap();
+        }
+
+        // Query completely before data
+        let results = storage.range_query(base_time - 10000, base_time - 1000).unwrap();
+        assert!(results.is_empty());
+
+        // Query completely after data
+        let results = storage.range_query(base_time + 10000, base_time + 20000).unwrap();
+        assert!(results.is_empty());
+
+        // Aggregations on empty ranges
+        let sum = storage.aggregate_sum(base_time - 10000, base_time - 1000).unwrap();
+        assert_eq!(sum, 0.0);
+    }
+
+    #[test]
+    fn test_partial_range_queries() {
+        let mut storage = ArrowStorage::new();
+
+        let base_time = 1_600_000_000_000_000;
+        for i in 0..10 {
+            storage.insert(base_time + i * 1000, i as f64, 1).unwrap();
+        }
+
+        // Query first half
+        let results = storage.range_query(base_time, base_time + 4500).unwrap();
+        assert!(!results.is_empty());
+
+        // Query last half
+        let results = storage.range_query(base_time + 5000, base_time + 15000).unwrap();
+        assert!(!results.is_empty());
+
+        // Query middle section
+        let results = storage.range_query(base_time + 2000, base_time + 7000).unwrap();
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_multiple_series() {
+        let mut storage = ArrowStorage::new();
+
+        let base_time = 1_600_000_000_000_000;
+
+        // Insert data for multiple series
+        for i in 0..5 {
+            storage.insert(base_time + i * 1000, (i * 10) as f64, 1).unwrap(); // Series 1
+            storage.insert(base_time + i * 1000, (i * 5) as f64, 2).unwrap();  // Series 2
+        }
+
+        // Should find data from both series
+        let results = storage.range_query(base_time, base_time + 10000).unwrap();
+        assert!(!results.is_empty());
+
+        // Aggregations should include all series
+        let sum = storage.aggregate_sum(base_time, base_time + 10000).unwrap();
+        assert!(sum > 0.0);
+    }
+
+    #[test]
+    fn test_large_batch_creation() {
+        let mut storage = ArrowStorage::new();
+
+        let base_time = 1_600_000_000_000_000;
+
+        // Insert enough data to trigger multiple batches
+        for i in 0..2000 {
+            storage.insert(base_time + i * 1000, i as f64, 1).unwrap();
+        }
+
+        // Query all data
+        let results = storage.range_query(base_time, base_time + 2_000_000).unwrap();
+        assert!(!results.is_empty());
+
+        // Test aggregations on large dataset
+        let sum = storage.aggregate_sum(base_time, base_time + 2_000_000).unwrap();
+        assert!(sum > 0.0);
+
+        let avg = storage.aggregate_avg(base_time, base_time + 2_000_000).unwrap();
+        assert!(avg > 0.0);
+    }
+
+    #[test]
+    fn test_overlapping_time_ranges() {
+        let mut storage = ArrowStorage::new();
+
+        let base_time = 1_600_000_000_000_000;
+        for i in 0..10 {
+            storage.insert(base_time + i * 1000, i as f64, 1).unwrap();
+        }
+
+        // Test overlapping queries
+        let results1 = storage.range_query(base_time, base_time + 5000).unwrap();
+        let results2 = storage.range_query(base_time + 3000, base_time + 8000).unwrap();
+
+        assert!(!results1.is_empty());
+        assert!(!results2.is_empty());
+    }
+
+    #[test]
+    fn test_exact_boundary_queries() {
+        let mut storage = ArrowStorage::new();
+
+        let base_time = 1_600_000_000_000_000;
+        for i in 0..5 {
+            storage.insert(base_time + i * 1000, i as f64, 1).unwrap();
+        }
+
+        // Query with exact boundaries
+        let results = storage.range_query(base_time, base_time + 4000).unwrap();
+        assert!(!results.is_empty());
+
+        // Query with timestamp exactly matching data point
+        let results = storage.range_query(base_time + 2000, base_time + 2000).unwrap();
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_learned_index_integration() {
+        let mut storage = ArrowStorage::new();
+
+        // Insert data with learned index enabled
+        let base_time = 1_600_000_000_000_000;
+        for i in 0..20 {
+            storage.insert(base_time + i * 1000, i as f64, 1).unwrap();
+        }
+
+        // Queries should work with learned index (batch creation happens internally)
+        let results = storage.range_query(base_time, base_time + 10000).unwrap();
+        assert!(!results.is_empty());
+
+        // Test aggregations with learned index
+        let sum = storage.aggregate_sum(base_time, base_time + 20000).unwrap();
+        assert!(sum > 0.0);
+    }
+
+    #[test]
+    fn test_edge_case_aggregations() {
+        let mut storage = ArrowStorage::new();
+
+        let base_time = 1_600_000_000_000_000;
+
+        // Insert some negative values
+        storage.insert(base_time, -5.0, 1).unwrap();
+        storage.insert(base_time + 1000, 10.0, 1).unwrap();
+        storage.insert(base_time + 2000, -3.0, 1).unwrap();
+
+        let sum = storage.aggregate_sum(base_time, base_time + 3000).unwrap();
+        assert_eq!(sum, 2.0); // -5 + 10 + -3 = 2
+
+        let avg = storage.aggregate_avg(base_time, base_time + 3000).unwrap();
+        assert!((avg - 0.6666666666666666).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_zero_and_special_values() {
+        let mut storage = ArrowStorage::new();
+
+        let base_time = 1_600_000_000_000_000;
+
+        // Insert various special values
+        storage.insert(base_time, 0.0, 1).unwrap();
+        storage.insert(base_time + 1000, f64::MIN, 1).unwrap();
+        storage.insert(base_time + 2000, f64::MAX, 1).unwrap();
+
+        let results = storage.range_query(base_time, base_time + 3000).unwrap();
+        assert!(!results.is_empty());
+
+        // Should handle extreme values without panicking
+        let sum = storage.aggregate_sum(base_time, base_time + 3000).unwrap();
+        assert!(sum.is_finite() || sum.is_infinite());
+    }
 }

@@ -95,4 +95,150 @@ mod tests {
         assert!(json.contains("healthy"));
         assert!(json.contains("version"));
     }
+
+    #[tokio::test]
+    async fn test_metrics_endpoint_request() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/metrics")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = handle_request(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let headers = response.headers();
+        assert_eq!(headers.get("content-type").unwrap(), "text/plain; version=0.0.4");
+    }
+
+    #[tokio::test]
+    async fn test_health_endpoint_request() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = handle_request(req).await.unwrap();
+        // Should be OK unless error rate is too high
+        assert!(response.status() == StatusCode::OK || response.status() == StatusCode::SERVICE_UNAVAILABLE);
+
+        let headers = response.headers();
+        assert_eq!(headers.get("content-type").unwrap(), "application/json");
+    }
+
+    #[tokio::test]
+    async fn test_ready_endpoint_request() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/ready")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = handle_request(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let headers = response.headers();
+        assert_eq!(headers.get("content-type").unwrap(), "text/plain");
+    }
+
+    #[tokio::test]
+    async fn test_not_found_endpoint() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/unknown")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = handle_request(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_post_method_not_found() {
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/metrics")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = handle_request(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_metrics_content_format() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/metrics")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = handle_request(req).await.unwrap();
+        let body_bytes = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
+
+        // Should contain Prometheus metrics
+        assert!(body_str.contains("omendb_"));
+        assert!(body_str.contains("TYPE"));
+        assert!(body_str.contains("HELP"));
+    }
+
+    #[tokio::test]
+    async fn test_health_json_format() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = handle_request(req).await.unwrap();
+        let body_bytes = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
+
+        // Should be valid JSON with expected fields
+        assert!(body_str.contains("\"healthy\""));
+        assert!(body_str.contains("\"version\""));
+        assert!(body_str.contains("\"uptime_seconds\""));
+        assert!(body_str.contains("\"total_operations\""));
+        assert!(body_str.contains("\"error_rate\""));
+    }
+
+    #[tokio::test]
+    async fn test_ready_response_content() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/ready")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = handle_request(req).await.unwrap();
+        let body_bytes = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
+
+        assert_eq!(body_str, "ready");
+    }
+
+    #[tokio::test]
+    async fn test_different_paths() {
+        let test_cases = vec![
+            ("/", StatusCode::NOT_FOUND),
+            ("/healthz", StatusCode::NOT_FOUND),
+            ("/status", StatusCode::NOT_FOUND),
+            ("/ping", StatusCode::NOT_FOUND),
+            ("/metrics/", StatusCode::NOT_FOUND),
+            ("/health/check", StatusCode::NOT_FOUND),
+        ];
+
+        for (path, expected_status) in test_cases {
+            let req = Request::builder()
+                .method(Method::GET)
+                .uri(path)
+                .body(Body::empty())
+                .unwrap();
+
+            let response = handle_request(req).await.unwrap();
+            assert_eq!(response.status(), expected_status, "Failed for path: {}", path);
+        }
+    }
 }
