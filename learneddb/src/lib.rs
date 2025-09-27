@@ -5,7 +5,15 @@ use std::sync::Arc;
 use std::time::Instant;
 
 mod transaction;
+mod engines;
+
 pub use transaction::{TransactionManager, TxnId, IsolationLevel};
+pub use engines::{
+    IndexEngine, StorageEngine, ComputeEngine, EngineFactory,
+    LearnedLinearEngine, LearnedRMIEngine, BTreeEngine,
+    RocksDBEngine, InMemoryEngine,
+    RustSIMDEngine, ScalarEngine,
+};
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
