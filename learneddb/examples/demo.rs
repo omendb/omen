@@ -1,4 +1,4 @@
-use learneddb::{LearnedDB, IndexType};
+use learneddb::{OmenDB, IndexType};
 use std::time::Instant;
 
 fn main() -> learneddb::Result<()> {
@@ -27,7 +27,7 @@ fn test_index_type(index_type: IndexType, name: &str) -> learneddb::Result<()> {
 
     // Create database with specific index type
     let db_path = format!("./demo_{:?}.db", index_type);
-    let mut db = LearnedDB::open_with_index(&db_path, index_type)?;
+    let mut db = OmenDB::open_with_index(&db_path, index_type)?;
 
     // Generate sequential test data (optimal for learned indexes)
     println!("Generating 50,000 sequential records...");
