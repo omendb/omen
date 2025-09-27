@@ -6,9 +6,13 @@ pub mod index;
 pub mod concurrent;
 pub mod wal;
 pub mod metrics;
+pub mod server;
 
 #[cfg(test)]
 mod tests;
+
+// Scale testing module available for benchmarking
+pub mod scale_tests;
 
 use storage::ArrowStorage;
 use anyhow::Result;

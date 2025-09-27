@@ -18,6 +18,10 @@ path = "src/main.rs"
 name = "bench_arrow"
 path = "src/bench_arrow.rs"
 
+[[bin]]
+name = "scale_test"
+path = "src/bin/scale_test.rs"
+
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1.4"
