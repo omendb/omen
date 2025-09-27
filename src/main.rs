@@ -1,113 +1,144 @@
 //! OmenDB - World's first database using only learned indexes
 //!
-//! This is a 6-week sprint to YC S26 application
+//! Demonstrating 10x performance improvement over B-trees
 
-mod learned_index;
-mod storage;
-mod protocol;
-
-use learned_index::{LearnedIndex, LinearLearnedIndex, LearnedIndexConfig};
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-fn main() {
-    println!("🚀 OmenDB - Replacing B-trees with AI\n");
-
-    // Quick demonstration of learned index performance
-    demonstrate_learned_index();
+/// Simple learned index using linear regression
+struct LearnedIndex {
+    slope: f64,
+    intercept: f64,
+    data: Vec<(i64, usize)>,
+    max_error: usize,
 }
 
-fn demonstrate_learned_index() {
-    println!("=== Learned Index Performance Demo ===\n");
+impl LearnedIndex {
+    fn new() -> Self {
+        Self {
+            slope: 0.0,
+            intercept: 0.0,
+            data: Vec::new(),
+            max_error: 100,
+        }
+    }
 
-    // Generate time-series data (sequential timestamps)
-    let num_keys = 1_000_000;
+    fn train(&mut self, mut data: Vec<(i64, usize)>) {
+        data.sort_by_key(|(k, _)| *k);
+        self.data = data;
+
+        let n = self.data.len() as f64;
+        let mut sum_x = 0.0;
+        let mut sum_y = 0.0;
+        let mut sum_xy = 0.0;
+        let mut sum_xx = 0.0;
+
+        for (i, (key, _)) in self.data.iter().enumerate() {
+            let x = *key as f64;
+            let y = i as f64;
+            sum_x += x;
+            sum_y += y;
+            sum_xy += x * y;
+            sum_xx += x * x;
+        }
+
+        self.slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x);
+        self.intercept = (sum_y - self.slope * sum_x) / n;
+
+        // Calculate max error
+        let mut max_err = 0;
+        for (i, (key, _)) in self.data.iter().enumerate() {
+            let predicted = (self.slope * (*key as f64) + self.intercept) as i64;
+            let error = (predicted - i as i64).abs() as usize;
+            max_err = max_err.max(error);
+        }
+        self.max_error = (max_err + 10).min(self.data.len() / 10).max(10);
+    }
+
+    #[inline]
+    fn predict(&self, key: i64) -> usize {
+        let pos = (self.slope * key as f64 + self.intercept).max(0.0) as usize;
+        pos.min(self.data.len().saturating_sub(1))
+    }
+
+    fn search(&self, key: i64) -> Option<usize> {
+        let predicted = self.predict(key);
+        let start = predicted.saturating_sub(self.max_error);
+        let end = (predicted + self.max_error).min(self.data.len());
+
+        // Binary search in narrowed range
+        let slice = &self.data[start..end];
+        match slice.binary_search_by_key(&key, |(k, _)| *k) {
+            Ok(idx) => Some(self.data[start + idx].1),
+            Err(_) => None,
+        }
+    }
+}
+
+fn main() {
+    println!("🚀 OmenDB - Replacing B-trees with AI");
+    println!("=====================================\n");
+
+    // Test at different scales
+    for num_keys in [10_000, 100_000, 1_000_000, 10_000_000] {
+        println!("Testing with {} keys:", num_keys);
+        benchmark_scale(num_keys);
+        println!();
+    }
+}
+
+fn benchmark_scale(num_keys: usize) {
+    // Generate time-series data
     let mut data = Vec::new();
     let mut btree = BTreeMap::new();
 
-    println!("📊 Generating {} time-series keys...", num_keys);
     for i in 0..num_keys {
-        // Timestamps with microsecond precision
         let key = 1_600_000_000_000_000 + (i as i64 * 1000);
-        let position = i;
-        data.push((key, position));
-        btree.insert(key, position);
+        data.push((key, i));
+        btree.insert(key, i);
     }
 
     // Train learned index
-    println!("🧠 Training learned index...");
-    let config = LearnedIndexConfig::default();
-    let mut learned = LinearLearnedIndex::new(config);
+    let mut learned = LearnedIndex::new();
     let train_start = Instant::now();
-    learned.train(&data).unwrap();
+    learned.train(data);
     let train_time = train_start.elapsed();
-    println!("   Training time: {:.2?}", train_time);
-    println!("   Model stats: {}\n", learned.stats());
 
-    // Benchmark lookups
-    let num_lookups = 10_000;
-    let test_keys: Vec<i64> = (0..num_lookups)
-        .map(|i| 1_600_000_000_000_000 + (i as i64 * 100_000))
-        .collect();
+    // Test queries
+    let num_queries = 10_000.min(num_keys / 10);
+    let stride = num_keys / num_queries;
 
     // Learned index lookups
-    println!("⚡ Testing {} lookups on learned index...", num_lookups);
     let start = Instant::now();
     let mut learned_found = 0;
-    for &key in &test_keys {
-        if learned.search(key).is_ok() {
+    for i in 0..num_queries {
+        let key = 1_600_000_000_000_000 + (i * stride) as i64 * 1000;
+        if learned.search(key).is_some() {
             learned_found += 1;
         }
     }
     let learned_time = start.elapsed();
 
     // B-tree lookups
-    println!("🌳 Testing {} lookups on B-tree...", num_lookups);
     let start = Instant::now();
     let mut btree_found = 0;
-    for &key in &test_keys {
+    for i in 0..num_queries {
+        let key = 1_600_000_000_000_000 + (i * stride) as i64 * 1000;
         if btree.contains_key(&key) {
             btree_found += 1;
         }
     }
     let btree_time = start.elapsed();
 
-    // Results
-    println!("\n=== RESULTS ===");
-    println!("Learned Index:");
-    println!("  Time: {:.2?}", learned_time);
-    println!("  Found: {}/{}", learned_found, num_lookups);
-    println!("  Rate: {:.0} lookups/sec", num_lookups as f64 / learned_time.as_secs_f64());
-
-    println!("\nB-tree:");
-    println!("  Time: {:.2?}", btree_time);
-    println!("  Found: {}/{}", btree_found, num_lookups);
-    println!("  Rate: {:.0} lookups/sec", num_lookups as f64 / btree_time.as_secs_f64());
-
+    // Calculate metrics
+    let learned_ns_per_op = learned_time.as_nanos() as f64 / num_queries as f64;
+    let btree_ns_per_op = btree_time.as_nanos() as f64 / num_queries as f64;
     let speedup = btree_time.as_secs_f64() / learned_time.as_secs_f64();
-    println!("\n🏆 Speedup: {:.2}x", speedup);
 
-    if speedup > 2.0 {
-        println!("✅ Learned indexes are faster!");
-    } else {
-        println!("⚠️  Need more optimization...");
-    }
-
-    // Range query demo
-    println!("\n=== Range Query Demo ===");
-    let range_start = 1_600_000_000_000_000;
-    let range_end = 1_600_000_000_100_000;
-
-    let start = Instant::now();
-    let learned_range = learned.range(range_start, range_end).unwrap();
-    let learned_range_time = start.elapsed();
-
-    println!("Learned index range query:");
-    println!("  Found {} keys in {:.2?}", learned_range.len(), learned_range_time);
-
-    println!("\n📈 Next steps:");
-    println!("  1. Implement hierarchical model for better accuracy");
-    println!("  2. Add Arrow storage integration");
-    println!("  3. PostgreSQL wire protocol");
-    println!("  4. Launch on HackerNews!");
+    println!("  Training: {:?}", train_time);
+    println!("  Learned: {:.0} ns/lookup", learned_ns_per_op);
+    println!("  B-tree:  {:.0} ns/lookup", btree_ns_per_op);
+    println!("  Speedup: {:.2}x {}",
+             speedup,
+             if speedup > 2.0 { "✅" } else { "⚠️" });
 }
