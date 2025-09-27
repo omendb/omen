@@ -7,6 +7,9 @@ use std::time::Instant;
 mod transaction;
 mod engines;
 
+#[cfg(feature = "python")]
+mod python;
+
 pub use transaction::{TransactionManager, TxnId, IsolationLevel};
 pub use engines::{
     IndexEngine, StorageEngine, ComputeEngine, EngineFactory,
@@ -14,6 +17,10 @@ pub use engines::{
     RocksDBEngine, InMemoryEngine,
     RustSIMDEngine, ScalarEngine,
 };
+
+// Re-export PyO3 module when Python feature is enabled
+#[cfg(feature = "python")]
+pub use python::*;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
