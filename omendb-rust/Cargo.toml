@@ -98,6 +98,19 @@ rand = "0.8"
 rand_distr = "0.4"
 glob = "0.3"
 
+# Cloud storage
+aws-config = "1.0"
+aws-sdk-s3 = "1.0"
+async-trait = "0.1"
+
+# SQL and query processing
+datafusion = "33.0"
+sqlparser = "0.39"
+
+# Distributed consensus
+etcd-client = "0.12"
+raft = "0.7"
+
 # CLI tools
 clap = { version = "4.0", features = ["derive"] }
 env_logger = "0.10"
