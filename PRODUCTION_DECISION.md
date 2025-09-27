@@ -1,11 +1,12 @@
 # OmenDB Production Architecture Decision
 
-## Executive Decision: Rust Core + Optional Mojo Acceleration
+## Executive Decision: Pure Rust Implementation
 
 After comprehensive analysis, the recommended production architecture is:
 
-**Primary: Pure Rust implementation for stability**
-**Enhancement: Optional Mojo acceleration module for 10x hot path**
+**Immediate: Pure Rust implementation for production stability**
+**Future (12+ months): Re-evaluate Mojo when it reaches 1.0 and MLIR/GPU execution matures**
+**GPU Option: Consider MAX for inference workloads if needed**
 
 ## Final Architecture
 
@@ -51,11 +52,11 @@ After comprehensive analysis, the recommended production architecture is:
 - Add monitoring and metrics
 - Deploy to staging environment
 
-### Phase 3: Mojo Enhancement (Month 2)
-- Build optional Mojo acceleration module
-- FFI bridge for hot path operations
-- A/B test Rust vs Mojo performance
-- Target: 10x PostgreSQL on sequential workloads
+### Phase 3: Performance Optimization (Month 2)
+- Implement Rust SIMD optimizations
+- Add parallel processing with Rayon
+- Cache-aligned data structures
+- Target: 5-10x PostgreSQL using pure Rust
 
 ### Phase 4: Scale Testing (Month 3)
 - Billion-record benchmarks
@@ -86,18 +87,26 @@ bincode = "1.3"            # Serialization
 lz4 = "1.28"               # Compression
 ```
 
-### Optional Accelerator: Mojo
-**When to Use:**
-- Achieved product-market fit
-- Need >10x performance on specific workloads
-- Have bandwidth for dual-language maintenance
-- Mojo reaches 1.0 stability
+### Future Technology Evaluation (12+ Months)
 
-**Integration Points:**
-- Learned index predictions (pure computation)
-- SIMD distance calculations
-- Batch vector operations
-- GPU kernel acceleration
+#### Mojo (When Mature)
+**Re-evaluate When:**
+- Mojo reaches 1.0 stability
+- MLIR compilation proven in production
+- Clear benchmarks show 2x+ advantage over optimized Rust
+- We have specific bottlenecks Rust cannot solve
+
+**Potential Use Cases:**
+- Ultra-hot path optimizations
+- Custom MLIR kernels for specific workloads
+- CPU/GPU unified execution (when stable)
+
+#### MAX Platform (For GPU Acceleration)
+**Consider For:**
+- Inference workloads (vector similarity)
+- Batch operations on large datasets
+- GPU-accelerated distance calculations
+- Not for core database operations (stay CPU-focused)
 
 ### Client API: Python
 **Rationale:**
@@ -165,15 +174,21 @@ SIMD Operations         N/A           Native         ∞
 
 ## Final Recommendation
 
-**Start with Rust, enhance with Mojo when mature.**
+**Pure Rust implementation with modular architecture for future flexibility.**
 
 This approach:
-1. **Minimizes risk** with production-proven Rust
-2. **Maximizes performance** with optional Mojo
-3. **Enables fast iteration** with established tooling
-4. **Future-proofs** architecture for GPU acceleration
+1. **Ships fast** with production-proven technology
+2. **Achieves target performance** (5-10x) with Rust alone
+3. **Reduces complexity** with single-language stack
+4. **Keeps options open** through modular design
 
-The hybrid architecture positions OmenDB as the fastest learned database while maintaining production stability.
+We will re-evaluate Mojo and MLIR technologies in 12+ months when:
+- The language reaches 1.0 stability
+- Production deployments prove the technology
+- We have specific performance needs Rust cannot meet
+- The business can support dual-language maintenance
+
+For now, Rust gives us everything we need to build a world-class learned database.
 
 ## Next Steps
 
