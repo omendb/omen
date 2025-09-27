@@ -1,6 +1,6 @@
 //! Compute engine implementations for SIMD and vector operations
 
-use super::{ComputeEngine, Result};
+use super::ComputeEngine;
 
 /// Rust SIMD compute engine using packed_simd2
 #[derive(Debug)]

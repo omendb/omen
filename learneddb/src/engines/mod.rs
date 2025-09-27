@@ -1,15 +1,15 @@
 //! Modular engine traits for OmenDB - allows swapping implementations
 
-use std::sync::Arc;
 use std::fmt::Debug;
 
-pub mod index;
+pub mod index_fixed;
 pub mod storage;
 pub mod compute;
 
-pub use index::{IndexEngine, LearnedLinearEngine, LearnedRMIEngine, BTreeEngine};
-pub use storage::{StorageEngine, RocksDBEngine, InMemoryEngine};
-pub use compute::{ComputeEngine, RustSIMDEngine, ScalarEngine};
+pub use index_fixed as index;
+pub use index::{LearnedLinearEngine, LearnedRMIEngine, BTreeEngine};
+pub use storage::{RocksDBEngine, InMemoryEngine};
+pub use compute::{RustSIMDEngine, ScalarEngine};
 
 /// Result type for engine operations
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
