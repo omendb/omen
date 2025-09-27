@@ -15,6 +15,9 @@ mod tests;
 // Scale testing module available for benchmarking
 pub mod scale_tests;
 
+// Integration testing module
+pub mod integration_tests;
+
 use storage::ArrowStorage;
 use anyhow::Result;
 use std::time::Instant;

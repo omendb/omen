@@ -26,6 +26,10 @@ path = "src/bin/scale_test.rs"
 name = "secure_server"
 path = "src/bin/secure_server.rs"
 
+[[bin]]
+name = "integration_test"
+path = "src/bin/integration_test.rs"
+
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1.4"
