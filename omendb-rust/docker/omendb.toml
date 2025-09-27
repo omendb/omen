@@ -1,0 +1,65 @@
+# OmenDB Production Configuration
+# Docker container configuration file
+
+[database]
+# Database settings
+name = "omendb_production"
+data_dir = "/var/lib/omendb/data"
+max_memory_mb = 1024
+expected_size = 1000000
+
+[storage]
+# Arrow storage configuration
+enable_compression = true
+batch_size = 50000
+sync_interval_ms = 5000
+
+[index]
+# Learned index configuration
+model_type = "recursive"
+max_error = 100
+retrain_threshold = 100000
+
+[wal]
+# Write-ahead log settings
+enabled = true
+sync_on_write = true
+max_file_size_mb = 100
+rotation_interval_hours = 24
+
+[http]
+# HTTP server configuration
+host = "0.0.0.0"
+port = 3000
+request_timeout_ms = 30000
+max_concurrent_requests = 1000
+
+[security]
+# Authentication and security
+auth_enabled = true
+session_timeout_seconds = 3600
+tls_enabled = false
+tls_cert_path = "/etc/omendb/certs/server.crt"
+tls_key_path = "/etc/omendb/certs/server.key"
+
+[monitoring]
+# Metrics and monitoring
+prometheus_enabled = true
+prometheus_port = 9090
+health_check_interval_ms = 10000
+log_level = "info"
+log_format = "json"
+
+[performance]
+# Performance tuning
+worker_threads = 4
+io_threads = 2
+enable_simd = true
+prefetch_size = 1000
+
+[limits]
+# Resource limits
+max_connections = 100
+max_query_duration_ms = 60000
+max_insert_batch_size = 10000
+memory_limit_mb = 2048

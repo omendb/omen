@@ -8,6 +8,7 @@ pub mod wal;
 pub mod metrics;
 pub mod server;
 pub mod security;
+pub mod backup;
 
 #[cfg(test)]
 mod tests;

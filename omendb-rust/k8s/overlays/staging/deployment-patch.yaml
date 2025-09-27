@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omendb
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+      - name: omendb
+        image: omendb:staging
+        env:
+        - name: RUST_LOG
+          value: info
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "750m"
+          limits:
+            memory: "3Gi"
+            cpu: "3000m"
