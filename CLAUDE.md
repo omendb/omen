@@ -1,12 +1,13 @@
 # OmenDB Development Context - STRATEGIC PIVOT
 
-## 🎯 Strategy Validated by Comprehensive Market Research (September 26, 2025)
+## 🎯 FINAL DECISION: OmenDB - Pure Learned Index Database (September 26, 2025)
 
-**Market Validated**: $104.5B database market + $22.8B ETL opportunity (real numbers)
-**Competition Confirmed**: CockroachDB $5B, SingleStore $500M exit, shows viable market
-**Technology Proven**: LearnedKV 4.32x speedup, 2025 research validates approach
-**Funding Pathway**: YC 75+ database companies, Databricks $10B round, VC appetite strong
-**Next Step**: Large-scale validation (50M keys) on 4090 GPU hardware
+**Product**: World's first database using ONLY learned indexes (no B-trees)
+**Target**: Time-series databases ($8B market) - IoT, monitoring, financial data
+**Stack**: Full Rust (Axum + custom learned index + Arrow storage)
+**Monetization**: SaaS platform ($500-10K/month usage-based)
+**Timeline**: 6 weeks to YC demo with 3 pilot customers
+**Moat**: We're the only ones with production learned indexes
 
 ## Market Research Findings
 
@@ -30,17 +31,19 @@
 - **Yugabyte**: $1.3B valuation, $188M Series C, ~$30M ARR
 - **Market gap**: PostgreSQL-compatible HTAP with learned optimization
 
-## Strategic Architecture
+## OmenDB Architecture (Final Decision)
 
 ```
-OmenDB 2.0: Unified OLTP/OLAP Database
-├── core/ (THIS REPO - Research complete, architecture designed)
-│   ├── src/                    # Core learned index library (proven at scale)
-│   ├── learneddb/              # Foundation for unified engine
-│   ├── external/papers/        # Research backing (LearnedKV, BLI, etc.)
-│   └── test_proper_learned.py  # Proper scale testing (50M keys)
-├── pg-learned/                 # PUBLIC - Extension for PostgreSQL
-└── website/                    # Updated for unified OLTP/OLAP messaging
+OmenDB: Pure Learned Index Database (Rust)
+├── core/ (THIS REPO)
+│   ├── omendb-rust/            # Main Rust implementation
+│   │   ├── learned_index/      # Core IP: Hierarchical learned indexes
+│   │   ├── storage/            # Arrow columnar storage
+│   │   └── protocol/           # PostgreSQL wire protocol
+│   ├── internal/               # Strategy and research docs
+│   └── benchmarks/             # Performance comparisons vs InfluxDB
+├── pg-learned/                 # Marketing: PostgreSQL extension demo
+└── deployment/                 # Docker + Kubernetes configs
 ```
 
 ## Recommended Strategy: Unified OLTP/OLAP Database
