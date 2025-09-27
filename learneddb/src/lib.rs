@@ -4,6 +4,9 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
+mod transaction;
+pub use transaction::{TransactionManager, TxnId, IsolationLevel};
+
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Key metadata for learned index optimization
@@ -23,6 +26,9 @@ pub struct OmenDB {
 
     // Cold path: RocksDB for persistence and overflow (FALLBACK)
     cold_storage: Arc<RocksDB>,
+
+    // Transaction support
+    txn_manager: Arc<TransactionManager>,
 
     // Configuration
     use_learned_index: bool,
@@ -47,14 +53,16 @@ impl OmenDB {
         opts.set_max_write_buffer_number(3);
         opts.set_target_file_size_base(64 * 1024 * 1024); // 64MB
 
-        let storage = RocksDB::open(&opts, path)?;
+        let storage = Arc::new(RocksDB::open(&opts, path)?);
+        let txn_manager = Arc::new(TransactionManager::new(Arc::clone(&storage)));
 
         Ok(OmenDB {
             hot_data: Vec::new(),
             hot_linear_index: None,
             hot_rmi_index: None,
             hot_capacity: 100_000, // Keep 100K items in memory for O(1) access
-            cold_storage: Arc::new(storage),
+            cold_storage: storage,
+            txn_manager,
             use_learned_index: false,
             total_keys: 0,
             index_type: IndexType::None,
@@ -355,6 +363,41 @@ impl OmenDB {
         }
 
         Ok(())
+    }
+
+    /// Begin a new transaction
+    pub fn begin_transaction(&self, isolation: IsolationLevel) -> TxnId {
+        self.txn_manager.begin(isolation)
+    }
+
+    /// Commit a transaction
+    pub fn commit(&self, txn_id: TxnId) -> Result<()> {
+        self.txn_manager.commit(txn_id)
+            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)
+    }
+
+    /// Rollback a transaction
+    pub fn rollback(&self, txn_id: TxnId) -> Result<()> {
+        self.txn_manager.rollback(txn_id)
+            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)
+    }
+
+    /// Get value within a transaction
+    pub fn txn_get(&self, txn_id: TxnId, key: i64) -> Result<Option<Vec<u8>>> {
+        self.txn_manager.get(txn_id, key)
+            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)
+    }
+
+    /// Put value within a transaction
+    pub fn txn_put(&self, txn_id: TxnId, key: i64, value: Vec<u8>) -> Result<()> {
+        self.txn_manager.put(txn_id, key, value)
+            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)
+    }
+
+    /// Delete value within a transaction
+    pub fn txn_delete(&self, txn_id: TxnId, key: i64) -> Result<()> {
+        self.txn_manager.delete(txn_id, key)
+            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)
     }
 
     /// Get database statistics
