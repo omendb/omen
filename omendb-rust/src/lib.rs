@@ -7,6 +7,7 @@ pub mod concurrent;
 pub mod wal;
 pub mod metrics;
 pub mod server;
+pub mod security;
 
 #[cfg(test)]
 mod tests;
