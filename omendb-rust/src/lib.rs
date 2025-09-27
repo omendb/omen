@@ -1,8 +1,12 @@
 //! OmenDB Library - Pure Learned Index Database
-//! Week 3: Arrow storage integration
+//! Production hardening: concurrency, testing, monitoring
 
 pub mod storage;
 pub mod index;
+pub mod concurrent;
+
+#[cfg(test)]
+mod tests;
 
 use storage::ArrowStorage;
 use anyhow::Result;
