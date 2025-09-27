@@ -128,6 +128,9 @@ impl WalManager {
     pub fn open(&self) -> Result<()> {
         let wal_path = self.current_wal_path();
 
+        // Check if WAL exists before opening
+        let exists_before_open = wal_path.exists();
+
         let file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -138,7 +141,7 @@ impl WalManager {
         *self.writer.lock().unwrap() = Some(writer);
 
         // Recover sequence number from existing WAL
-        if wal_path.exists() {
+        if exists_before_open {
             let last_seq = self.find_last_sequence(&wal_path)?;
             *self.sequence.write().unwrap() = last_seq + 1;
         }
@@ -283,13 +286,30 @@ impl WalManager {
 
                 let len = u32::from_le_bytes(len_bytes) as usize;
 
+                // Sanity check: WAL entries shouldn't be huge
+                if len > 10_000_000 {  // 10MB max per entry
+                    stats.corrupted_entries += 1;
+                    break;  // Rest of file likely corrupted
+                }
+
                 // Read entry data
                 let mut data = vec![0u8; len];
-                reader.read_exact(&mut data)?;
+                match reader.read_exact(&mut data) {
+                    Ok(_) => {},
+                    Err(_) => {
+                        stats.corrupted_entries += 1;
+                        break;  // Can't continue reading
+                    }
+                }
 
                 // Deserialize entry
-                let entry: WalEntry = bincode::deserialize(&data)
-                    .context("Failed to deserialize WAL entry")?;
+                let entry: WalEntry = match bincode::deserialize(&data) {
+                    Ok(e) => e,
+                    Err(_) => {
+                        stats.corrupted_entries += 1;
+                        continue;
+                    }
+                };
 
                 // Verify checksum
                 if !entry.verify_checksum() {
