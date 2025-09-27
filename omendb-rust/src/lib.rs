@@ -5,12 +5,15 @@ pub mod storage;
 pub mod index;
 pub mod concurrent;
 pub mod wal;
+pub mod metrics;
 
 #[cfg(test)]
 mod tests;
 
 use storage::ArrowStorage;
 use anyhow::Result;
+use std::time::Instant;
+use crate::metrics::{record_search, record_insert, record_search_failure, record_insert_failure};
 
 /// Main OmenDB structure combining learned index and Arrow storage
 pub struct OmenDB {
@@ -36,25 +39,48 @@ impl OmenDB {
 
     /// Insert time-series data
     pub fn insert(&mut self, timestamp: i64, value: f64, series_id: i64) -> Result<()> {
+        let start = Instant::now();
+
         // Insert into storage
-        self.storage.insert(timestamp, value, series_id)?;
+        let result = self.storage.insert(timestamp, value, series_id);
 
-        // Update learned index
-        self.index.add_key(timestamp);
+        if result.is_ok() {
+            // Update learned index
+            self.index.add_key(timestamp);
 
-        Ok(())
+            // Record success metric
+            let duration = start.elapsed().as_secs_f64();
+            record_insert(duration);
+        } else {
+            // Record failure metric
+            record_insert_failure();
+        }
+
+        result
     }
 
     /// Point query using learned index
     pub fn get(&self, timestamp: i64) -> Option<f64> {
+        let start = Instant::now();
+
         // Use learned index to find position
-        if let Some(_pos) = self.index.search(timestamp) {
+        let result = if let Some(_pos) = self.index.search(timestamp) {
             // In real implementation, would fetch from storage
             // For now, return placeholder
             Some(0.0)
         } else {
             None
+        };
+
+        // Record metrics
+        let duration = start.elapsed().as_secs_f64();
+        if result.is_some() {
+            record_search(duration);
+        } else {
+            record_search_failure();
         }
+
+        result
     }
 
     /// Range query using learned index
