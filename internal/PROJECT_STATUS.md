@@ -137,12 +137,13 @@ Success Metric: 3 LOIs + 100 HN upvotes
 5. ✅ Achieve 8.39x speedup (exceeds target!)
 6. ✅ Decision: CONTINUE with pure learned approach
 
-### **Week 3 Tasks (Sept 28 - Oct 10)**
-1. [ ] Begin Arrow storage integration
-2. [ ] Implement range queries on learned index
-3. [ ] Scale testing to 50M+ keys
-4. [ ] Basic aggregations (sum, avg, min, max)
-5. [ ] Time-series optimized data layout
+### **Week 3 Progress (Sept 27 - In Progress)**
+1. ✅ Arrow storage integration complete
+2. ✅ Range queries on learned index implemented
+3. ✅ Time-series aggregations (SUM, AVG) working
+4. ✅ Columnar storage with Parquet support
+5. [ ] Scale testing to 50M+ keys (next)
+6. [ ] MIN/MAX aggregations (pending)
 
 ---
 
