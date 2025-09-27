@@ -20,13 +20,19 @@
 - **Growth Driver**: Real-time fraud detection, inventory, personalization
 - **Gap**: Traditional ETL can't meet latency requirements
 
-### Competition Analysis
-| Company | Valuation | Approach | Weakness |
-|---------|-----------|----------|----------|
-| SingleStore | $1.35B | MySQL-compatible HTAP | Proprietary, expensive |
-| TiDB | $3B | Distributed NewSQL | Complex deployment |
-| Regatta | Early | Postgres-compatible HTAP | New, unproven |
-| **OmenDB** | **Startup** | **Postgres + Arrow + Learned** | **Need to execute** |
+### Competition Analysis (Updated Sept 2025)
+| Company | Valuation | Recent Funding | Revenue | Capital Efficiency |
+|---------|-----------|----------------|---------|------------------- |
+| **CockroachDB** | **$5.0B** | $278M Series F | ~$200M ARR | Excellent |
+| **SingleStore** | **$1.3B** | $500M PE Acquisition | $110M ARR | Good |
+| **TiDB (PingCAP)** | TBD | $270M Series D | $13.1M ARR | **Poor** |
+| **Yugabyte** | **$1.3B** | $188M Series C | ~$30M ARR | Moderate |
+| **OmenDB** | **Pre-seed** | **Bootstrap** | **$0** | **TBD** |
+
+**Key Insights:**
+- ✅ **Market validated**: $500M+ exits and $5B valuations prove market
+- ✅ **Opportunity exists**: TiDB shows poor capital efficiency ($641M raised, $13M revenue)
+- ✅ **Timing optimal**: Recent PE acquisition of SingleStore shows maturity
 
 ## Technical Architecture
 
@@ -53,12 +59,22 @@
 - **Learned Components**: Hot/cold placement, query routing
 - **Language**: Rust for performance, safety
 
-### Learned Index Integration
-Instead of replacing traditional indexes, use them for:
+### Learned Index Integration (2025 Research Validated)
+Based on latest papers (LearnedKV 2024, LITune 2025), use learned models for:
+
 1. **Hot/Cold Data Placement**: Predict which data will be queried
+   - *Research*: LearnedKV shows 4.32x speedup with tiered approach
 2. **Query Routing**: OLTP vs OLAP engine selection
+   - *Research*: LITune RL approach optimizes routing decisions
 3. **Cache Management**: Intelligent prefetching
+   - *Research*: DeeperImpact optimizes sparse data structures
 4. **Storage Tiering**: Memory vs SSD vs object store
+   - *Research*: Proven at 50M+ keys with Zipfian workloads
+
+**Key Research Findings:**
+- ✅ **Hybrid approaches work**: LSM + Learned (not pure learned)
+- ✅ **Scale matters**: Benefits only appear at 10M+ keys
+- ✅ **Active research**: 5+ major papers in 2024-2025
 
 ## Competitive Advantages
 
@@ -177,6 +193,44 @@ Instead of replacing traditional indexes, use them for:
 - **Year 1**: $500K ARR (50 Pro customers)
 - **Year 2**: $5M ARR (500 Pro + 10 Enterprise)
 - **Year 3**: $25M ARR (Enterprise focus)
+
+## Funding Strategy & Market Validation
+
+### **Funding Landscape Analysis (2024-2025)**
+
+**Database Startup Success Stories:**
+- **Databricks**: $10B round (largest 2024 database deal)
+- **Pinecone**: $750M valuation (vector DB market leader)
+- **Weaviate**: $50M Series B funding
+- **YC Portfolio**: 75+ data engineering startups funded
+
+**Market Growth Drivers:**
+- Database software market: **$104.5B by 2025** (fastest-growing software category)
+- AI applications driving 31% of global VC funding
+- Strong VC appetite for database infrastructure
+
+### **Funding Timeline**
+
+**Phase 1: Bootstrap/Angel ($500K - Month 2)**
+- **Investors**: Technical angels, PostgreSQL ecosystem
+- **Valuation**: $5M pre-money
+- **Use**: Team expansion, customer development
+- **Milestone**: Proven learned index performance at scale
+
+**Phase 2: YC Application (Month 6)**
+- **Target**: S26 batch (Summer 2026)
+- **Requirements**: 10 pilot customers, performance benchmarks
+- **Advantage**: YC's database expertise and enterprise connections
+
+**Phase 3: Series A ($10M+ - Month 12)**
+- **Lead VCs**: Andreessen Horowitz, Index Ventures, Battery Ventures
+- **Valuation**: $50M+ (following SingleStore trajectory)
+- **Requirements**: $1M ARR, 50+ customers, proven unit economics
+
+### **Exit Strategy**
+- **IPO Path**: Follow CockroachDB ($5B valuation) model
+- **Acquisition**: PE buyers (SingleStore $500M exit) or strategic (Snowflake, Databricks)
+- **Timeline**: 7-10 years to exit, $1B+ potential valuation
 
 ## Risk Mitigation
 

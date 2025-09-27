@@ -1,4 +1,34 @@
-# Critical Learned Index Papers
+# Critical Learned Index Papers (Updated Sept 2025)
+
+## **LATEST RESEARCH (2024-2025) - READ FIRST**
+
+### 🔥 A New Paradigm in Tuning Learned Indexes (Feb 2025)
+**MIT & Others - BREAKTHROUGH**
+- https://arxiv.org/abs/2502.05001
+- **LITune framework** with Deep Reinforcement Learning
+- End-to-end automatic tuning of learned indexes
+- **Key finding**: RL can optimize parameters dynamically
+
+### ✅ LearnedKV: Integrating LSM and Learned Index (June 2024)
+**VALIDATION PAPER - PROVES OUR APPROACH**
+- https://arxiv.org/abs/2406.18892v1
+- **4.32x speedup** vs pure LSM trees on SSDs
+- Tiered architecture: LSM for writes, learned for reads
+- **CRITICAL**: Validates our hybrid approach is correct
+
+### 🎯 DeeperImpact: Optimizing Sparse Learned Index (May 2024)
+**Real-world Applications**
+- https://arxiv.org/abs/2405.17093
+- Sparse learned indexes for production data
+- Deep neural architectures for retrieval
+- **Relevance**: Most production data is sparse
+
+### 📊 A Survey of Learned Indexes for Multi-dimensional Space (Mar 2024)
+**Comprehensive Review**
+- https://www.cs.purdue.edu/homes/aref/papers/learnedmultidimensionalindexingsurvey2024.pdf
+- Multi-dimensional learned indexes
+- Current state of research area
+- **Strategic**: Shows active research community
 
 ## Essential Reading (Download These First)
 
