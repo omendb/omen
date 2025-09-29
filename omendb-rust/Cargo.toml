@@ -38,6 +38,10 @@ path = "src/bin/backup_tool.rs"
 name = "test_backup"
 path = "src/bin/test_backup.rs"
 
+[[bin]]
+name = "benchmark_vs_btree"
+path = "src/bin/benchmark_vs_btree.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
