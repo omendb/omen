@@ -9,8 +9,6 @@ pub mod metrics;
 pub mod server;
 pub mod security;
 pub mod backup;
-pub mod storage_backend;
-pub mod query_engine;
 
 #[cfg(test)]
 mod tests;
