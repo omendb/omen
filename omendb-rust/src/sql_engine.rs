@@ -8,7 +8,7 @@ use anyhow::{Result, anyhow};
 use arrow::datatypes::{DataType, Field, Schema};
 use sqlparser::ast::{
     ColumnDef, DataType as SqlDataType, Expr, ObjectName, Query, Select,
-    SelectItem, SetExpr, Statement, TableFactor, Values,
+    SelectItem, SetExpr, Statement, TableFactor, TableWithJoins, Values,
 };
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -39,11 +39,11 @@ impl SqlEngine {
         }
 
         match &statements[0] {
-            Statement::CreateTable(create_stmt) => {
-                self.execute_create_table(&create_stmt.name, &create_stmt.columns)
+            Statement::CreateTable(stmt) => {
+                self.execute_create_table(&stmt.name, &stmt.columns)
             }
-            Statement::Insert { table_name, source, .. } => {
-                self.execute_insert(table_name, source)
+            Statement::Insert(stmt) => {
+                self.execute_insert(&stmt.table_name, &stmt.source)
             }
             Statement::Query(query) => self.execute_query(query),
             _ => Err(anyhow!("Unsupported SQL statement")),
@@ -65,7 +65,7 @@ impl SqlEngine {
                 matches!(opt.option, sqlparser::ast::ColumnOption::NotNull)
             });
 
-            // Check if this is the primary key (simplified check)
+            // Check if this is the primary key
             if column.options.iter().any(|opt| {
                 matches!(&opt.option, sqlparser::ast::ColumnOption::Unique { .. })
             }) {
@@ -180,7 +180,7 @@ impl SqlEngine {
     fn sql_type_to_arrow(sql_type: &SqlDataType) -> Result<DataType> {
         match sql_type {
             SqlDataType::BigInt(_) | SqlDataType::Int8(_) => Ok(DataType::Int64),
-            SqlDataType::Double(_) | SqlDataType::Float8 => Ok(DataType::Float64),
+            SqlDataType::Double | SqlDataType::Float8 => Ok(DataType::Float64),
             SqlDataType::Varchar(_) | SqlDataType::Text | SqlDataType::String(_) => Ok(DataType::Utf8),
             SqlDataType::Timestamp(_, _) => Ok(DataType::Timestamp(
                 arrow::datatypes::TimeUnit::Microsecond,
