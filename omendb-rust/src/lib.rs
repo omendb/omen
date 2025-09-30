@@ -1,6 +1,13 @@
 //! OmenDB Library - Pure Learned Index Database
 //! Production hardening: concurrency, testing, monitoring
 
+// New architecture (proper multi-table database)
+pub mod value;
+pub mod row;
+pub mod table;
+pub mod catalog;
+
+// Existing modules (will be refactored)
 pub mod storage;
 pub mod index;
 pub mod concurrent;
