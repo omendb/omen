@@ -81,13 +81,19 @@ impl RecursiveModelIndex {
         }
 
         // Train root model to predict which second-layer model to use
+        // Normalize keys to avoid floating-point precision issues
+        let min_key = self.data.first().map(|(k, _)| *k as f64).unwrap_or(0.0);
+        let max_key = self.data.last().map(|(k, _)| *k as f64).unwrap_or(0.0);
+        let key_range = (max_key - min_key).max(1.0);
+
         let mut sum_x = 0.0;
         let mut sum_y = 0.0;
         let mut sum_xy = 0.0;
         let mut sum_xx = 0.0;
 
         for (i, (key, _)) in self.data.iter().enumerate() {
-            let x = *key as f64;
+            // Normalize key to [0, 1] range
+            let x = (*key as f64 - min_key) / key_range;
             let y = (i as f64 / n as f64) * self.num_second_models as f64;
             sum_x += x;
             sum_y += y;
@@ -98,8 +104,12 @@ impl RecursiveModelIndex {
         let n_f = n as f64;
         let denominator = n_f * sum_xx - sum_x * sum_x;
         if denominator.abs() > 1e-10 {
-            self.root.slope = (n_f * sum_xy - sum_x * sum_y) / denominator;
-            self.root.intercept = (sum_y - self.root.slope * sum_x) / n_f;
+            let normalized_slope = (n_f * sum_xy - sum_x * sum_y) / denominator;
+            let normalized_intercept = (sum_y - normalized_slope * sum_x) / n_f;
+
+            // Denormalize for actual use
+            self.root.slope = normalized_slope / key_range;
+            self.root.intercept = normalized_intercept - self.root.slope * min_key;
         }
 
         self.root.start_idx = 0;
@@ -241,7 +251,8 @@ impl RecursiveModelIndex {
             return Some(self.data[global_pos].1);
         }
 
-        if start < end && end - start <= 16 {
+        // Always binary search in the window, regardless of size
+        if start < end {
             let slice = &self.data[start..end];
             match slice.binary_search_by_key(&key, |(k, _)| *k) {
                 Ok(idx) => Some(self.data[start + idx].1),
