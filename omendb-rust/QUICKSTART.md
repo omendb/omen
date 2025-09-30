@@ -114,6 +114,15 @@ fn main() -> Result<()> {
         _ => {}
     }
 
+    // Query with WHERE clause (uses learned index)
+    let result = engine.execute("SELECT * FROM metrics WHERE timestamp > 500000")?;
+    match result {
+        ExecutionResult::Selected { rows, .. } => {
+            println!("✅ Found {} readings with timestamp > 500000", rows);
+        }
+        _ => {}
+    }
+
     // Show database stats
     let tables = engine.catalog().list_tables();
     println!("\nDatabase has {} table(s)", tables.len());

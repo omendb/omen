@@ -16,7 +16,7 @@ Build the world's first production database using **only learned indexes** (no B
 - **3x less memory** than B-tree indexes ✅
 - **Production-ready** with full SQL support ✅
 
-## ✅ Completed Features (13/15 tasks)
+## ✅ Completed Features (14/17 tasks)
 
 ### 1. Core Database Architecture ✅
 - **Multi-table database** with catalog system
@@ -29,7 +29,8 @@ Build the world's first production database using **only learned indexes** (no B
 - **SQL parser** (sqlparser-rs integration)
 - **CREATE TABLE** with schema definition
 - **INSERT** with batch support
-- **SELECT** queries (full table scans)
+- **SELECT** queries with WHERE clause support
+- **WHERE clause** with learned index optimization
 - **Multi-table queries** (each table independent)
 
 ### 3. Durability & Persistence ✅
@@ -40,9 +41,10 @@ Build the world's first production database using **only learned indexes** (no B
 - **Drop implementation** ensures data flushed
 
 ### 4. Testing & Quality ✅
-- **142 tests passing** (100% pass rate)
+- **150 tests passing** (100% pass rate)
 - **Unit tests** for all components
 - **Integration tests** for multi-table operations
+- **WHERE clause tests** (8 comprehensive tests)
 - **WAL recovery tests**
 - **Scale tests** (1M+ keys)
 - **Performance regression tests**
@@ -60,7 +62,7 @@ Build the world's first production database using **only learned indexes** (no B
 - **3 runnable examples**: SQL, multi-table, programmatic API
 - **Inline code documentation**
 
-## 🚧 Remaining Work (2/15 tasks)
+## 🚧 Remaining Work (3/17 tasks)
 
 ### 1. PostgreSQL Wire Protocol (Optional)
 **Priority: Medium**
@@ -121,7 +123,8 @@ omendb-rust/
 ✅ **Full SQL Database**
 - Create multiple tables with different schemas
 - Insert data with learned index optimization
-- Query data from any table
+- Query data from any table with WHERE clause support
+- WHERE clause uses learned index for primary key queries
 - Automatic persistence and recovery
 
 ✅ **Learned Indexes**
@@ -146,10 +149,10 @@ omendb-rust/
 ### What Doesn't Work Yet
 
 ⚠️ **SQL Limitations**
-- No WHERE clause (full table scans only)
 - No JOIN operations
 - No aggregates (SUM, AVG, COUNT)
 - No UPDATE or DELETE
+- WHERE clause only supports simple predicates (=, >, <, >=, <=, AND)
 
 ⚠️ **Index Limitations**
 - Sequential data performs best
@@ -257,7 +260,7 @@ cargo run --example programmatic_api
 2. ✅ **Complete** - SQL interface working
 3. ✅ **Complete** - Performance validated (9.85x)
 4. ✅ **Complete** - Documentation and examples
-5. ❓ **Optional** - WHERE clause support (improves demo)
+5. ✅ **Complete** - WHERE clause support with learned index optimization
 
 ### Post-Demo (Funding Dependent)
 
@@ -285,11 +288,12 @@ cargo run --example programmatic_api
 ## 📊 Metrics for Tracking
 
 ### Technical Metrics
-- ✅ Test coverage: 142 tests, 100% passing
+- ✅ Test coverage: 150 tests, 100% passing
 - ✅ Performance: 9.85x vs B-trees
 - ✅ Throughput: 102K ops/sec
 - ✅ Latency: 183μs average
 - ✅ Code quality: All warnings cleaned
+- ✅ WHERE clause: Learned index optimization working
 
 ### Product Metrics (TBD)
 - Pilot customers: 0 (target: 3)

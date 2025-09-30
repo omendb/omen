@@ -8,7 +8,7 @@ OmenDB is a high-performance, multi-table database that replaces traditional B-t
 
 - **Learned Indexes Only**: No B-trees. Pure learned index architecture (Recursive Model Index)
 - **9.85x Performance**: Validated speedup over B-trees on real-world time-series data
-- **Full SQL Support**: Standard SQL interface (CREATE TABLE, INSERT, SELECT)
+- **Full SQL Support**: Standard SQL interface (CREATE TABLE, INSERT, SELECT with WHERE clause)
 - **Multi-Table Database**: Complete catalog system with schema-agnostic tables
 - **Columnar Storage**: Apache Arrow/Parquet for efficient data storage
 - **Production Ready**: WAL, persistence, crash recovery, comprehensive testing
@@ -159,6 +159,11 @@ match result {
     }
     _ => {}
 }
+
+// Query with WHERE clause (uses learned index for primary key)
+let result = engine.execute("SELECT * FROM sensors WHERE timestamp = 2000")?;
+// Range query (also uses learned index)
+let result = engine.execute("SELECT * FROM sensors WHERE timestamp > 1000 AND timestamp < 3000")?;
 ```
 
 ### Multi-Table Database
@@ -324,14 +329,14 @@ let catalog = Catalog::new_with_wal(data_dir, false)?;
 ### Completed ✅
 - [x] Multi-table database architecture
 - [x] SQL interface (CREATE, INSERT, SELECT)
+- [x] WHERE clause support with learned index optimization
 - [x] Learned indexes for all tables
 - [x] Write-ahead log & crash recovery
-- [x] Comprehensive testing (142 tests)
+- [x] Comprehensive testing (150 tests)
 - [x] Performance benchmarks (9.85x validated)
 
 ### In Progress 🚧
 - [ ] PostgreSQL wire protocol
-- [ ] WHERE clause support
 - [ ] JOIN operations
 - [ ] Aggregate functions (SUM, AVG, COUNT)
 
