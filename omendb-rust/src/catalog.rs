@@ -159,6 +159,15 @@ impl Catalog {
     }
 }
 
+impl Drop for Catalog {
+    fn drop(&mut self) {
+        // Persist all tables to disk when catalog is dropped
+        for table in self.tables.values_mut() {
+            let _ = table.persist();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -29,6 +29,10 @@ pub mod scale_tests;
 // Integration testing module
 pub mod integration_tests;
 
+// Comprehensive multi-table integration tests
+#[cfg(test)]
+mod multi_table_tests;
+
 use storage::ArrowStorage;
 use anyhow::Result;
 use std::time::Instant;
