@@ -42,6 +42,10 @@ path = "src/bin/test_backup.rs"
 name = "benchmark_vs_btree"
 path = "src/bin/benchmark_vs_btree.rs"
 
+[[bin]]
+name = "sql_demo"
+path = "src/bin/sql_demo.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
