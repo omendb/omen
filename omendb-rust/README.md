@@ -237,13 +237,15 @@ let result = table.get(&Value::Int64(1))?;
 - ✅ **ORDER BY** - Sort results by any column (ASC/DESC)
 - ✅ **LIMIT** - Limit number of results
 - ✅ **OFFSET** - Skip rows for pagination
+- ✅ **Aggregates** (COUNT, SUM, AVG, MIN, MAX) - With NULL handling
+- ✅ **GROUP BY** - Single and multiple column grouping
 
 ### Currently Not Supported (v0.1.0)
 - ❌ **UPDATE** - Not yet implemented
 - ❌ **DELETE** - Not yet implemented
 - ❌ **JOIN** operations
-- ❌ **Aggregates** (COUNT, SUM, AVG, MIN, MAX)
-- ❌ **GROUP BY**
+- ❌ **HAVING** clause
+- ❌ **DISTINCT**
 - ❌ **OR** operator, **IN**, **LIKE**, **BETWEEN**
 - ❌ **Subqueries**, **CTEs** (Common Table Expressions)
 - ❌ **Transactions** (BEGIN, COMMIT, ROLLBACK)
