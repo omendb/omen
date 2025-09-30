@@ -11,8 +11,11 @@ pub struct TableIndex {
     /// Underlying learned index (works with i64)
     learned_index: RecursiveModelIndex,
 
-    /// Mapping from i64 key to row position
+    /// Mapping from i64 key to row position (KEPT SORTED by key)
     key_to_position: Vec<(i64, usize)>,
+
+    /// Whether the index needs retraining
+    needs_retrain: bool,
 }
 
 impl TableIndex {
@@ -21,39 +24,78 @@ impl TableIndex {
         Self {
             learned_index: RecursiveModelIndex::new(capacity),
             key_to_position: Vec::new(),
+            needs_retrain: false,
         }
     }
 
     /// Add key-value pair to index
     pub fn insert(&mut self, key: &Value, position: usize) -> Result<()> {
-        // Convert key to i64
         let key_i64 = key.to_i64()?;
 
-        // Add to learned index
-        self.learned_index.add_key(key_i64);
+        // Find insertion point using binary search to maintain sorted order
+        let insert_idx = match self.key_to_position.binary_search_by_key(&key_i64, |(k, _)| *k) {
+            Ok(idx) => {
+                // Key already exists - update position
+                self.key_to_position[idx] = (key_i64, position);
+                return Ok(());
+            }
+            Err(idx) => idx,
+        };
 
-        // Store mapping
-        self.key_to_position.push((key_i64, position));
+        // Insert at correct position to keep sorted
+        self.key_to_position.insert(insert_idx, (key_i64, position));
+        self.needs_retrain = true;
+
+        // Retrain periodically (every 1000 inserts)
+        if self.key_to_position.len() % 1000 == 0 && self.needs_retrain {
+            self.retrain_internal();
+        }
 
         Ok(())
     }
 
-    /// Search for exact key
+    /// Search for exact key using learned index prediction
     pub fn search(&self, key: &Value) -> Result<Option<usize>> {
         let key_i64 = key.to_i64()?;
 
-        // Use learned index hint for optimization (not yet implemented)
-        let _predicted_pos = self.learned_index.search(key_i64);
+        if self.key_to_position.is_empty() {
+            return Ok(None);
+        }
 
-        // Linear search in key_to_position
-        // TODO: Use predicted position for binary search around the hint
-        for (stored_key, position) in &self.key_to_position {
-            if *stored_key == key_i64 {
-                return Ok(Some(*position));
+        // Retrain if needed before search
+        if self.needs_retrain {
+            // Can't mutate in search, so fall back to binary search
+            match self.key_to_position.binary_search_by_key(&key_i64, |(k, _)| *k) {
+                Ok(idx) => return Ok(Some(self.key_to_position[idx].1)),
+                Err(_) => return Ok(None),
             }
         }
 
-        Ok(None)
+        // Use learned index to predict position in key_to_position array
+        if let Some(predicted_idx) = self.learned_index.search(key_i64) {
+            // predicted_idx is an index into the sorted key_to_position array
+            let predicted_idx = predicted_idx.min(self.key_to_position.len() - 1);
+
+            // Search around the predicted position (within error bound)
+            let search_radius = 100; // Conservative error bound
+            let start = predicted_idx.saturating_sub(search_radius);
+            let end = (predicted_idx + search_radius).min(self.key_to_position.len());
+
+            // Binary search in the local window
+            let window = &self.key_to_position[start..end];
+            match window.binary_search_by_key(&key_i64, |(k, _)| *k) {
+                Ok(local_idx) => return Ok(Some(window[local_idx].1)),
+                Err(_) => {
+                    // Not in predicted window - fall back to full binary search
+                }
+            }
+        }
+
+        // Fallback: full binary search on entire array
+        match self.key_to_position.binary_search_by_key(&key_i64, |(k, _)| *k) {
+            Ok(idx) => Ok(Some(self.key_to_position[idx].1)),
+            Err(_) => Ok(None),
+        }
     }
 
     /// Range query - find all positions for keys in [start, end]
@@ -61,13 +103,25 @@ impl TableIndex {
         let start_i64 = start.to_i64()?;
         let end_i64 = end.to_i64()?;
 
-        let mut results = Vec::new();
-
-        for (key, position) in &self.key_to_position {
-            if *key >= start_i64 && *key <= end_i64 {
-                results.push(*position);
-            }
+        if self.key_to_position.is_empty() {
+            return Ok(Vec::new());
         }
+
+        // Since key_to_position is sorted, use binary search to find range bounds
+        let start_idx = self.key_to_position
+            .binary_search_by_key(&start_i64, |(k, _)| *k)
+            .unwrap_or_else(|idx| idx);
+
+        let end_idx = self.key_to_position
+            .binary_search_by_key(&end_i64, |(k, _)| *k)
+            .map(|idx| idx + 1) // Include the end key if found
+            .unwrap_or_else(|idx| idx);
+
+        // Extract positions for all keys in range
+        let results: Vec<usize> = self.key_to_position[start_idx..end_idx]
+            .iter()
+            .map(|(_, pos)| *pos)
+            .collect();
 
         Ok(results)
     }
@@ -82,18 +136,25 @@ impl TableIndex {
         self.key_to_position.is_empty()
     }
 
-    /// Retrain the learned index (should be called periodically)
-    pub fn retrain(&mut self) {
-        // Extract all keys
-        let keys: Vec<i64> = self.key_to_position.iter()
-            .map(|(k, _)| *k)
+    /// Internal retraining that's called during insert
+    fn retrain_internal(&mut self) {
+        // Build training data: (key, index_in_array) pairs
+        let training_data: Vec<(i64, usize)> = self.key_to_position
+            .iter()
+            .enumerate()
+            .map(|(idx, (key, _row_pos))| (*key, idx))
             .collect();
 
-        // Rebuild learned index
-        self.learned_index = RecursiveModelIndex::new(keys.len());
-        for key in keys {
-            self.learned_index.add_key(key);
-        }
+        // Rebuild learned index with the mapping from key -> array index
+        self.learned_index = RecursiveModelIndex::new(training_data.len());
+        self.learned_index.train(training_data);
+
+        self.needs_retrain = false;
+    }
+
+    /// Retrain the learned index (should be called periodically)
+    pub fn retrain(&mut self) {
+        self.retrain_internal();
     }
 }
 

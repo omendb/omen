@@ -827,4 +827,82 @@ mod tests {
             _ => panic!("Expected Selected result"),
         }
     }
+
+    #[test]
+    #[ignore] // Large test - run with: cargo test test_where_clause_large_scale -- --ignored --nocapture
+    fn test_where_clause_large_scale() {
+        use std::time::Instant;
+
+        let temp_dir = TempDir::new().unwrap();
+        let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+        let mut engine = SqlEngine::new(catalog);
+
+        println!("\n📊 Large-scale WHERE clause test (10,000 rows)");
+
+        // Create table
+        engine.execute("CREATE TABLE large_data (id BIGINT PRIMARY KEY, value DOUBLE)").unwrap();
+
+        // Insert 10K rows
+        println!("  Inserting 10,000 rows...");
+        let start = Instant::now();
+        for i in 0..10_000 {
+            let sql = format!("INSERT INTO large_data VALUES ({}, {})", i, i as f64 * 1.5);
+            engine.execute(&sql).unwrap();
+        }
+        let insert_time = start.elapsed();
+        println!("  ✅ Inserted 10K rows in {:?}", insert_time);
+
+        // Point query
+        println!("  Testing point query...");
+        let start = Instant::now();
+        let result = engine.execute("SELECT * FROM large_data WHERE id = 5000").unwrap();
+        let point_time = start.elapsed();
+        match result {
+            ExecutionResult::Selected { rows, .. } => {
+                assert_eq!(rows, 1);
+                println!("  ✅ Point query: {} row in {:?}", rows, point_time);
+            }
+            _ => panic!("Expected Selected result"),
+        }
+
+        // Range query
+        println!("  Testing range query...");
+        let start = Instant::now();
+        let result = engine.execute("SELECT * FROM large_data WHERE id > 8000 AND id < 9000").unwrap();
+        let range_time = start.elapsed();
+        match result {
+            ExecutionResult::Selected { rows, .. } => {
+                assert_eq!(rows, 999);
+                println!("  ✅ Range query: {} rows in {:?}", rows, range_time);
+            }
+            _ => panic!("Expected Selected result"),
+        }
+
+        // Full scan for comparison
+        println!("  Testing full scan...");
+        let start = Instant::now();
+        let result = engine.execute("SELECT * FROM large_data").unwrap();
+        let scan_time = start.elapsed();
+        match result {
+            ExecutionResult::Selected { rows, .. } => {
+                assert_eq!(rows, 10_000);
+                println!("  ✅ Full scan: {} rows in {:?}", rows, scan_time);
+            }
+            _ => panic!("Expected Selected result"),
+        }
+
+        // Analysis
+        let point_speedup = scan_time.as_micros() as f64 / point_time.as_micros() as f64;
+        let range_speedup = scan_time.as_micros() as f64 / range_time.as_micros() as f64;
+        println!();
+        println!("  📈 Analysis:");
+        println!("     Point query speedup: {:.2}x vs full scan", point_speedup);
+        println!("     Range query speedup: {:.2}x vs full scan", range_speedup);
+
+        // Assert meaningful speedup
+        assert!(point_speedup > 2.0, "Point query should be at least 2x faster than full scan");
+        assert!(range_speedup > 2.0, "Range query should be at least 2x faster than full scan");
+
+        println!("  ✅ Learned index providing significant speedup!");
+    }
 }
