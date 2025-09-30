@@ -10,9 +10,11 @@ pub mod table;
 pub mod catalog;
 pub mod sql_engine;
 pub mod table_wal;
+pub mod connection_pool;
 
 // Re-exports for common types
 pub use sql_engine::QueryConfig;
+pub use connection_pool::{ConnectionPool, PoolConfig, Connection};
 
 // Existing modules (will be refactored)
 pub mod storage;
