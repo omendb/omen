@@ -234,13 +234,16 @@ let result = table.get(&Value::Int64(1))?;
   - `WHERE id > X AND id < Y` (range query - up to 116x faster)
   - `WHERE id > X`, `WHERE id < X` (half-range queries)
   - Supports `=`, `>`, `<`, `>=`, `<=`, `AND` operators
+- ✅ **ORDER BY** - Sort results by any column (ASC/DESC)
+- ✅ **LIMIT** - Limit number of results
+- ✅ **OFFSET** - Skip rows for pagination
 
 ### Currently Not Supported (v0.1.0)
 - ❌ **UPDATE** - Not yet implemented
 - ❌ **DELETE** - Not yet implemented
 - ❌ **JOIN** operations
 - ❌ **Aggregates** (COUNT, SUM, AVG, MIN, MAX)
-- ❌ **GROUP BY**, **ORDER BY**, **LIMIT**, **OFFSET**
+- ❌ **GROUP BY**
 - ❌ **OR** operator, **IN**, **LIKE**, **BETWEEN**
 - ❌ **Subqueries**, **CTEs** (Common Table Expressions)
 - ❌ **Transactions** (BEGIN, COMMIT, ROLLBACK)
@@ -257,7 +260,7 @@ For details on UPDATE/DELETE design considerations, see [ARCHITECTURE_LIMITATION
 
 ## 🧪 Testing & Verification
 
-**Comprehensive testing with 175 tests (100% pass rate)**
+**Comprehensive testing with 183 tests (100% pass rate)**
 
 All code has been systematically verified. During verification, we found and fixed 5 bugs (2 critical):
 - ✅ Learned index broken at scale (floating-point precision) - **FIXED**

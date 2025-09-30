@@ -7,7 +7,7 @@ use crate::value::Value;
 use anyhow::{Result, anyhow};
 use arrow::datatypes::{DataType, Field, Schema};
 use sqlparser::ast::{
-    ColumnDef, DataType as SqlDataType, Expr, ObjectName, Query, Select,
+    ColumnDef, DataType as SqlDataType, Expr, ObjectName, OrderByExpr, Query, Select,
     SelectItem, SetExpr, Statement, TableFactor, TableWithJoins, Values,
 };
 use sqlparser::dialect::GenericDialect;
@@ -126,14 +126,57 @@ impl SqlEngine {
 
     /// Execute SELECT query
     fn execute_query(&self, query: &Query) -> Result<ExecutionResult> {
-        match query.body.as_ref() {
-            SetExpr::Select(select) => self.execute_select(select),
-            _ => Err(anyhow!("Only SELECT queries supported")),
+        let order_by = match &query.order_by {
+            Some(order) => order.exprs.as_slice(),
+            None => &[],
+        };
+
+        let mut result = match query.body.as_ref() {
+            SetExpr::Select(select) => self.execute_select(select, order_by)?,
+            _ => return Err(anyhow!("Only SELECT queries supported")),
+        };
+
+        // Apply OFFSET first, then LIMIT (standard SQL semantics)
+        if let Some(offset_expr) = &query.offset {
+            if let sqlparser::ast::Offset { value, .. } = offset_expr {
+                if let Expr::Value(sqlparser::ast::Value::Number(n, _)) = value {
+                    let offset: usize = n.parse()?;
+                    if let ExecutionResult::Selected { columns, rows, mut data } = result {
+                        if offset < data.len() {
+                            data = data.into_iter().skip(offset).collect();
+                        } else {
+                            data.clear();
+                        }
+                        result = ExecutionResult::Selected {
+                            columns,
+                            rows: data.len(),
+                            data,
+                        };
+                    }
+                }
+            }
         }
+
+        // Apply LIMIT after OFFSET
+        if let Some(limit_expr) = &query.limit {
+            if let Expr::Value(sqlparser::ast::Value::Number(n, _)) = limit_expr {
+                let limit: usize = n.parse()?;
+                if let ExecutionResult::Selected { columns, rows, mut data } = result {
+                    data.truncate(limit);
+                    result = ExecutionResult::Selected {
+                        columns,
+                        rows: data.len(),
+                        data,
+                    };
+                }
+            }
+        }
+
+        Ok(result)
     }
 
     /// Execute SELECT statement
-    fn execute_select(&self, select: &Select) -> Result<ExecutionResult> {
+    fn execute_select(&self, select: &Select, order_by: &[OrderByExpr]) -> Result<ExecutionResult> {
         // Extract table name
         if select.from.len() != 1 {
             return Err(anyhow!("Only single table SELECT supported"));
@@ -147,12 +190,17 @@ impl SqlEngine {
         let table = self.catalog.get_table(&table_name)?;
 
         // Get rows based on WHERE clause
-        let rows = if let Some(ref selection) = select.selection {
+        let mut rows = if let Some(ref selection) = select.selection {
             self.execute_where_clause(table, selection)?
         } else {
             // No WHERE clause - scan all
             table.scan_all()?
         };
+
+        // Apply ORDER BY if present
+        if !order_by.is_empty() {
+            rows = self.apply_order_by(rows, order_by, table)?;
+        }
 
         // Extract column names to return
         let column_names: Vec<String> = match &select.projection[0] {
@@ -179,6 +227,55 @@ impl SqlEngine {
             rows: rows.len(),
             data: rows,
         })
+    }
+
+    /// Apply ORDER BY clause to rows
+    fn apply_order_by(
+        &self,
+        mut rows: Vec<Row>,
+        order_by: &[OrderByExpr],
+        table: &crate::table::Table,
+    ) -> Result<Vec<Row>> {
+        if order_by.is_empty() {
+            return Ok(rows);
+        }
+
+        // Get the column to order by (only support single column for now)
+        let order_expr = &order_by[0];
+        let column_name = match &order_expr.expr {
+            Expr::Identifier(ident) => ident.value.clone(),
+            _ => return Err(anyhow!("ORDER BY only supports column names")),
+        };
+
+        let column_idx = table.schema().index_of(&column_name)?;
+        let is_asc = order_expr.asc.unwrap_or(true); // Default to ASC
+
+        // Sort the rows
+        rows.sort_by(|a, b| {
+            let val_a = a.get(column_idx).ok();
+            let val_b = b.get(column_idx).ok();
+
+            let cmp = match (val_a, val_b) {
+                (Some(a), Some(b)) => {
+                    match Self::compare_values(a, b) {
+                        Ok(c) if c < 0 => std::cmp::Ordering::Less,
+                        Ok(c) if c > 0 => std::cmp::Ordering::Greater,
+                        _ => std::cmp::Ordering::Equal,
+                    }
+                }
+                (Some(_), None) => std::cmp::Ordering::Greater,
+                (None, Some(_)) => std::cmp::Ordering::Less,
+                (None, None) => std::cmp::Ordering::Equal,
+            };
+
+            if is_asc {
+                cmp
+            } else {
+                cmp.reverse()
+            }
+        });
+
+        Ok(rows)
     }
 
     /// Execute WHERE clause with learned index optimization
