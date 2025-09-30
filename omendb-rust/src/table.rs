@@ -3,6 +3,8 @@
 
 use crate::row::Row;
 use crate::value::Value;
+use crate::table_storage::TableStorage;
+use crate::table_index::TableIndex;
 use anyhow::{Result, anyhow};
 use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
@@ -27,7 +29,6 @@ struct SchemaField {
 }
 
 /// A table with schema, storage, and learned index
-#[derive(Debug)]
 pub struct Table {
     /// Table name
     name: String,
@@ -44,11 +45,11 @@ pub struct Table {
     /// Table directory
     table_dir: PathBuf,
 
-    /// In-memory rows (will be replaced with proper storage)
-    rows: Vec<Row>,
+    /// Columnar storage with Arrow/Parquet
+    storage: TableStorage,
 
-    /// Learned index keys (will be replaced with TableIndex)
-    index_keys: Vec<i64>,
+    /// Learned index over primary key
+    index: TableIndex,
 }
 
 impl Table {
@@ -71,14 +72,18 @@ impl Table {
         // Create table directory
         fs::create_dir_all(&table_dir)?;
 
+        // Create storage and index
+        let storage = TableStorage::new(schema.clone(), table_dir.clone(), 10000)?;
+        let index = TableIndex::new(10000);
+
         let table = Self {
             name,
             schema,
             primary_key,
             primary_key_index,
             table_dir,
-            rows: Vec::new(),
-            index_keys: Vec::new(),
+            storage,
+            index,
         };
 
         // Save metadata
@@ -104,14 +109,25 @@ impl Table {
         let schema = Arc::new(arrow::datatypes::Schema::new(fields?));
         let primary_key_index = schema.index_of(&metadata.primary_key)?;
 
+        // Load storage
+        let storage = TableStorage::load(schema.clone(), table_dir.clone())?;
+
+        // Rebuild index from storage
+        let mut index = TableIndex::new(storage.row_count());
+        let all_rows = storage.scan_all()?;
+        for (position, row) in all_rows.iter().enumerate() {
+            let pk_value = row.get(primary_key_index)?;
+            index.insert(pk_value, position)?;
+        }
+
         Ok(Self {
             name,
             schema,
             primary_key: metadata.primary_key,
             primary_key_index,
             table_dir,
-            rows: Vec::new(),
-            index_keys: Vec::new(),
+            storage,
+            index,
         })
     }
 
@@ -122,49 +138,42 @@ impl Table {
 
         // Extract primary key value
         let pk_value = row.get(self.primary_key_index)?;
-        let pk_i64 = pk_value.to_i64()?;
+
+        // Get position where row will be stored
+        let position = self.storage.row_count();
 
         // Add to index
-        self.index_keys.push(pk_i64);
+        self.index.insert(pk_value, position)?;
 
         // Store row
-        self.rows.push(row);
+        self.storage.insert(row)?;
 
         Ok(())
     }
 
     /// Get row by primary key value
-    pub fn get(&self, key_value: &Value) -> Result<Option<&Row>> {
-        let search_key = key_value.to_i64()?;
-
-        // Linear search for now (will use learned index later)
-        for (i, &index_key) in self.index_keys.iter().enumerate() {
-            if index_key == search_key {
-                return Ok(Some(&self.rows[i]));
-            }
+    pub fn get(&self, key_value: &Value) -> Result<Option<Row>> {
+        // Use index to find position
+        if let Some(position) = self.index.search(key_value)? {
+            let row = self.storage.get(position)?;
+            return Ok(Some(row));
         }
 
         Ok(None)
     }
 
     /// Range query by primary key
-    pub fn range_query(&self, start: &Value, end: &Value) -> Result<Vec<&Row>> {
-        let start_key = start.to_i64()?;
-        let end_key = end.to_i64()?;
+    pub fn range_query(&self, start: &Value, end: &Value) -> Result<Vec<Row>> {
+        // Use index to find positions
+        let positions = self.index.range_query(start, end)?;
 
-        let mut results = Vec::new();
-        for (i, &index_key) in self.index_keys.iter().enumerate() {
-            if index_key >= start_key && index_key <= end_key {
-                results.push(&self.rows[i]);
-            }
-        }
-
-        Ok(results)
+        // Retrieve rows
+        self.storage.get_many(&positions)
     }
 
     /// Get all rows as RecordBatch
-    pub fn scan(&self) -> Result<RecordBatch> {
-        Row::rows_to_batch(&self.rows, &self.schema)
+    pub fn scan(&mut self) -> Result<Vec<RecordBatch>> {
+        self.storage.scan_batches()
     }
 
     /// Table name
@@ -184,7 +193,14 @@ impl Table {
 
     /// Number of rows
     pub fn row_count(&self) -> usize {
-        self.rows.len()
+        self.storage.row_count()
+    }
+
+    /// Persist table to disk
+    pub fn persist(&mut self) -> Result<()> {
+        self.storage.persist()?;
+        self.save_metadata()?;
+        Ok(())
     }
 
     /// Save table metadata
@@ -359,5 +375,45 @@ mod tests {
         ).unwrap();
 
         assert_eq!(results.len(), 5); // 3, 4, 5, 6, 7
+    }
+
+    #[test]
+    fn test_table_persist_and_load() {
+        let temp_dir = TempDir::new().unwrap();
+        let table_dir = temp_dir.path().join("users");
+
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, false),
+        ]));
+
+        // Create and populate table
+        {
+            let mut table = Table::new(
+                "users".to_string(),
+                schema.clone(),
+                "id".to_string(),
+                table_dir.clone(),
+            ).unwrap();
+
+            for i in 0..3 {
+                let row = Row::new(vec![
+                    Value::Int64(i),
+                    Value::Text(format!("user_{}", i)),
+                ]);
+                table.insert(row).unwrap();
+            }
+
+            table.persist().unwrap();
+        }
+
+        // Load table
+        let table = Table::load("users".to_string(), table_dir).unwrap();
+        assert_eq!(table.row_count(), 3);
+
+        // Verify data
+        let row = table.get(&Value::Int64(1)).unwrap().unwrap();
+        assert_eq!(row.get(0).unwrap(), &Value::Int64(1));
+        assert_eq!(row.get(1).unwrap(), &Value::Text("user_1".to_string()));
     }
 }
