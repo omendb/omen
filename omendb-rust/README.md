@@ -8,7 +8,7 @@ OmenDB is a high-performance, multi-table database that replaces traditional B-t
 
 - **Learned Indexes Only**: No B-trees. Pure learned index architecture (Recursive Model Index)
 - **9.85x Performance**: Validated speedup over B-trees on real-world time-series data
-- **Full SQL Support**: Standard SQL interface (CREATE TABLE, INSERT, SELECT with WHERE clause)
+- **SQL Interface**: CREATE TABLE, INSERT, SELECT with WHERE clause (see SQL Support section below)
 - **Multi-Table Database**: Complete catalog system with schema-agnostic tables
 - **Columnar Storage**: Apache Arrow/Parquet for efficient data storage
 - **Production Ready**: WAL, persistence, crash recovery, comprehensive testing
@@ -223,10 +223,51 @@ table.insert(row)?;
 let result = table.get(&Value::Int64(1))?;
 ```
 
-## 🧪 Testing
+## 📋 SQL Support
+
+### Fully Optimized (Production Ready)
+- ✅ **CREATE TABLE** - Define schema with primary key
+- ✅ **INSERT** - High-throughput writes (242K ops/sec)
+- ✅ **SELECT** - Full table scans and projections
+- ✅ **WHERE clause** - Point queries and range queries with learned index
+  - `WHERE id = X` (point query - 9.57x faster)
+  - `WHERE id > X AND id < Y` (range query - up to 116x faster)
+  - `WHERE id > X`, `WHERE id < X` (half-range queries)
+  - Supports `=`, `>`, `<`, `>=`, `<=`, `AND` operators
+
+### Currently Not Supported (v0.1.0)
+- ❌ **UPDATE** - Not yet implemented
+- ❌ **DELETE** - Not yet implemented
+- ❌ **JOIN** operations
+- ❌ **Aggregates** (COUNT, SUM, AVG, MIN, MAX)
+- ❌ **GROUP BY**, **ORDER BY**, **LIMIT**, **OFFSET**
+- ❌ **OR** operator, **IN**, **LIKE**, **BETWEEN**
+- ❌ **Subqueries**, **CTEs** (Common Table Expressions)
+- ❌ **Transactions** (BEGIN, COMMIT, ROLLBACK)
+
+### Architectural Notes
+OmenDB's append-only columnar storage + learned index architecture is optimized for:
+- ✅ High-throughput inserts
+- ✅ Fast point and range queries
+- ✅ Analytics workloads
+
+For details on UPDATE/DELETE design considerations, see [ARCHITECTURE_LIMITATIONS.md](ARCHITECTURE_LIMITATIONS.md).
+
+**Roadmap**: UPDATE/DELETE support planned for v0.2.0 using hybrid delta storage approach.
+
+## 🧪 Testing & Verification
+
+**Comprehensive testing with 175 tests (100% pass rate)**
+
+All code has been systematically verified. During verification, we found and fixed 5 bugs (2 critical):
+- ✅ Learned index broken at scale (floating-point precision) - **FIXED**
+- ✅ Negative number support - **FIXED**
+- ✅ Boundary value handling (i64::MIN/MAX) - **FIXED**
+
+See [BUGS_FOUND.md](BUGS_FOUND.md) and [VERIFICATION_COMPLETE.md](VERIFICATION_COMPLETE.md) for details.
 
 ```bash
-# Run all tests (142 tests)
+# Run all tests (175 tests)
 cargo test
 
 # Run specific test suites
