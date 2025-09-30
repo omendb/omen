@@ -4,6 +4,8 @@
 // New architecture (proper multi-table database)
 pub mod value;
 pub mod row;
+pub mod table_storage;
+pub mod table_index;
 pub mod table;
 pub mod catalog;
 
