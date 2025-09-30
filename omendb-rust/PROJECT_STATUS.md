@@ -52,8 +52,10 @@ Build the world's first production database using **only learned indexes** (no B
 ### 5. Benchmarking & Validation ✅
 - **Learned index vs B-tree** comparison (5 workloads)
 - **Full system benchmarks** (5 scenarios)
+- **WHERE clause benchmarks** (100K rows, 6 scenarios)
 - **Performance documentation** with analysis
 - **Validated 9.85x speedup** claim
+- **Validated WHERE clause speedup**: 9.57x point queries, 116.83x range queries
 
 ### 6. Documentation ✅
 - **README.md**: Comprehensive project overview
@@ -189,6 +191,19 @@ omendb-rust/
 | Point Queries | 1,884 queries/sec | 335.9μs |
 
 **Overall: 102,270 ops/sec average, 183.2μs latency**
+
+### WHERE Clause Performance (100K rows)
+
+| Query Type | Time | Speedup vs Full Scan |
+|------------|------|---------------------|
+| Point query (WHERE id = X) | 354.8μs avg | **9.57x faster** |
+| Small range (100 rows) | 29.9μs | **116.83x faster** |
+| Large range (5K rows) | 273.9μs | **12.35x faster** |
+| Greater than (WHERE id > X) | 215.8μs | **15.70x faster** |
+| Less than (WHERE id < X) | 253.5μs | **13.37x faster** |
+| Full table scan | 3.39ms | baseline |
+
+**Learned index providing 10-100x speedup on WHERE clauses**
 
 ## 🎬 Demo Ready
 

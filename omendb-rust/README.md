@@ -43,6 +43,21 @@ Point Queries                             5000         1884/sec      335.9μs
 Overall: 102,270 ops/sec average throughput, 183.2μs avg latency
 ```
 
+### WHERE Clause Performance (100K rows)
+
+```
+Query Type                          Time        Speedup vs Full Scan
+────────────────────────────────────────────────────────────────────
+Point query (WHERE id = X)      354.8μs avg          9.57x faster
+Small range (100 rows)              29.9μs        116.83x faster
+Large range (5K rows)              273.9μs         12.35x faster
+Greater than (WHERE id > X)        215.8μs         15.70x faster
+Less than (WHERE id < X)           253.5μs         13.37x faster
+Full table scan                     3.39ms             baseline
+
+Learned index providing 10-100x speedup on WHERE clauses
+```
+
 ## 🎯 Target Use Cases
 
 - **Time-Series Data**: IoT sensors, monitoring, metrics (best performance)
