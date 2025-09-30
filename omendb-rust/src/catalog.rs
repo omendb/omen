@@ -2,6 +2,7 @@
 //! Provides table creation, lookup, and metadata persistence
 
 use crate::table::Table;
+use crate::table_wal::TableWalManager;
 use anyhow::{Result, anyhow};
 use arrow::datatypes::SchemaRef;
 use serde::{Serialize, Deserialize};
@@ -17,7 +18,6 @@ struct TableMetadata {
 }
 
 /// Catalog manages all tables in the database
-#[derive(Debug)]
 pub struct Catalog {
     /// All tables by name
     tables: HashMap<String, Table>,
@@ -27,19 +27,37 @@ pub struct Catalog {
 
     /// Metadata file path
     metadata_file: PathBuf,
+
+    /// Write-ahead log for durability (optional)
+    wal: Option<TableWalManager>,
 }
 
 impl Catalog {
     /// Create new catalog with given data directory
     pub fn new(data_dir: PathBuf) -> Result<Self> {
+        Self::new_with_wal(data_dir, true)
+    }
+
+    /// Create new catalog with optional WAL
+    pub fn new_with_wal(data_dir: PathBuf, enable_wal: bool) -> Result<Self> {
         // Ensure data directory exists
         fs::create_dir_all(&data_dir)?;
 
         let metadata_file = data_dir.join("catalog.json");
+
+        // Initialize WAL if enabled
+        let wal = if enable_wal {
+            let wal_dir = data_dir.join("wal");
+            Some(TableWalManager::new(&wal_dir)?)
+        } else {
+            None
+        };
+
         let mut catalog = Self {
             tables: HashMap::new(),
             data_dir,
             metadata_file,
+            wal,
         };
 
         // Load existing metadata if present
@@ -74,6 +92,11 @@ impl Catalog {
                 primary_key, pk_field.data_type()));
         }
 
+        // Log to WAL before making changes
+        if let Some(wal) = &self.wal {
+            wal.log_create_table(name.clone(), schema.clone(), primary_key.clone())?;
+        }
+
         // Create table directory
         let table_dir = self.data_dir.join(&name);
         fs::create_dir_all(&table_dir)?;
@@ -102,9 +125,18 @@ impl Catalog {
 
     /// Drop table
     pub fn drop_table(&mut self, name: &str) -> Result<()> {
+        // Check table exists
+        if !self.tables.contains_key(name) {
+            return Err(anyhow!("Table '{}' not found", name));
+        }
+
+        // Log to WAL before making changes
+        if let Some(wal) = &self.wal {
+            wal.log_drop_table(name.to_string())?;
+        }
+
         // Remove from catalog
-        self.tables.remove(name)
-            .ok_or_else(|| anyhow!("Table '{}' not found", name))?;
+        self.tables.remove(name);
 
         // Remove table directory
         let table_dir = self.data_dir.join(name);

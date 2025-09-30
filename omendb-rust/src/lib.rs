@@ -9,6 +9,7 @@ pub mod table_index;
 pub mod table;
 pub mod catalog;
 pub mod sql_engine;
+pub mod table_wal;
 
 // Existing modules (will be refactored)
 pub mod storage;

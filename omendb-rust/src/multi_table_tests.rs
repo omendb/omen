@@ -370,4 +370,72 @@ mod integration_tests {
             _ => panic!("Expected Selected result"),
         }
     }
+
+    #[test]
+    fn test_wal_logging_create_drop_table() {
+        use crate::table_wal::TableWalManager;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().to_path_buf();
+
+        // Phase 1: Create catalog with WAL and perform operations
+        {
+            let catalog = Catalog::new(db_path.clone()).unwrap();
+            let mut engine = SqlEngine::new(catalog);
+
+            // These operations should be logged to WAL
+            engine.execute("CREATE TABLE test1 (id BIGINT PRIMARY KEY)").unwrap();
+            engine.execute("CREATE TABLE test2 (id BIGINT PRIMARY KEY, name VARCHAR(255))").unwrap();
+        }
+
+        // Phase 2: Check WAL contains the operations
+        {
+            let wal_dir = db_path.join("wal");
+            let wal = TableWalManager::new(&wal_dir).unwrap();
+            let entries = wal.recover().unwrap();
+
+            assert!(entries.len() >= 2, "Expected at least 2 WAL entries (2 CREATE TABLEs)");
+
+            // Verify we have CREATE TABLE operations
+            let create_count = entries.iter()
+                .filter(|e| matches!(e.operation, crate::table_wal::TableWalOperation::CreateTable { .. }))
+                .count();
+            assert_eq!(create_count, 2, "Expected 2 CREATE TABLE operations in WAL");
+        }
+    }
+
+    #[test]
+    fn test_wal_recovery_create_table() {
+        use crate::table_wal::{TableWalManager, TableWalOperation};
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().to_path_buf();
+
+        // Phase 1: Create tables (logged to WAL)
+        {
+            let catalog = Catalog::new(db_path.clone()).unwrap();
+            let mut engine = SqlEngine::new(catalog);
+
+            engine.execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))").unwrap();
+            engine.execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, amount DOUBLE)").unwrap();
+        }
+
+        // Phase 2: Verify WAL can be recovered
+        {
+            let wal_dir = db_path.join("wal");
+            let wal = TableWalManager::new(&wal_dir).unwrap();
+            let entries = wal.recover().unwrap();
+
+            // Find CREATE TABLE operations
+            let creates: Vec<_> = entries.iter()
+                .filter_map(|e| match &e.operation {
+                    TableWalOperation::CreateTable { table_name, .. } => Some(table_name.clone()),
+                    _ => None,
+                })
+                .collect();
+
+            assert!(creates.contains(&"users".to_string()));
+            assert!(creates.contains(&"orders".to_string()));
+        }
+    }
 }
