@@ -401,6 +401,32 @@ impl SqlEngine {
                     _ => Err(anyhow!("Unsupported value type in WHERE clause")),
                 }
             }
+            Expr::UnaryOp { op, expr } => {
+                // Handle negative numbers in WHERE clause
+                use sqlparser::ast::UnaryOperator;
+                match op {
+                    UnaryOperator::Minus => {
+                        // Special case for i64::MIN
+                        if let Expr::Value(sqlparser::ast::Value::Number(n, _)) = expr.as_ref() {
+                            if n == "9223372036854775808" {
+                                return Ok(Value::Int64(i64::MIN));
+                            }
+                        }
+
+                        let value = self.evaluate_value_expr(expr, row, schema)?;
+                        match value {
+                            Value::Int64(n) => Ok(Value::Int64(-n)),
+                            Value::Float64(f) => Ok(Value::Float64(-f)),
+                            Value::Timestamp(t) => Ok(Value::Timestamp(-t)),
+                            _ => Err(anyhow!("Cannot negate {:?}", value)),
+                        }
+                    }
+                    UnaryOperator::Plus => {
+                        self.evaluate_value_expr(expr, row, schema)
+                    }
+                    _ => Err(anyhow!("Unsupported unary operator in WHERE clause: {:?}", op)),
+                }
+            }
             _ => Err(anyhow!("Unsupported expression type")),
         }
     }
@@ -485,6 +511,34 @@ impl SqlEngine {
                 }
             }
             Expr::Value(sqlparser::ast::Value::Null) => Ok(Value::Null),
+            Expr::UnaryOp { op, expr } => {
+                // Handle negative numbers: -50, -3.14
+                use sqlparser::ast::UnaryOperator;
+                match op {
+                    UnaryOperator::Minus => {
+                        // Special case: i64::MIN cannot be parsed as positive then negated
+                        // because i64::MAX + 1 overflows
+                        if let Expr::Value(sqlparser::ast::Value::Number(n, _)) = expr.as_ref() {
+                            if matches!(expected_type, DataType::Int64) && n == "9223372036854775808" {
+                                return Ok(Value::Int64(i64::MIN));
+                            }
+                        }
+
+                        let value = Self::expr_to_value(expr, expected_type)?;
+                        match value {
+                            Value::Int64(n) => Ok(Value::Int64(-n)),
+                            Value::Float64(f) => Ok(Value::Float64(-f)),
+                            Value::Timestamp(t) => Ok(Value::Timestamp(-t)),
+                            _ => Err(anyhow!("Cannot negate {:?}", value)),
+                        }
+                    }
+                    UnaryOperator::Plus => {
+                        // Unary plus is a no-op
+                        Self::expr_to_value(expr, expected_type)
+                    }
+                    _ => Err(anyhow!("Unsupported unary operator: {:?}", op)),
+                }
+            }
             _ => Err(anyhow!("Unsupported expression: {:?}", expr)),
         }
     }
