@@ -197,7 +197,17 @@ impl SqlEngine {
             table.scan_all()?
         };
 
-        // Apply ORDER BY if present
+        // Check if this is an aggregate query
+        let has_aggregates = select.projection.iter().any(|item| {
+            matches!(item, SelectItem::UnnamedExpr(Expr::Function(_)))
+        });
+
+        if has_aggregates {
+            // Handle aggregate query
+            return self.execute_aggregate_query(&select.projection, rows, &select.group_by, table);
+        }
+
+        // Apply ORDER BY if present (non-aggregate queries)
         if !order_by.is_empty() {
             rows = self.apply_order_by(rows, order_by, table)?;
         }
@@ -227,6 +237,262 @@ impl SqlEngine {
             rows: rows.len(),
             data: rows,
         })
+    }
+
+    /// Execute aggregate query (COUNT, SUM, AVG, MIN, MAX)
+    fn execute_aggregate_query(
+        &self,
+        projection: &[SelectItem],
+        rows: Vec<Row>,
+        group_by: &sqlparser::ast::GroupByExpr,
+        table: &crate::table::Table,
+    ) -> Result<ExecutionResult> {
+        use sqlparser::ast::Function;
+        use std::collections::HashMap;
+
+        // Parse GROUP BY columns
+        let group_by_cols: Vec<String> = match group_by {
+            sqlparser::ast::GroupByExpr::Expressions(exprs, _) => {
+                exprs.iter()
+                    .filter_map(|expr| {
+                        if let Expr::Identifier(ident) = expr {
+                            Some(ident.value.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            }
+            sqlparser::ast::GroupByExpr::All(_) => Vec::new(),
+        };
+
+        // Group rows if GROUP BY is present
+        // Use string keys since Value doesn't implement Eq+Hash (contains f64)
+        let groups: HashMap<String, (Vec<Value>, Vec<Row>)> = if !group_by_cols.is_empty() {
+            let mut groups = HashMap::new();
+
+            for row in rows {
+                let mut key_values = Vec::new();
+                let mut key_str = String::new();
+
+                for col_name in &group_by_cols {
+                    let col_idx = table.schema().index_of(col_name)?;
+                    let val = row.get(col_idx)?.clone();
+                    key_str.push_str(&format!("{:?}|", val));
+                    key_values.push(val);
+                }
+
+                let entry = groups.entry(key_str).or_insert_with(|| (key_values.clone(), Vec::new()));
+                entry.1.push(row);
+            }
+            groups
+        } else {
+            // No GROUP BY - treat all rows as single group
+            let mut groups = HashMap::new();
+            groups.insert(String::new(), (Vec::new(), rows));
+            groups
+        };
+
+        // Process each group and compute aggregates
+        let mut result_rows = Vec::new();
+        let mut column_names = Vec::new();
+
+        for (_group_key, (group_values, group_row_data)) in groups {
+            let mut result_values = Vec::new();
+
+            // Add GROUP BY columns first
+            result_values.extend(group_values);
+
+            // Process each projection item
+            for item in projection {
+                match item {
+                    SelectItem::UnnamedExpr(Expr::Function(func)) => {
+                        let agg_value = self.compute_aggregate(func, &group_row_data, table)?;
+                        result_values.push(agg_value);
+
+                        // Add column name for first group only
+                        if column_names.len() < group_by_cols.len() + projection.len() {
+                            // Extract argument description
+                            let arg_desc = match &func.args {
+                                sqlparser::ast::FunctionArguments::List(list) => {
+                                    if list.args.is_empty() {
+                                        "*"
+                                    } else {
+                                        "column"
+                                    }
+                                }
+                                _ => "column",
+                            };
+                            column_names.push(format!("{}({})",
+                                func.name.0[0].value.to_uppercase(),
+                                arg_desc
+                            ));
+                        }
+                    }
+                    SelectItem::UnnamedExpr(Expr::Identifier(ident)) => {
+                        // Non-aggregate column (must be in GROUP BY)
+                        if column_names.len() < group_by_cols.len() {
+                            column_names.push(ident.value.clone());
+                        }
+                    }
+                    _ => return Err(anyhow!("Unsupported projection in aggregate query")),
+                }
+            }
+
+            result_rows.push(Row::new(result_values));
+        }
+
+        Ok(ExecutionResult::Selected {
+            columns: column_names,
+            rows: result_rows.len(),
+            data: result_rows,
+        })
+    }
+
+    /// Compute single aggregate function
+    fn compute_aggregate(
+        &self,
+        func: &sqlparser::ast::Function,
+        rows: &[Row],
+        table: &crate::table::Table,
+    ) -> Result<Value> {
+        use sqlparser::ast::{FunctionArg, FunctionArguments};
+
+        let func_name = func.name.0[0].value.to_uppercase();
+
+        match func_name.as_str() {
+            "COUNT" => {
+                // Extract args from FunctionArguments enum
+                let args = match &func.args {
+                    FunctionArguments::List(list) => &list.args,
+                    _ => return Err(anyhow!("Invalid function arguments")),
+                };
+
+                if args.is_empty() || matches!(&args[0], FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Wildcard)) {
+                    // COUNT(*) or COUNT()
+                    Ok(Value::Int64(rows.len() as i64))
+                } else {
+                    // COUNT(column) - count non-null values
+                    let col_idx = self.extract_column_index(&args[0], table)?;
+                    let count = rows.iter()
+                        .filter(|row| !matches!(row.get(col_idx), Ok(Value::Null)))
+                        .count();
+                    Ok(Value::Int64(count as i64))
+                }
+            }
+            "SUM" => {
+                let args = match &func.args {
+                    FunctionArguments::List(list) => &list.args,
+                    _ => return Err(anyhow!("Invalid function arguments")),
+                };
+                let col_idx = self.extract_column_index(&args[0], table)?;
+                let mut sum = 0.0;
+                for row in rows {
+                    match row.get(col_idx)? {
+                        Value::Int64(n) => sum += *n as f64,
+                        Value::Float64(f) => sum += f,
+                        Value::Null => continue,
+                        _ => return Err(anyhow!("SUM requires numeric column")),
+                    }
+                }
+                Ok(Value::Float64(sum))
+            }
+            "AVG" => {
+                let args = match &func.args {
+                    FunctionArguments::List(list) => &list.args,
+                    _ => return Err(anyhow!("Invalid function arguments")),
+                };
+                let col_idx = self.extract_column_index(&args[0], table)?;
+                let mut sum = 0.0;
+                let mut count = 0;
+                for row in rows {
+                    match row.get(col_idx)? {
+                        Value::Int64(n) => {
+                            sum += *n as f64;
+                            count += 1;
+                        }
+                        Value::Float64(f) => {
+                            sum += f;
+                            count += 1;
+                        }
+                        Value::Null => continue,
+                        _ => return Err(anyhow!("AVG requires numeric column")),
+                    }
+                }
+                if count == 0 {
+                    Ok(Value::Null)
+                } else {
+                    Ok(Value::Float64(sum / count as f64))
+                }
+            }
+            "MIN" => {
+                let args = match &func.args {
+                    FunctionArguments::List(list) => &list.args,
+                    _ => return Err(anyhow!("Invalid function arguments")),
+                };
+                let col_idx = self.extract_column_index(&args[0], table)?;
+                let mut min_val: Option<Value> = None;
+                for row in rows {
+                    let val = row.get(col_idx)?;
+                    if matches!(val, Value::Null) {
+                        continue;
+                    }
+                    min_val = match min_val {
+                        None => Some(val.clone()),
+                        Some(ref current) => {
+                            if Self::compare_values(val, current)? < 0 {
+                                Some(val.clone())
+                            } else {
+                                Some(current.clone())
+                            }
+                        }
+                    };
+                }
+                Ok(min_val.unwrap_or(Value::Null))
+            }
+            "MAX" => {
+                let args = match &func.args {
+                    FunctionArguments::List(list) => &list.args,
+                    _ => return Err(anyhow!("Invalid function arguments")),
+                };
+                let col_idx = self.extract_column_index(&args[0], table)?;
+                let mut max_val: Option<Value> = None;
+                for row in rows {
+                    let val = row.get(col_idx)?;
+                    if matches!(val, Value::Null) {
+                        continue;
+                    }
+                    max_val = match max_val {
+                        None => Some(val.clone()),
+                        Some(ref current) => {
+                            if Self::compare_values(val, current)? > 0 {
+                                Some(val.clone())
+                            } else {
+                                Some(current.clone())
+                            }
+                        }
+                    };
+                }
+                Ok(max_val.unwrap_or(Value::Null))
+            }
+            _ => Err(anyhow!("Unsupported aggregate function: {}", func_name)),
+        }
+    }
+
+    /// Extract column index from function argument
+    fn extract_column_index(
+        &self,
+        arg: &sqlparser::ast::FunctionArg,
+        table: &crate::table::Table,
+    ) -> Result<usize> {
+        use sqlparser::ast::FunctionArg;
+
+        match arg {
+            FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(Expr::Identifier(ident))) => {
+                Ok(table.schema().index_of(&ident.value)?)
+            }
+            _ => Err(anyhow!("Aggregate function requires column name")),
+        }
     }
 
     /// Apply ORDER BY clause to rows
@@ -572,8 +838,8 @@ impl SqlEngine {
     /// Convert SQL data type to Arrow data type
     fn sql_type_to_arrow(sql_type: &SqlDataType) -> Result<DataType> {
         match sql_type {
-            SqlDataType::BigInt(_) | SqlDataType::Int8(_) => Ok(DataType::Int64),
-            SqlDataType::Double | SqlDataType::Float8 => Ok(DataType::Float64),
+            SqlDataType::BigInt(_) | SqlDataType::Int8(_) | SqlDataType::Int64 => Ok(DataType::Int64),
+            SqlDataType::Double | SqlDataType::Float8 | SqlDataType::Float64 => Ok(DataType::Float64),
             SqlDataType::Varchar(_) | SqlDataType::Text | SqlDataType::String(_) => Ok(DataType::Utf8),
             SqlDataType::Timestamp(_, _) => Ok(DataType::Timestamp(
                 arrow::datatypes::TimeUnit::Microsecond,
