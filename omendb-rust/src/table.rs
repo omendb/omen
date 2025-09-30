@@ -29,6 +29,7 @@ struct SchemaField {
 }
 
 /// A table with schema, storage, and learned index
+#[derive(Debug)]
 pub struct Table {
     /// Table name
     name: String,
@@ -174,6 +175,11 @@ impl Table {
     /// Get all rows as RecordBatch
     pub fn scan(&mut self) -> Result<Vec<RecordBatch>> {
         self.storage.scan_batches()
+    }
+
+    /// Get all rows as Row objects
+    pub fn scan_all(&self) -> Result<Vec<Row>> {
+        self.storage.scan_all()
     }
 
     /// Table name

@@ -6,6 +6,7 @@ use crate::value::Value;
 use anyhow::{Result, anyhow};
 
 /// Generic index over any orderable column type
+#[derive(Debug)]
 pub struct TableIndex {
     /// Underlying learned index (works with i64)
     learned_index: RecursiveModelIndex,

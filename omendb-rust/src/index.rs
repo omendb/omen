@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 /// Recursive Model Index with multiple layers for better scaling
+#[derive(Debug)]
 pub struct RecursiveModelIndex {
     // Root model
     root: LinearModel,
@@ -18,7 +19,7 @@ pub struct RecursiveModelIndex {
     num_second_models: usize,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct LinearModel {
     slope: f64,
     intercept: f64,
