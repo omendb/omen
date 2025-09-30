@@ -13,20 +13,57 @@ use sqlparser::ast::{
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+/// Configuration for SQL engine execution
+#[derive(Clone, Debug)]
+pub struct QueryConfig {
+    /// Maximum query execution time (default: 30 seconds)
+    pub timeout: Duration,
+
+    /// Maximum number of rows to return (default: 1 million)
+    pub max_rows: usize,
+
+    /// Maximum memory per query in bytes (default: 1GB)
+    pub max_memory_bytes: usize,
+}
+
+impl Default for QueryConfig {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(30),
+            max_rows: 1_000_000,
+            max_memory_bytes: 1_000_000_000, // 1GB
+        }
+    }
+}
 
 /// SQL execution engine
 pub struct SqlEngine {
     catalog: Catalog,
+    config: QueryConfig,
 }
 
 impl SqlEngine {
-    /// Create new SQL engine with catalog
+    /// Create new SQL engine with catalog and default config
     pub fn new(catalog: Catalog) -> Self {
-        Self { catalog }
+        Self::with_config(catalog, QueryConfig::default())
     }
 
-    /// Execute a SQL statement
+    /// Create new SQL engine with custom configuration
+    pub fn with_config(catalog: Catalog, config: QueryConfig) -> Self {
+        Self { catalog, config }
+    }
+
+    /// Execute a SQL statement with timeout and resource limits
     pub fn execute(&mut self, sql: &str) -> Result<ExecutionResult> {
+        let start_time = Instant::now();
+
+        // Check query size limit (default: 10MB)
+        if sql.len() > 10_000_000 {
+            return Err(anyhow!("Query size exceeds limit (10MB)"));
+        }
+
         let dialect = GenericDialect {};
         let statements = Parser::parse_sql(&dialect, sql)?;
 
@@ -38,6 +75,11 @@ impl SqlEngine {
             return Err(anyhow!("Multiple statements not supported"));
         }
 
+        // Check timeout before execution
+        if start_time.elapsed() > self.config.timeout {
+            return Err(anyhow!("Query timed out during parsing"));
+        }
+
         match &statements[0] {
             Statement::CreateTable(stmt) => {
                 self.execute_create_table(&stmt.name, &stmt.columns)
@@ -45,9 +87,22 @@ impl SqlEngine {
             Statement::Insert(stmt) => {
                 self.execute_insert(&stmt.table_name, &stmt.source)
             }
-            Statement::Query(query) => self.execute_query(query),
+            Statement::Query(query) => {
+                self.execute_query_with_limits(query, start_time)
+            }
             _ => Err(anyhow!("Unsupported SQL statement")),
         }
+    }
+
+    /// Check if query has exceeded timeout
+    fn check_timeout(&self, start_time: Instant) -> Result<()> {
+        if start_time.elapsed() > self.config.timeout {
+            return Err(anyhow!(
+                "Query execution timeout ({} seconds)",
+                self.config.timeout.as_secs()
+            ));
+        }
+        Ok(())
     }
 
     /// Execute CREATE TABLE statement
@@ -125,7 +180,11 @@ impl SqlEngine {
     }
 
     /// Execute SELECT query
-    fn execute_query(&self, query: &Query) -> Result<ExecutionResult> {
+    /// Execute SELECT query with timeout and resource limits
+    fn execute_query_with_limits(&self, query: &Query, start_time: Instant) -> Result<ExecutionResult> {
+        // Check timeout before query execution
+        self.check_timeout(start_time)?;
+
         let order_by = match &query.order_by {
             Some(order) => order.exprs.as_slice(),
             None => &[],
@@ -135,6 +194,9 @@ impl SqlEngine {
             SetExpr::Select(select) => self.execute_select(select, order_by)?,
             _ => return Err(anyhow!("Only SELECT queries supported")),
         };
+
+        // Check timeout after query execution
+        self.check_timeout(start_time)?;
 
         // Apply OFFSET first, then LIMIT (standard SQL semantics)
         if let Some(offset_expr) = &query.offset {
@@ -172,7 +234,23 @@ impl SqlEngine {
             }
         }
 
+        // Enforce maximum row limit
+        if let ExecutionResult::Selected { columns, rows, mut data } = result {
+            if data.len() > self.config.max_rows {
+                return Err(anyhow!(
+                    "Query result exceeds maximum row limit ({} rows). Use LIMIT clause to restrict results.",
+                    self.config.max_rows
+                ));
+            }
+            result = ExecutionResult::Selected { columns, rows, data };
+        }
+
         Ok(result)
+    }
+
+    /// Execute SELECT query (legacy method for backward compatibility)
+    fn execute_query(&self, query: &Query) -> Result<ExecutionResult> {
+        self.execute_query_with_limits(query, Instant::now())
     }
 
     /// Execute SELECT statement

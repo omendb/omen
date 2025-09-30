@@ -11,6 +11,9 @@ pub mod catalog;
 pub mod sql_engine;
 pub mod table_wal;
 
+// Re-exports for common types
+pub use sql_engine::QueryConfig;
+
 // Existing modules (will be refactored)
 pub mod storage;
 pub mod index;
