@@ -73,6 +73,9 @@ wiremock = "0.6"
 assert_cmd = "2.0"
 predicates = "3.0"
 
+# PostgreSQL client for testing wire protocol
+tokio-postgres = "0.7"
+
 [dependencies]
 # SQL Engine - Apache DataFusion
 datafusion = "43"

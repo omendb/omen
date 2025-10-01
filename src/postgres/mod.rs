@@ -6,4 +6,7 @@ pub mod encoding;
 pub mod handlers;
 pub mod server;
 
+#[cfg(test)]
+mod tests;
+
 pub use server::PostgresServer;
