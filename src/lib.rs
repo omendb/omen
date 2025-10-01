@@ -31,6 +31,7 @@ pub mod server;
 pub mod security;
 pub mod backup;
 pub mod postgres;
+pub mod rest;
 
 #[cfg(test)]
 mod tests;

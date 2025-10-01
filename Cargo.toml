@@ -62,6 +62,10 @@ path = "src/bin/benchmark_datafusion_sql.rs"
 name = "postgres_server"
 path = "src/bin/postgres_server.rs"
 
+[[bin]]
+name = "rest_server"
+path = "src/bin/rest_server.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
@@ -75,6 +79,9 @@ predicates = "3.0"
 
 # PostgreSQL client for testing wire protocol
 tokio-postgres = "0.7"
+
+# HTTP client for testing REST API
+reqwest = { version = "0.12", features = ["json"] }
 
 [dependencies]
 # SQL Engine - Apache DataFusion
