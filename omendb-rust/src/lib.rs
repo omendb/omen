@@ -11,13 +11,17 @@ pub mod catalog;
 pub mod sql_engine;
 pub mod table_wal;
 pub mod connection_pool;
+pub mod logging;
+pub mod mvcc;
 
 // Re-exports for common types
 pub use sql_engine::QueryConfig;
 pub use connection_pool::{ConnectionPool, PoolConfig, Connection};
+pub use logging::{LogConfig, init_logging, init_from_env};
 
 // Existing modules (will be refactored)
 pub mod storage;
+pub mod redb_storage;
 pub mod index;
 pub mod concurrent;
 pub mod wal;

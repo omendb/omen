@@ -133,6 +133,40 @@ pub static THROUGHPUT: Lazy<Gauge> = Lazy::new(|| {
     ).unwrap()
 });
 
+// SQL query metrics
+pub static SQL_QUERY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "omendb_sql_query_duration_seconds",
+        "SQL query execution latency in seconds (includes p50/p95/p99 via histogram)",
+        &["query_type"],
+        vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+    ).unwrap()
+});
+
+pub static SQL_QUERIES_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "omendb_sql_queries_total",
+        "Total SQL queries executed by type",
+        &["query_type"]
+    ).unwrap()
+});
+
+pub static SQL_QUERY_ERRORS: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "omendb_sql_query_errors_total",
+        "Total SQL query errors by type",
+        &["error_type"]
+    ).unwrap()
+});
+
+pub static SQL_QUERY_ROWS_RETURNED: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "omendb_sql_query_rows_returned",
+        "Number of rows returned per query",
+        vec![1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0]
+    ).unwrap()
+});
+
 /// Timer for measuring operation duration
 pub struct Timer {
     start: Instant,
@@ -192,6 +226,26 @@ pub fn set_database_size(bytes: i64) {
 /// Update index size
 pub fn set_index_size(keys: i64) {
     INDEX_SIZE.set(keys);
+}
+
+/// Record SQL query execution
+pub fn record_sql_query(query_type: &str, duration_secs: f64, rows_returned: usize) {
+    SQL_QUERIES_TOTAL
+        .with_label_values(&[query_type])
+        .inc();
+
+    SQL_QUERY_DURATION
+        .with_label_values(&[query_type])
+        .observe(duration_secs);
+
+    SQL_QUERY_ROWS_RETURNED.observe(rows_returned as f64);
+}
+
+/// Record SQL query error
+pub fn record_sql_query_error(error_type: &str) {
+    SQL_QUERY_ERRORS
+        .with_label_values(&[error_type])
+        .inc();
 }
 
 /// Get metrics in Prometheus text format
@@ -429,5 +483,79 @@ mod tests {
 
         // Should be valid prometheus format
         assert!(!metrics.is_empty());
+    }
+
+    #[test]
+    fn test_sql_query_metrics() {
+        // Record SELECT query
+        record_sql_query("SELECT", 0.015, 100);
+        record_sql_query("SELECT", 0.025, 250);
+
+        // Record INSERT query
+        record_sql_query("INSERT", 0.005, 1);
+
+        // Verify metrics appear in output
+        let metrics = get_metrics();
+        assert!(metrics.contains("omendb_sql_query_duration_seconds"));
+        assert!(metrics.contains("omendb_sql_queries_total"));
+        assert!(metrics.contains("omendb_sql_query_rows_returned"));
+
+        // Should contain query types
+        assert!(metrics.contains("SELECT") || metrics.contains("INSERT"));
+    }
+
+    #[test]
+    fn test_sql_query_error_metrics() {
+        // Record errors
+        record_sql_query_error("syntax_error");
+        record_sql_query_error("timeout");
+        record_sql_query_error("syntax_error"); // Duplicate
+
+        // Verify error metrics appear
+        let metrics = get_metrics();
+        assert!(metrics.contains("omendb_sql_query_errors_total"));
+    }
+
+    #[test]
+    fn test_sql_query_latency_buckets() {
+        // Test different latencies to ensure histogram buckets work
+        record_sql_query("SELECT", 0.001, 10);     // Very fast
+        record_sql_query("SELECT", 0.01, 100);     // Fast
+        record_sql_query("SELECT", 0.1, 1000);     // Medium
+        record_sql_query("SELECT", 1.0, 10000);    // Slow
+        record_sql_query("SELECT", 5.0, 100000);   // Very slow
+
+        let metrics = get_metrics();
+        assert!(metrics.contains("omendb_sql_query_duration_seconds"));
+
+        // Should contain histogram data (buckets)
+        assert!(metrics.contains("bucket"));
+    }
+
+    #[test]
+    fn test_sql_query_types() {
+        // Test different query types
+        record_sql_query("SELECT", 0.01, 50);
+        record_sql_query("INSERT", 0.005, 1);
+        record_sql_query("CREATE_TABLE", 0.002, 0);
+        record_sql_query("DROP_TABLE", 0.001, 0);
+
+        let metrics = get_metrics();
+        assert!(metrics.contains("omendb_sql_queries_total"));
+
+        // Each query type should have its own counter
+        // (actual verification would need prometheus parsing)
+    }
+
+    #[test]
+    fn test_rows_returned_histogram() {
+        // Test different row counts
+        record_sql_query("SELECT", 0.01, 5);        // Small result
+        record_sql_query("SELECT", 0.05, 500);      // Medium result
+        record_sql_query("SELECT", 0.5, 50000);     // Large result
+        record_sql_query("SELECT", 2.0, 500000);    // Very large result
+
+        let metrics = get_metrics();
+        assert!(metrics.contains("omendb_sql_query_rows_returned"));
     }
 }

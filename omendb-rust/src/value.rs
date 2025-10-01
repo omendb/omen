@@ -14,6 +14,9 @@ pub enum Value {
     /// 64-bit signed integer
     Int64(i64),
 
+    /// 64-bit unsigned integer (for MVCC version tracking)
+    UInt64(u64),
+
     /// 64-bit floating point
     Float64(f64),
 
@@ -35,6 +38,7 @@ impl Value {
     pub fn matches_type(&self, data_type: &DataType) -> bool {
         match (self, data_type) {
             (Value::Int64(_), DataType::Int64) => true,
+            (Value::UInt64(_), DataType::UInt64) => true,
             (Value::Float64(_), DataType::Float64) => true,
             (Value::Text(_), DataType::Utf8) => true,
             (Value::Timestamp(_), DataType::Timestamp(_, _)) => true,
@@ -55,6 +59,11 @@ impl Value {
                 let arr = array.as_any().downcast_ref::<Int64Array>()
                     .ok_or_else(|| anyhow!("Failed to downcast to Int64Array"))?;
                 Ok(Value::Int64(arr.value(index)))
+            }
+            DataType::UInt64 => {
+                let arr = array.as_any().downcast_ref::<UInt64Array>()
+                    .ok_or_else(|| anyhow!("Failed to downcast to UInt64Array"))?;
+                Ok(Value::UInt64(arr.value(index)))
             }
             DataType::Float64 => {
                 let arr = array.as_any().downcast_ref::<Float64Array>()
@@ -85,6 +94,7 @@ impl Value {
     pub fn to_i64(&self) -> Result<i64> {
         match self {
             Value::Int64(v) => Ok(*v),
+            Value::UInt64(v) => Ok(*v as i64),
             Value::Timestamp(v) => Ok(*v),
             Value::Float64(v) => {
                 // Use bit representation for ordering
@@ -100,6 +110,7 @@ impl Value {
     pub fn is_orderable(&self) -> bool {
         matches!(self,
             Value::Int64(_) |
+            Value::UInt64(_) |
             Value::Timestamp(_) |
             Value::Float64(_) |
             Value::Boolean(_)
@@ -110,6 +121,7 @@ impl Value {
     pub fn arrow_type(&self) -> DataType {
         match self {
             Value::Int64(_) => DataType::Int64,
+            Value::UInt64(_) => DataType::UInt64,
             Value::Float64(_) => DataType::Float64,
             Value::Text(_) => DataType::Utf8,
             Value::Timestamp(_) => DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None),
@@ -123,6 +135,7 @@ impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (Value::Int64(a), Value::Int64(b)) => a.partial_cmp(b),
+            (Value::UInt64(a), Value::UInt64(b)) => a.partial_cmp(b),
             (Value::Float64(a), Value::Float64(b)) => a.partial_cmp(b),
             (Value::Text(a), Value::Text(b)) => a.partial_cmp(b),
             (Value::Timestamp(a), Value::Timestamp(b)) => a.partial_cmp(b),
@@ -139,6 +152,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Int64(v) => write!(f, "{}", v),
+            Value::UInt64(v) => write!(f, "{}", v),
             Value::Float64(v) => write!(f, "{}", v),
             Value::Text(v) => write!(f, "'{}'", v),
             Value::Timestamp(v) => write!(f, "{}", v),

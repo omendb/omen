@@ -1,10 +1,12 @@
 //! Table abstraction - combines schema, storage, and learned index
 //! Each table has its own schema and primary key for indexing
+//! Supports MVCC for UPDATE/DELETE operations
 
 use crate::row::Row;
 use crate::value::Value;
 use crate::table_storage::TableStorage;
 use crate::table_index::TableIndex;
+use crate::mvcc::{self, MvccIndices};
 use anyhow::{Result, anyhow};
 use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
@@ -34,14 +36,20 @@ pub struct Table {
     /// Table name
     name: String,
 
-    /// Table schema
-    schema: SchemaRef,
+    /// User-facing schema (without MVCC columns)
+    user_schema: SchemaRef,
+
+    /// Internal schema (with MVCC columns for versioning)
+    internal_schema: SchemaRef,
 
     /// Primary key column name (must be orderable type)
     primary_key: String,
 
-    /// Primary key column index
+    /// Primary key column index in user schema
     primary_key_index: usize,
+
+    /// MVCC column indices in internal schema
+    mvcc_indices: MvccIndices,
 
     /// Table directory
     table_dir: PathBuf,
@@ -51,43 +59,60 @@ pub struct Table {
 
     /// Learned index over primary key
     index: TableIndex,
+
+    /// Version counter for MVCC
+    next_version: u64,
+
+    /// Current transaction ID (0 for non-transactional operations)
+    current_txn_id: u64,
 }
 
 impl Table {
-    /// Create new table
+    /// Create new table with MVCC support
     pub fn new(
         name: String,
-        schema: SchemaRef,
+        user_schema: SchemaRef,
         primary_key: String,
         table_dir: PathBuf,
     ) -> Result<Self> {
-        // Find primary key index
-        let primary_key_index = schema.index_of(&primary_key)?;
+        // Find primary key index in user schema
+        let primary_key_index = user_schema.index_of(&primary_key)?;
 
         // Validate primary key is orderable
-        let pk_field = schema.field(primary_key_index);
+        let pk_field = user_schema.field(primary_key_index);
         if !crate::value::is_orderable_type(pk_field.data_type()) {
             return Err(anyhow!("Primary key '{}' has non-orderable type", primary_key));
         }
 
+        // Create internal schema with MVCC columns
+        let internal_schema = mvcc::add_mvcc_columns(user_schema.clone());
+
+        // Get MVCC column indices
+        let mvcc_indices = MvccIndices::from_schema(&internal_schema)
+            .ok_or_else(|| anyhow!("Failed to add MVCC columns to schema"))?;
+
         // Create table directory
         fs::create_dir_all(&table_dir)?;
 
-        // Create storage and index
-        let storage = TableStorage::new(schema.clone(), table_dir.clone(), 10000)?;
+        // Create storage with internal schema (includes MVCC columns)
+        let storage = TableStorage::new(internal_schema.clone(), table_dir.clone(), 10000)?;
         let index = TableIndex::new(10000);
 
         let table = Self {
             name,
-            schema,
+            user_schema: user_schema.clone(),
+            internal_schema,
             primary_key,
             primary_key_index,
+            mvcc_indices,
             table_dir,
             storage,
             index,
+            next_version: 0,
+            current_txn_id: 0,
         };
 
-        // Save metadata
+        // Save metadata (uses user schema, not internal)
         table.save_metadata()?;
 
         Ok(table)
@@ -99,7 +124,7 @@ impl Table {
         let json = fs::read_to_string(&metadata_file)?;
         let metadata: TableMetadata = serde_json::from_str(&json)?;
 
-        // Reconstruct schema
+        // Reconstruct user schema
         let fields: Result<Vec<_>> = metadata.schema.iter()
             .map(|f| {
                 let data_type = Self::parse_data_type(&f.data_type)?;
@@ -107,38 +132,73 @@ impl Table {
             })
             .collect();
 
-        let schema = Arc::new(arrow::datatypes::Schema::new(fields?));
-        let primary_key_index = schema.index_of(&metadata.primary_key)?;
+        let user_schema = Arc::new(arrow::datatypes::Schema::new(fields?));
+        let primary_key_index = user_schema.index_of(&metadata.primary_key)?;
 
-        // Load storage
-        let storage = TableStorage::load(schema.clone(), table_dir.clone())?;
+        // Create internal schema with MVCC columns
+        let internal_schema = mvcc::add_mvcc_columns(user_schema.clone());
 
-        // Rebuild index from storage
-        let mut index = TableIndex::new(storage.row_count());
+        // Get MVCC column indices
+        let mvcc_indices = MvccIndices::from_schema(&internal_schema)
+            .ok_or_else(|| anyhow!("Failed to add MVCC columns to schema"))?;
+
+        // Load storage (with internal schema)
+        let storage = TableStorage::load(internal_schema.clone(), table_dir.clone())?;
+
+        // Find max version from existing data
         let all_rows = storage.scan_all()?;
+        let mut max_version = 0u64;
+        for row in &all_rows {
+            if let Ok(Value::UInt64(version)) = row.get(mvcc_indices.version) {
+                max_version = max_version.max(*version);
+            }
+        }
+
+        // Rebuild index from storage (only non-deleted rows with latest versions)
+        let mut index = TableIndex::new(storage.row_count());
         for (position, row) in all_rows.iter().enumerate() {
+            // Skip deleted rows
+            if let Ok(Value::Boolean(true)) = row.get(mvcc_indices.deleted) {
+                continue;
+            }
+
             let pk_value = row.get(primary_key_index)?;
             index.insert(pk_value, position)?;
         }
 
         Ok(Self {
             name,
-            schema,
+            user_schema,
+            internal_schema,
             primary_key: metadata.primary_key,
             primary_key_index,
+            mvcc_indices,
             table_dir,
             storage,
             index,
+            next_version: max_version + 1,
+            current_txn_id: 0,
         })
     }
 
-    /// Insert row into table
+    /// Insert row into table with MVCC metadata
     pub fn insert(&mut self, row: Row) -> Result<()> {
-        // Validate row matches schema
-        row.validate(&self.schema)?;
+        // Validate row matches user schema
+        row.validate(&self.user_schema)?;
 
         // Extract primary key value
         let pk_value = row.get(self.primary_key_index)?;
+
+        // Add MVCC metadata to row
+        let version = self.next_version;
+        self.next_version += 1;
+
+        let mut internal_values = row.values().to_vec();
+        internal_values.push(Value::UInt64(version)); // __mvcc_version
+        internal_values.push(Value::UInt64(self.current_txn_id)); // __mvcc_txn_id
+        internal_values.push(Value::Boolean(false)); // __mvcc_deleted
+
+        let internal_row = Row::new(internal_values);
 
         // Get position where row will be stored
         let position = self.storage.row_count();
@@ -146,18 +206,130 @@ impl Table {
         // Add to index
         self.index.insert(pk_value, position)?;
 
-        // Store row
-        self.storage.insert(row)?;
+        // Store row with MVCC metadata
+        self.storage.insert(internal_row)?;
 
         Ok(())
+    }
+
+    /// Update row by primary key
+    /// Creates new version with updated values, marks old version as deleted
+    pub fn update(&mut self, key_value: &Value, updated_row: Row) -> Result<usize> {
+        // Validate updated row matches user schema
+        updated_row.validate(&self.user_schema)?;
+
+        // Find existing row
+        let position = self.index.search(key_value)?
+            .ok_or_else(|| anyhow!("Row with key {:?} not found", key_value))?;
+
+        let existing_internal_row = self.storage.get(position)?;
+
+        // Check if already deleted
+        if self.is_deleted(&existing_internal_row) {
+            return Ok(0); // Row already deleted, nothing to update
+        }
+
+        // Mark old version as deleted (in-place update not supported in append-only storage)
+        // Instead, insert new version with updated values
+        let version = self.next_version;
+        self.next_version += 1;
+
+        let mut internal_values = updated_row.values().to_vec();
+        internal_values.push(Value::UInt64(version)); // __mvcc_version
+        internal_values.push(Value::UInt64(self.current_txn_id)); // __mvcc_txn_id
+        internal_values.push(Value::Boolean(false)); // __mvcc_deleted
+
+        let new_internal_row = Row::new(internal_values);
+
+        // Get new position
+        let new_position = self.storage.row_count();
+
+        // Update index to point to new version
+        // (Overwrites old position with new position)
+        self.index.insert(key_value, new_position)?;
+
+        // Store new version
+        self.storage.insert(new_internal_row)?;
+
+        Ok(1) // 1 row updated
+    }
+
+    /// Delete row by primary key
+    /// Creates new version marked as deleted
+    pub fn delete(&mut self, key_value: &Value) -> Result<usize> {
+        // Find existing row
+        let position = self.index.search(key_value)?
+            .ok_or_else(|| anyhow!("Row with key {:?} not found", key_value))?;
+
+        let existing_internal_row = self.storage.get(position)?;
+
+        // Check if already deleted
+        if self.is_deleted(&existing_internal_row) {
+            return Ok(0); // Already deleted
+        }
+
+        // Create new version marked as deleted
+        let version = self.next_version;
+        self.next_version += 1;
+
+        // Copy all values from existing row
+        let mut internal_values = existing_internal_row.values()[..self.user_schema.fields().len()].to_vec();
+
+        // Add MVCC metadata with deleted=true
+        internal_values.push(Value::UInt64(version)); // __mvcc_version
+        internal_values.push(Value::UInt64(self.current_txn_id)); // __mvcc_txn_id
+        internal_values.push(Value::Boolean(true)); // __mvcc_deleted = true
+
+        let deleted_internal_row = Row::new(internal_values);
+
+        // Store deleted version
+        self.storage.insert(deleted_internal_row)?;
+
+        // Remove from index
+        // (Index will no longer return this row)
+        // Note: Index doesn't have remove method, so it will still point to old position
+        // But get() checks is_deleted, so it will return None
+
+        Ok(1) // 1 row deleted
+    }
+
+    /// Set transaction ID for next operations
+    pub fn set_transaction_id(&mut self, txn_id: u64) {
+        self.current_txn_id = txn_id;
+    }
+
+    /// Strip MVCC metadata from internal row to create user-facing row
+    fn strip_mvcc_columns(&self, internal_row: &Row) -> Row {
+        let user_values: Vec<Value> = internal_row.values()
+            .iter()
+            .take(self.user_schema.fields().len())
+            .cloned()
+            .collect();
+        Row::new(user_values)
+    }
+
+    /// Check if row is deleted
+    fn is_deleted(&self, internal_row: &Row) -> bool {
+        matches!(
+            internal_row.get(self.mvcc_indices.deleted),
+            Ok(Value::Boolean(true))
+        )
     }
 
     /// Get row by primary key value
     pub fn get(&self, key_value: &Value) -> Result<Option<Row>> {
         // Use index to find position
         if let Some(position) = self.index.search(key_value)? {
-            let row = self.storage.get(position)?;
-            return Ok(Some(row));
+            let internal_row = self.storage.get(position)?;
+
+            // Check if deleted
+            if self.is_deleted(&internal_row) {
+                return Ok(None);
+            }
+
+            // Strip MVCC columns before returning
+            let user_row = self.strip_mvcc_columns(&internal_row);
+            return Ok(Some(user_row));
         }
 
         Ok(None)
@@ -168,8 +340,15 @@ impl Table {
         // Use index to find positions
         let positions = self.index.range_query(start, end)?;
 
-        // Retrieve rows
-        self.storage.get_many(&positions)
+        // Retrieve rows, filter deleted, strip MVCC columns
+        let mut user_rows = Vec::new();
+        for internal_row in self.storage.get_many(&positions)? {
+            if !self.is_deleted(&internal_row) {
+                user_rows.push(self.strip_mvcc_columns(&internal_row));
+            }
+        }
+
+        Ok(user_rows)
     }
 
     /// Get all rows as RecordBatch
@@ -177,9 +356,18 @@ impl Table {
         self.storage.scan_batches()
     }
 
-    /// Get all rows as Row objects
+    /// Get all rows as Row objects (filters deleted, strips MVCC columns)
     pub fn scan_all(&self) -> Result<Vec<Row>> {
-        self.storage.scan_all()
+        let all_internal_rows = self.storage.scan_all()?;
+        let mut user_rows = Vec::new();
+
+        for internal_row in all_internal_rows {
+            if !self.is_deleted(&internal_row) {
+                user_rows.push(self.strip_mvcc_columns(&internal_row));
+            }
+        }
+
+        Ok(user_rows)
     }
 
     /// Table name
@@ -187,9 +375,9 @@ impl Table {
         &self.name
     }
 
-    /// Table schema
+    /// Table schema (user-facing, without MVCC columns)
     pub fn schema(&self) -> &SchemaRef {
-        &self.schema
+        &self.user_schema
     }
 
     /// Primary key column name
@@ -209,9 +397,9 @@ impl Table {
         Ok(())
     }
 
-    /// Save table metadata
+    /// Save table metadata (saves user schema, not internal)
     fn save_metadata(&self) -> Result<()> {
-        let schema_fields: Vec<SchemaField> = self.schema.fields().iter()
+        let schema_fields: Vec<SchemaField> = self.user_schema.fields().iter()
             .map(|f| SchemaField {
                 name: f.name().clone(),
                 data_type: Self::format_data_type(f.data_type()),

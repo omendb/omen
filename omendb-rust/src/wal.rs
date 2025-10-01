@@ -482,6 +482,11 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    /// Get transaction ID
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
     /// Write operation within transaction
     pub fn write(&self, operation: WalOperation) -> Result<u64> {
         self.wal.write(operation)

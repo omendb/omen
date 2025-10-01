@@ -2,8 +2,10 @@
 //! Parses and executes SQL statements using the multi-table catalog
 
 use crate::catalog::Catalog;
+use crate::metrics::{record_sql_query, record_sql_query_error};
 use crate::row::Row;
 use crate::value::Value;
+use crate::wal::{TransactionManager, Transaction, WalManager};
 use anyhow::{Result, anyhow};
 use arrow::datatypes::{DataType, Field, Schema};
 use sqlparser::ast::{
@@ -12,8 +14,9 @@ use sqlparser::ast::{
 };
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tracing::{debug, error, info, warn, instrument, span, Level};
 
 /// Configuration for SQL engine execution
 #[derive(Clone, Debug)]
@@ -38,10 +41,12 @@ impl Default for QueryConfig {
     }
 }
 
-/// SQL execution engine
+/// SQL execution engine with transaction support
 pub struct SqlEngine {
     catalog: Catalog,
     config: QueryConfig,
+    transaction_manager: Option<Arc<TransactionManager>>,
+    current_transaction: Arc<Mutex<Option<Transaction>>>,
 }
 
 impl SqlEngine {
@@ -52,46 +57,150 @@ impl SqlEngine {
 
     /// Create new SQL engine with custom configuration
     pub fn with_config(catalog: Catalog, config: QueryConfig) -> Self {
-        Self { catalog, config }
+        Self {
+            catalog,
+            config,
+            transaction_manager: None,
+            current_transaction: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Create new SQL engine with transaction support
+    pub fn with_transactions(catalog: Catalog, config: QueryConfig, wal: Arc<WalManager>) -> Self {
+        let tx_manager = Arc::new(TransactionManager::new(wal));
+        Self {
+            catalog,
+            config,
+            transaction_manager: Some(tx_manager),
+            current_transaction: Arc::new(Mutex::new(None)),
+        }
     }
 
     /// Execute a SQL statement with timeout and resource limits
+    #[instrument(skip(self, sql), fields(query_length = sql.len()))]
     pub fn execute(&mut self, sql: &str) -> Result<ExecutionResult> {
         let start_time = Instant::now();
 
+        debug!(query = %sql, "Executing SQL query");
+
         // Check query size limit (default: 10MB)
         if sql.len() > 10_000_000 {
+            error!(query_size = sql.len(), "Query size exceeds limit");
+            record_sql_query_error("query_too_large");
             return Err(anyhow!("Query size exceeds limit (10MB)"));
         }
 
         let dialect = GenericDialect {};
-        let statements = Parser::parse_sql(&dialect, sql)?;
+        let statements = match Parser::parse_sql(&dialect, sql) {
+            Ok(stmts) => {
+                debug!(statement_count = stmts.len(), "SQL parsed successfully");
+                stmts
+            }
+            Err(e) => {
+                error!(error = %e, "SQL parse error");
+                record_sql_query_error("parse_error");
+                return Err(anyhow!("SQL parse error: {}", e));
+            }
+        };
 
         if statements.is_empty() {
+            warn!("Empty SQL query received");
+            record_sql_query_error("empty_query");
             return Err(anyhow!("No SQL statement found"));
         }
 
         if statements.len() > 1 {
+            warn!(count = statements.len(), "Multiple statements not supported");
+            record_sql_query_error("multiple_statements");
             return Err(anyhow!("Multiple statements not supported"));
         }
 
         // Check timeout before execution
         if start_time.elapsed() > self.config.timeout {
+            error!("Query timed out during parsing");
+            record_sql_query_error("timeout");
             return Err(anyhow!("Query timed out during parsing"));
         }
 
-        match &statements[0] {
+        // Execute query and record metrics
+        let result = match &statements[0] {
+            Statement::StartTransaction { .. } => {
+                info!("Beginning transaction");
+                self.begin_transaction()
+            }
+            Statement::Commit { .. } => {
+                info!("Committing transaction");
+                self.commit_transaction()
+            }
+            Statement::Rollback { .. } => {
+                info!("Rolling back transaction");
+                self.rollback_transaction()
+            }
             Statement::CreateTable(stmt) => {
+                info!(table = %stmt.name, "Creating table");
                 self.execute_create_table(&stmt.name, &stmt.columns)
             }
             Statement::Insert(stmt) => {
+                debug!(table = %stmt.table_name, "Inserting data");
                 self.execute_insert(&stmt.table_name, &stmt.source)
             }
+            Statement::Update { .. } => {
+                warn!("UPDATE not yet implemented in current engine (will be available in DataFusion migration)");
+                Err(anyhow!("UPDATE statement not yet implemented - coming soon with DataFusion"))
+            }
+            Statement::Delete { .. } => {
+                warn!("DELETE not yet implemented in current engine (will be available in DataFusion migration)");
+                Err(anyhow!("DELETE statement not yet implemented - coming soon with DataFusion"))
+            }
             Statement::Query(query) => {
+                debug!("Executing SELECT query");
                 self.execute_query_with_limits(query, start_time)
             }
-            _ => Err(anyhow!("Unsupported SQL statement")),
+            _ => {
+                warn!("Unsupported SQL statement type");
+                record_sql_query_error("unsupported_statement");
+                return Err(anyhow!("Unsupported SQL statement"));
+            }
+        };
+
+        // Record metrics based on result
+        match &result {
+            Ok(exec_result) => {
+                let duration = start_time.elapsed().as_secs_f64();
+                let (query_type, rows) = match exec_result {
+                    ExecutionResult::Created { .. } => ("CREATE_TABLE", 0),
+                    ExecutionResult::Inserted { rows } => ("INSERT", *rows),
+                    ExecutionResult::Updated { rows } => ("UPDATE", *rows),
+                    ExecutionResult::Deleted { rows } => ("DELETE", *rows),
+                    ExecutionResult::Selected { rows, .. } => ("SELECT", *rows),
+                    ExecutionResult::TransactionStarted { .. } => ("BEGIN", 0),
+                    ExecutionResult::TransactionCommitted { .. } => ("COMMIT", 0),
+                    ExecutionResult::TransactionRolledBack { .. } => ("ROLLBACK", 0),
+                };
+                info!(
+                    query_type = query_type,
+                    rows = rows,
+                    duration_ms = duration * 1000.0,
+                    "Query executed successfully"
+                );
+                record_sql_query(query_type, duration, rows);
+            }
+            Err(e) => {
+                let error_type = if e.to_string().contains("timeout") {
+                    "timeout"
+                } else if e.to_string().contains("exceeds maximum row limit") {
+                    "row_limit_exceeded"
+                } else if e.to_string().contains("not found") {
+                    "not_found"
+                } else {
+                    "execution_error"
+                };
+                error!(error = %e, error_type = error_type, "Query execution failed");
+                record_sql_query_error(error_type);
+            }
         }
+
+        result
     }
 
     /// Check if query has exceeded timeout
@@ -103,6 +212,58 @@ impl SqlEngine {
             ));
         }
         Ok(())
+    }
+
+    /// Begin a new transaction
+    fn begin_transaction(&self) -> Result<ExecutionResult> {
+        // Check if transactions are enabled
+        let tx_manager = self.transaction_manager.as_ref()
+            .ok_or_else(|| anyhow!("Transactions not enabled. Use SqlEngine::with_transactions()"))?;
+
+        // Check if there's already an active transaction
+        let mut current_tx = self.current_transaction.lock().unwrap();
+        if current_tx.is_some() {
+            return Err(anyhow!("Transaction already in progress. Commit or rollback first."));
+        }
+
+        // Begin new transaction
+        let transaction = tx_manager.begin()?;
+        let txn_id = transaction.id();
+        *current_tx = Some(transaction);
+
+        debug!(txn_id = txn_id, "Transaction started");
+
+        Ok(ExecutionResult::TransactionStarted { txn_id })
+    }
+
+    /// Commit the current transaction
+    fn commit_transaction(&self) -> Result<ExecutionResult> {
+        let mut current_tx = self.current_transaction.lock().unwrap();
+
+        let transaction = current_tx.take()
+            .ok_or_else(|| anyhow!("No active transaction to commit"))?;
+
+        let txn_id = transaction.id();
+        transaction.commit()?;
+
+        debug!(txn_id = txn_id, "Transaction committed");
+
+        Ok(ExecutionResult::TransactionCommitted { txn_id })
+    }
+
+    /// Rollback the current transaction
+    fn rollback_transaction(&self) -> Result<ExecutionResult> {
+        let mut current_tx = self.current_transaction.lock().unwrap();
+
+        let transaction = current_tx.take()
+            .ok_or_else(|| anyhow!("No active transaction to rollback"))?;
+
+        let txn_id = transaction.id();
+        transaction.rollback()?;
+
+        debug!(txn_id = txn_id, "Transaction rolled back");
+
+        Ok(ExecutionResult::TransactionRolledBack { txn_id })
     }
 
     /// Execute CREATE TABLE statement
@@ -1012,12 +1173,27 @@ pub enum ExecutionResult {
     /// Rows inserted
     Inserted { rows: usize },
 
+    /// Rows updated
+    Updated { rows: usize },
+
+    /// Rows deleted
+    Deleted { rows: usize },
+
     /// Rows selected
     Selected {
         columns: Vec<String>,
         rows: usize,
         data: Vec<Row>,
     },
+
+    /// Transaction started
+    TransactionStarted { txn_id: u64 },
+
+    /// Transaction committed
+    TransactionCommitted { txn_id: u64 },
+
+    /// Transaction rolled back
+    TransactionRolledBack { txn_id: u64 },
 }
 
 #[cfg(test)]

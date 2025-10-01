@@ -176,6 +176,9 @@ fn value_to_array(value: &Value, data_type: &arrow::datatypes::DataType) -> Resu
         (Value::Int64(v), DataType::Int64) => {
             Ok(Arc::new(Int64Array::from(vec![*v])))
         }
+        (Value::UInt64(v), DataType::UInt64) => {
+            Ok(Arc::new(UInt64Array::from(vec![*v])))
+        }
         (Value::Float64(v), DataType::Float64) => {
             Ok(Arc::new(Float64Array::from(vec![*v])))
         }
@@ -192,6 +195,7 @@ fn value_to_array(value: &Value, data_type: &arrow::datatypes::DataType) -> Resu
             // Create single-element null array of appropriate type
             match data_type {
                 DataType::Int64 => Ok(Arc::new(Int64Array::from(vec![None as Option<i64>]))),
+                DataType::UInt64 => Ok(Arc::new(UInt64Array::from(vec![None as Option<u64>]))),
                 DataType::Float64 => Ok(Arc::new(Float64Array::from(vec![None as Option<f64>]))),
                 DataType::Utf8 => Ok(Arc::new(StringArray::from(vec![None as Option<&str>]))),
                 DataType::Timestamp(_, _) => Ok(Arc::new(TimestampMicrosecondArray::from(vec![None as Option<i64>]))),
@@ -209,6 +213,7 @@ fn create_array_builder(data_type: &arrow::datatypes::DataType, capacity: usize)
 
     match data_type {
         DataType::Int64 => Ok(Box::new(Int64Builder::with_capacity(capacity))),
+        DataType::UInt64 => Ok(Box::new(UInt64Builder::with_capacity(capacity))),
         DataType::Float64 => Ok(Box::new(Float64Builder::with_capacity(capacity))),
         DataType::Utf8 => Ok(Box::new(StringBuilder::with_capacity(capacity, 1024))),
         DataType::Timestamp(_, _) => Ok(Box::new(TimestampMicrosecondBuilder::with_capacity(capacity))),
@@ -222,6 +227,11 @@ fn append_value_to_builder(builder: &mut Box<dyn ArrayBuilder>, value: &Value) -
     match value {
         Value::Int64(v) => {
             let b = builder.as_any_mut().downcast_mut::<Int64Builder>()
+                .ok_or_else(|| anyhow!("Builder type mismatch"))?;
+            b.append_value(*v);
+        }
+        Value::UInt64(v) => {
+            let b = builder.as_any_mut().downcast_mut::<UInt64Builder>()
                 .ok_or_else(|| anyhow!("Builder type mismatch"))?;
             b.append_value(*v);
         }
@@ -248,6 +258,8 @@ fn append_value_to_builder(builder: &mut Box<dyn ArrayBuilder>, value: &Value) -
         Value::Null => {
             // Determine builder type and append null appropriately
             if let Some(b) = builder.as_any_mut().downcast_mut::<Int64Builder>() {
+                b.append_null();
+            } else if let Some(b) = builder.as_any_mut().downcast_mut::<UInt64Builder>() {
                 b.append_null();
             } else if let Some(b) = builder.as_any_mut().downcast_mut::<Float64Builder>() {
                 b.append_null();

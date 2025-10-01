@@ -5,6 +5,7 @@ use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tracing::{debug, info, warn, instrument};
 
 /// Connection pool configuration
 #[derive(Clone, Debug)]
@@ -150,13 +151,20 @@ impl ConnectionPool {
     }
 
     /// Acquire a connection from the pool
+    #[instrument(skip(self))]
     pub fn acquire(&self) -> Result<Connection> {
         let start_time = Instant::now();
         let deadline = start_time + self.config.acquire_timeout;
 
+        debug!("Acquiring connection from pool");
+
         loop {
             // Check if we've exceeded acquire timeout
             if Instant::now() > deadline {
+                warn!(
+                    timeout_secs = self.config.acquire_timeout.as_secs(),
+                    "Connection acquire timeout"
+                );
                 return Err(anyhow!(
                     "Connection acquire timeout ({} seconds)",
                     self.config.acquire_timeout.as_secs()
@@ -178,6 +186,13 @@ impl ConnectionPool {
                 stats.total_acquisitions += 1;
                 stats.active_connections += 1;
                 stats.idle_connections = stats.idle_connections.saturating_sub(1);
+
+                debug!(
+                    connection_id = *id,
+                    active = stats.active_connections,
+                    idle = stats.idle_connections,
+                    "Reused idle connection"
+                );
 
                 let connection = Connection {
                     id: *id,
@@ -217,6 +232,13 @@ impl ConnectionPool {
                 stats.total_acquisitions += 1;
                 stats.active_connections += 1;
 
+                info!(
+                    connection_id = id,
+                    total_connections = total_connections + 1,
+                    max_connections = self.config.max_connections,
+                    "Created new connection"
+                );
+
                 let connection = Connection {
                     id,
                     pool: Arc::new(self.clone_pool_handle()),
@@ -231,6 +253,11 @@ impl ConnectionPool {
 
             // Pool is full, record this
             stats.max_connections_reached += 1;
+            warn!(
+                max_connections = self.config.max_connections,
+                active = stats.active_connections,
+                "Connection pool at capacity, waiting"
+            );
 
             drop(connections);
             drop(stats);
@@ -256,6 +283,7 @@ impl ConnectionPool {
     }
 
     /// Clean up idle connections that have exceeded timeout
+    #[instrument(skip(self))]
     pub fn cleanup_idle_connections(&self) -> Result<usize> {
         let mut connections = self.connections.lock().unwrap();
         let mut stats = self.stats.lock().unwrap();
@@ -278,6 +306,15 @@ impl ConnectionPool {
             stats.total_closed += 1;
             stats.idle_connections = stats.idle_connections.saturating_sub(1);
             stats.idle_timeouts += 1;
+            debug!(connection_id = id, "Cleaned up idle connection");
+        }
+
+        if removed > 0 {
+            info!(
+                removed_count = removed,
+                remaining = connections.len(),
+                "Cleaned up idle connections"
+            );
         }
 
         Ok(removed)
