@@ -58,6 +58,10 @@ path = "src/bin/benchmark_redb_learned.rs"
 name = "benchmark_datafusion_sql"
 path = "src/bin/benchmark_datafusion_sql.rs"
 
+[[bin]]
+name = "postgres_server"
+path = "src/bin/postgres_server.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
