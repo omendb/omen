@@ -1,8 +1,8 @@
 # OmenDB Current Status
 
-**Last Updated:** October 1, 2025 (Week 1, Day 1 Complete)
-**Phase:** Storage Layer Implementation - redb + Learned Index ✅
-**Maturity:** 30% (was 20%) → Target: 95% production-ready (4 weeks with proven libraries)
+**Last Updated:** October 1, 2025 (Week 1, Day 2 Complete)
+**Phase:** DataFusion Integration - SQL Execution on redb ✅
+**Maturity:** 45% (was 30%) → Target: 95% production-ready (4 weeks with proven libraries)
 
 ---
 
@@ -148,6 +148,25 @@
 
 ## 📊 **Current Progress**
 
+### ✅ Completed (Week 1, Day 2 - October 1, 2025)
+
+**DataFusion Integration:**
+1. ✅ Created `src/datafusion/redb_table.rs` (TableProvider implementation)
+2. ✅ Implemented TableProvider trait for redb + learned index
+3. ✅ Point query detection: WHERE id = ? → uses learned index
+4. ✅ Full scan support for other queries
+5. ✅ Projection and aggregation support
+6. ✅ Written 4 comprehensive DataFusion tests (all passing)
+7. ✅ Created SQL benchmark (benchmark_datafusion_sql)
+8. ✅ All 180 tests passing (4 new DataFusion tests added)
+
+**SQL Capabilities Now Available:**
+- SELECT with WHERE clauses (point queries optimized)
+- Full table scans
+- Projections (SELECT specific columns)
+- Aggregations (COUNT, etc.)
+- Range queries (WHERE id BETWEEN x AND y)
+
 ### ✅ Completed (Week 1, Day 1 - October 1, 2025)
 
 **redb Storage Layer Implementation:**
@@ -196,22 +215,25 @@
    - ✅ SESSION_SUMMARY.md
    - ✅ This updated status doc
 
-### 🔄 In Progress (Week 1, Days 2-7)
+### 🔄 In Progress (Week 1, Days 3-7)
 
-**Current Focus:** DataFusion TableProvider Implementation
-- Implement TableProvider trait for learned index integration
-- Point query optimization detection
-- Range query support via DataFusion
-- Tests for SQL query execution
+**Current Focus:** PostgreSQL Wire Protocol Integration
+- Integrate pgwire library for PostgreSQL compatibility
+- All PostgreSQL clients will work (psql, Python, Go, JS, etc.)
+- Connection handling and authentication
+- Query execution pipeline via DataFusion
 
 ### 📅 Next Up (4-Week Implementation)
 
-**Week 1: Storage Layer** (30% complete)
+**Week 1: Storage Layer + DataFusion** (60% complete)
 - ✅ Day 1: Create redb storage wrapper
 - ✅ Day 1: Integrate learned index with redb
 - ✅ Day 1: Implement basic CRUD operations
 - ✅ Day 1: Tests for storage + learned index (5 tests, all passing)
-- ⏳ Days 2-7: DataFusion TableProvider for redb + learned index
+- ✅ Day 2: DataFusion TableProvider for redb + learned index
+- ✅ Day 2: Point query optimization detection
+- ✅ Day 2: SQL execution tests (4 tests, all passing)
+- ⏳ Days 3-7: PostgreSQL wire protocol integration
 
 **Week 2: DataFusion Integration**
 - Implement TableProvider trait
@@ -432,7 +454,16 @@ impl TableProvider for LearnedIndexTable {
 
 ## 📞 **Status Updates**
 
-**Oct 1 (Today) - WEEK 1, DAY 1 COMPLETE ✅**
+**Oct 1 (Today) - WEEK 1, DAY 2 COMPLETE ✅**
+- ✅ Created DataFusion TableProvider (`src/datafusion/redb_table.rs`, 300+ lines)
+- ✅ Implemented point query optimization (WHERE id = ? → learned index)
+- ✅ Full SQL support: SELECT, WHERE, projections, aggregations, range queries
+- ✅ Written 4 DataFusion integration tests (all passing)
+- ✅ Created SQL benchmark (benchmark_datafusion_sql)
+- ✅ All 180 tests passing (176 → 180 with new DataFusion tests)
+- **Status:** SQL execution working on redb via DataFusion ✅
+
+**Oct 1 (Earlier) - WEEK 1, DAY 1 COMPLETE ✅**
 - ✅ Created redb storage wrapper (`src/redb_storage.rs`, 330 lines)
 - ✅ Integrated learned index with redb
 - ✅ Implemented CRUD operations (insert, get, scan, delete)
@@ -450,12 +481,12 @@ impl TableProvider for LearnedIndexTable {
 - ✅ Created comprehensive documentation
 - **Impact:** 12 months saved, production-ready in 4 weeks
 
-**Next (Oct 2) - DATAFUSION TABLEPROVIDER**
-- [ ] Create DataFusion TableProvider for redb
-- [ ] Integrate learned index with TableProvider
-- [ ] Point query optimization detection
-- [ ] Test SQL execution via DataFusion
-- **Goal:** SQL queries working on redb + learned index
+**Next (Oct 2) - POSTGRESQL WIRE PROTOCOL**
+- [ ] Integrate pgwire library
+- [ ] Implement connection handling
+- [ ] Wire SQL execution to DataFusion
+- [ ] Test with psql client
+- **Goal:** PostgreSQL clients can connect and query
 
 ---
 

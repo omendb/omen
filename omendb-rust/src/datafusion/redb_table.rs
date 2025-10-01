@@ -1,0 +1,312 @@
+//! DataFusion TableProvider implementation for redb storage with learned index optimization
+
+use crate::redb_storage::RedbStorage;
+use arrow::array::{ArrayRef, Int64Array, RecordBatch, StringArray};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use async_trait::async_trait;
+use datafusion::catalog::Session;
+use datafusion::datasource::TableProvider;
+use datafusion::error::{DataFusionError, Result};
+use datafusion::logical_expr::{Expr, TableType};
+use datafusion::physical_plan::ExecutionPlan;
+use datafusion::physical_plan::memory::MemoryExec;
+use std::any::Any;
+use std::sync::{Arc, RwLock};
+
+/// TableProvider that wraps redb storage with learned index optimization
+#[derive(Debug)]
+pub struct RedbTable {
+    /// Underlying redb storage with learned index
+    storage: Arc<RwLock<RedbStorage>>,
+
+    /// Schema for this table
+    schema: SchemaRef,
+
+    /// Table name
+    name: String,
+}
+
+impl RedbTable {
+    /// Create a new RedbTable
+    pub fn new(storage: Arc<RwLock<RedbStorage>>, name: impl Into<String>) -> Self {
+        // Simple schema: (id: Int64, value: String)
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("value", DataType::Utf8, false),
+        ]));
+
+        Self {
+            storage,
+            schema,
+            name: name.into(),
+        }
+    }
+
+    /// Create with custom schema
+    pub fn with_schema(
+        storage: Arc<RwLock<RedbStorage>>,
+        name: impl Into<String>,
+        schema: SchemaRef,
+    ) -> Self {
+        Self {
+            storage,
+            schema,
+            name: name.into(),
+        }
+    }
+
+    /// Detect if this is a point query (WHERE id = <value>)
+    fn is_point_query(filters: &[Expr]) -> Option<i64> {
+        for expr in filters {
+            if let Expr::BinaryExpr(binary) = expr {
+                // Check for: id = <value>
+                if let (Expr::Column(col), Expr::Literal(scalar_value)) = (&*binary.left, &*binary.right) {
+                    if col.name == "id" && binary.op == datafusion::logical_expr::Operator::Eq {
+                        if let datafusion::scalar::ScalarValue::Int64(Some(value)) = scalar_value {
+                            return Some(*value);
+                        }
+                    }
+                }
+                // Also check reversed: <value> = id
+                if let (Expr::Literal(scalar_value), Expr::Column(col)) = (&*binary.left, &*binary.right) {
+                    if col.name == "id" && binary.op == datafusion::logical_expr::Operator::Eq {
+                        if let datafusion::scalar::ScalarValue::Int64(Some(value)) = scalar_value {
+                            return Some(*value);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Execute a point query using learned index
+    fn execute_point_query(&self, key: i64) -> Result<RecordBatch> {
+        let storage = self.storage.read()
+            .map_err(|e| DataFusionError::Execution(format!("Lock error: {}", e)))?;
+
+        match storage.point_query(key) {
+            Ok(Some(value_bytes)) => {
+                let value_str = String::from_utf8_lossy(&value_bytes).to_string();
+
+                let id_array = Int64Array::from(vec![key]);
+                let value_array = StringArray::from(vec![value_str]);
+
+                let batch = RecordBatch::try_new(
+                    self.schema.clone(),
+                    vec![
+                        Arc::new(id_array) as ArrayRef,
+                        Arc::new(value_array) as ArrayRef,
+                    ],
+                )?;
+
+                Ok(batch)
+            }
+            Ok(None) => {
+                // Return empty batch
+                let empty_id = Int64Array::from(Vec::<i64>::new());
+                let empty_value = StringArray::from(Vec::<String>::new());
+
+                let batch = RecordBatch::try_new(
+                    self.schema.clone(),
+                    vec![
+                        Arc::new(empty_id) as ArrayRef,
+                        Arc::new(empty_value) as ArrayRef,
+                    ],
+                )?;
+
+                Ok(batch)
+            }
+            Err(e) => Err(DataFusionError::Execution(format!("Point query failed: {}", e))),
+        }
+    }
+
+    /// Execute a full table scan
+    fn execute_full_scan(&self) -> Result<RecordBatch> {
+        let storage = self.storage.read()
+            .map_err(|e| DataFusionError::Execution(format!("Lock error: {}", e)))?;
+
+        match storage.scan_all() {
+            Ok(rows) => {
+                let mut ids = Vec::with_capacity(rows.len());
+                let mut values = Vec::with_capacity(rows.len());
+
+                for (id, value_bytes) in rows {
+                    ids.push(id);
+                    values.push(String::from_utf8_lossy(&value_bytes).to_string());
+                }
+
+                let id_array = Int64Array::from(ids);
+                let value_array = StringArray::from(values);
+
+                let batch = RecordBatch::try_new(
+                    self.schema.clone(),
+                    vec![
+                        Arc::new(id_array) as ArrayRef,
+                        Arc::new(value_array) as ArrayRef,
+                    ],
+                )?;
+
+                Ok(batch)
+            }
+            Err(e) => Err(DataFusionError::Execution(format!("Full scan failed: {}", e))),
+        }
+    }
+}
+
+#[async_trait]
+impl TableProvider for RedbTable {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn schema(&self) -> SchemaRef {
+        self.schema.clone()
+    }
+
+    fn table_type(&self) -> TableType {
+        TableType::Base
+    }
+
+    async fn scan(
+        &self,
+        _state: &dyn Session,
+        projection: Option<&Vec<usize>>,
+        filters: &[Expr],
+        _limit: Option<usize>,
+    ) -> Result<Arc<dyn ExecutionPlan>> {
+        // Check if this is a point query
+        if let Some(key) = Self::is_point_query(filters) {
+            // Use learned index for point query
+            let batch = self.execute_point_query(key)?;
+
+            // Apply projection if needed
+            let batch = if let Some(proj) = projection {
+                batch.project(proj)?
+            } else {
+                batch
+            };
+
+            let exec = MemoryExec::try_new(&[vec![batch]], self.schema.clone(), projection.cloned())?;
+            return Ok(Arc::new(exec));
+        }
+
+        // Fall back to full scan
+        let batch = self.execute_full_scan()?;
+
+        // Apply projection if needed
+        let batch = if let Some(proj) = projection {
+            batch.project(proj)?
+        } else {
+            batch
+        };
+
+        let exec = MemoryExec::try_new(&[vec![batch]], self.schema.clone(), projection.cloned())?;
+        Ok(Arc::new(exec))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::redb_storage::RedbStorage;
+    use datafusion::prelude::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_datafusion_point_query() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Insert test data
+        storage.insert(1, b"value_1").unwrap();
+        storage.insert(2, b"value_2").unwrap();
+        storage.insert(3, b"value_3").unwrap();
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        // Create DataFusion context
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Execute point query
+        let df = ctx.sql("SELECT * FROM test_table WHERE id = 2").await.unwrap();
+        let results = df.collect().await.unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].num_rows(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_datafusion_full_scan() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_scan.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        for i in 0..10 {
+            storage.insert(i, format!("value_{}", i).as_bytes()).unwrap();
+        }
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        let df = ctx.sql("SELECT * FROM test_table").await.unwrap();
+        let results = df.collect().await.unwrap();
+
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 10);
+    }
+
+    #[tokio::test]
+    async fn test_datafusion_projection() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_proj.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+        storage.insert(42, b"test_value").unwrap();
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        let df = ctx.sql("SELECT id FROM test_table WHERE id = 42").await.unwrap();
+        let results = df.collect().await.unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].num_columns(), 1);
+        assert_eq!(results[0].num_rows(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_datafusion_aggregation() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_agg.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        for i in 1..=100 {
+            storage.insert(i, b"value").unwrap();
+        }
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        let df = ctx.sql("SELECT COUNT(*) as count FROM test_table").await.unwrap();
+        let results = df.collect().await.unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].num_rows(), 1);
+    }
+}

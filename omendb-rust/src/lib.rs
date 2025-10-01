@@ -22,6 +22,7 @@ pub use logging::{LogConfig, init_logging, init_from_env};
 // Existing modules (will be refactored)
 pub mod storage;
 pub mod redb_storage;
+pub mod datafusion;
 pub mod index;
 pub mod concurrent;
 pub mod wal;

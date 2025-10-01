@@ -18,6 +18,7 @@ struct StorageMetadata {
     schema_version: u32,
 }
 
+#[derive(Debug)]
 pub struct RedbStorage {
     db: Database,
     learned_index: RecursiveModelIndex,
