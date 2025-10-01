@@ -1,44 +1,151 @@
-//! OmenDB Learned Index - ML-powered indexing that's 10x faster than B-trees
+//! OmenDB Library - Pure Learned Index Database
+//! Production hardening: concurrency, testing, monitoring
 
-pub mod linear;
-pub mod rmi;
-pub mod error;
+// New architecture (proper multi-table database)
+pub mod value;
+pub mod row;
+pub mod table_storage;
+pub mod table_index;
+pub mod table;
+pub mod catalog;
+pub mod sql_engine;
+pub mod table_wal;
+pub mod connection_pool;
+pub mod logging;
+pub mod mvcc;
 
-pub use linear::LinearIndex;
-pub use rmi::RMIIndex;
-pub use error::{Error, Result};
+// Re-exports for common types
+pub use sql_engine::QueryConfig;
+pub use connection_pool::{ConnectionPool, PoolConfig, Connection};
+pub use logging::{LogConfig, init_logging, init_from_env};
 
-/// Core trait for all learned index implementations
-pub trait LearnedIndex<K: Ord + Clone, V: Clone> {
-    /// Train the model on sorted data
-    fn train(data: Vec<(K, V)>) -> Result<Self>
-    where
-        Self: Sized;
-
-    /// Lookup a key and return its value
-    fn get(&self, key: &K) -> Option<V>;
-
-    /// Range query from start to end (inclusive)
-    fn range(&self, start: &K, end: &K) -> Vec<V>;
-
-    /// Number of keys in the index
-    fn len(&self) -> usize;
-
-    /// Check if index is empty
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-}
+// Existing modules (will be refactored)
+pub mod storage;
+pub mod redb_storage;
+pub mod datafusion;
+pub mod index;
+pub mod concurrent;
+pub mod wal;
+pub mod metrics;
+pub mod server;
+pub mod security;
+pub mod backup;
+pub mod postgres;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::BTreeMap;
-    use std::time::Instant;
+mod tests;
 
-    #[test]
-    fn test_linear_index_basic() {
-        // We'll test once we implement LinearIndex
-        assert!(true);
+// Scale testing module available for benchmarking
+pub mod scale_tests;
+
+// Integration testing module
+pub mod integration_tests;
+
+// Comprehensive multi-table integration tests
+#[cfg(test)]
+mod multi_table_tests;
+
+use storage::ArrowStorage;
+use anyhow::Result;
+use std::time::Instant;
+use crate::metrics::{record_search, record_insert, record_search_failure, record_insert_failure};
+
+/// Main OmenDB structure combining learned index and Arrow storage
+pub struct OmenDB {
+    /// Learned index for fast lookups
+    pub index: index::RecursiveModelIndex,
+
+    /// Columnar storage backend
+    pub storage: ArrowStorage,
+
+    /// Database name
+    pub name: String,
+}
+
+impl OmenDB {
+    /// Create new database instance
+    pub fn new(name: &str) -> Self {
+        Self {
+            index: index::RecursiveModelIndex::new(1_000_000),
+            storage: ArrowStorage::new(),
+            name: name.to_string(),
+        }
+    }
+
+    /// Insert time-series data
+    pub fn insert(&mut self, timestamp: i64, value: f64, series_id: i64) -> Result<()> {
+        let start = Instant::now();
+
+        // Insert into storage
+        let result = self.storage.insert(timestamp, value, series_id);
+
+        if result.is_ok() {
+            // Update learned index
+            self.index.add_key(timestamp);
+
+            // Record success metric
+            let duration = start.elapsed().as_secs_f64();
+            record_insert(duration);
+        } else {
+            // Record failure metric
+            record_insert_failure();
+        }
+
+        result
+    }
+
+    /// Point query using learned index
+    pub fn get(&self, timestamp: i64) -> Option<f64> {
+        let start = Instant::now();
+
+        // Use learned index to find position
+        let result = if let Some(_pos) = self.index.search(timestamp) {
+            // In real implementation, would fetch from storage
+            // For now, return placeholder
+            Some(0.0)
+        } else {
+            None
+        };
+
+        // Record metrics
+        let duration = start.elapsed().as_secs_f64();
+        if result.is_some() {
+            record_search(duration);
+        } else {
+            record_search_failure();
+        }
+
+        result
+    }
+
+    /// Range query using learned index
+    pub fn range_query(&self, start: i64, end: i64) -> Result<Vec<(i64, f64)>> {
+        // Use storage's range query which integrates with learned index
+        let batches = self.storage.range_query(start, end)?;
+
+        // Convert Arrow batches to simple format
+        let mut results = Vec::new();
+        for batch in batches {
+            // Extract timestamp and value columns
+            if let (Some(timestamps), Some(values)) = (
+                batch.column(0).as_any().downcast_ref::<arrow::array::TimestampMicrosecondArray>(),
+                batch.column(1).as_any().downcast_ref::<arrow::array::Float64Array>()
+            ) {
+                for i in 0..batch.num_rows() {
+                    results.push((timestamps.value(i), values.value(i)));
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Time-series aggregations
+    pub fn sum(&self, start: i64, end: i64) -> Result<f64> {
+        self.storage.aggregate_sum(start, end)
+    }
+
+    pub fn avg(&self, start: i64, end: i64) -> Result<f64> {
+        self.storage.aggregate_avg(start, end)
     }
 }
