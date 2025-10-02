@@ -171,8 +171,14 @@ impl ConnectionPool {
                 ));
             }
 
-            let mut connections = self.connections.lock().unwrap();
-            let mut stats = self.stats.lock().unwrap();
+            let mut connections = self
+                .connections
+                .lock()
+                .map_err(|e| anyhow!("Connection pool mutex poisoned: {}", e))?;
+            let mut stats = self
+                .stats
+                .lock()
+                .map_err(|e| anyhow!("Stats mutex poisoned: {}", e))?;
 
             // Try to find an idle connection
             if let Some((id, metadata)) = connections
@@ -211,7 +217,10 @@ impl ConnectionPool {
             if total_connections < self.config.max_connections {
                 // Create new connection
                 let id = {
-                    let mut next_id = self.next_id.lock().unwrap();
+                    let mut next_id = self
+                        .next_id
+                        .lock()
+                        .map_err(|e| anyhow!("ID generator mutex poisoned: {}", e))?;
                     let id = *next_id;
                     *next_id += 1;
                     id
@@ -269,8 +278,20 @@ impl ConnectionPool {
 
     /// Release a connection back to the pool
     fn release(&self, connection_id: u64) {
-        let mut connections = self.connections.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let mut connections = match self.connections.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                warn!("Connection pool mutex poisoned during release: {}", e);
+                return;
+            }
+        };
+        let mut stats = match self.stats.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                warn!("Stats mutex poisoned during release: {}", e);
+                return;
+            }
+        };
 
         if let Some(metadata) = connections.get_mut(&connection_id) {
             metadata.state = ConnectionState::Idle;
@@ -285,8 +306,14 @@ impl ConnectionPool {
     /// Clean up idle connections that have exceeded timeout
     #[instrument(skip(self))]
     pub fn cleanup_idle_connections(&self) -> Result<usize> {
-        let mut connections = self.connections.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let mut connections = self
+            .connections
+            .lock()
+            .map_err(|e| anyhow!("Connection pool mutex poisoned: {}", e))?;
+        let mut stats = self
+            .stats
+            .lock()
+            .map_err(|e| anyhow!("Stats mutex poisoned: {}", e))?;
 
         let now = Instant::now();
         let mut removed = 0;
@@ -322,12 +349,24 @@ impl ConnectionPool {
 
     /// Get current pool statistics
     pub fn stats(&self) -> PoolStats {
-        self.stats.lock().unwrap().clone()
+        self.stats
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|e| {
+                warn!("Stats mutex poisoned, returning default: {}", e);
+                PoolStats::default()
+            })
     }
 
     /// Get current connection count
     pub fn connection_count(&self) -> usize {
-        self.connections.lock().unwrap().len()
+        self.connections
+            .lock()
+            .map(|guard| guard.len())
+            .unwrap_or_else(|e| {
+                warn!("Connection pool mutex poisoned, returning 0: {}", e);
+                0
+            })
     }
 
     /// Get maximum connections allowed
@@ -337,8 +376,14 @@ impl ConnectionPool {
 
     /// Close all connections and shut down the pool
     pub fn shutdown(&self) -> Result<()> {
-        let mut connections = self.connections.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let mut connections = self
+            .connections
+            .lock()
+            .map_err(|e| anyhow!("Connection pool mutex poisoned during shutdown: {}", e))?;
+        let mut stats = self
+            .stats
+            .lock()
+            .map_err(|e| anyhow!("Stats mutex poisoned during shutdown: {}", e))?;
 
         let count = connections.len();
         connections.clear();
@@ -362,7 +407,13 @@ impl ConnectionPool {
 
     /// Record query execution for a connection
     pub fn record_query(&self, connection_id: u64, bytes: u64) {
-        let mut connections = self.connections.lock().unwrap();
+        let mut connections = match self.connections.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                warn!("Connection pool mutex poisoned during record_query: {}", e);
+                return;
+            }
+        };
         if let Some(metadata) = connections.get_mut(&connection_id) {
             metadata.query_count += 1;
             metadata.bytes_processed += bytes;
