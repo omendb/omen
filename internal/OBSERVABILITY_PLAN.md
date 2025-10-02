@@ -3,7 +3,7 @@
 **Date**: January 2025
 **Goal**: Add comprehensive logging and metrics for production monitoring
 **Timeline**: 6-8 hours
-**Status**: 🟡 IN PROGRESS - Phase 2 complete
+**Status**: 🟡 IN PROGRESS - Phase 3 complete (3.5 hours elapsed)
 
 ---
 
@@ -208,7 +208,14 @@ $ grep -r "record_search\|record_insert" src/redb_storage.rs
 - Throughput logging for batch operations
 - Index rebuild event logging
 
-#### Phase 3b: SQL Engine & Index Logging (Pending)
+#### Phase 3b: Learned Index Logging ✅ COMPLETE
+
+**Deliverable**: ✅ Index layer logging complete (Commit 33c0224)
+- train() and retrain() instrumented with #[instrument]
+- Training metrics: duration, keys, models, avg max error
+- Periodic retrain logging (every 10,000 keys)
+- High prediction error warnings (>10% of dataset)
+- All 5 index + 5 storage tests passing
 
 ---
 
@@ -376,7 +383,7 @@ Prometheus alerting rules:
 2. ✅ Add learned index metrics (Phase 1) (Commit 6ca61f4)
 3. ✅ Integrate metrics into storage layer (Phase 2) (Commit 1230d5c)
 4. ✅ Add structured logging to storage (Phase 3a) (Commit 5d70bd4)
-5. ⏳ Add structured logging to SQL engine (Phase 3b)
+5. ✅ Add structured logging to learned index (Phase 3b) (Commit 33c0224)
 6. ⏳ Add query tracing infrastructure (Phase 4)
 7. ⏳ Add observability tests
 8. ⏳ Create observability guide for operators
