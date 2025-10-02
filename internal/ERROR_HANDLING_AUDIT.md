@@ -187,9 +187,16 @@ fn test_learned_index_correctness_edge_cases() {
 
 **Results**: 34 panic points eliminated, 198/211 tests passing
 
-### Phase 2: High Priority (Tomorrow - 2-3 hours)
-4. Fix downcasts in rest/handlers.rs
-5. Audit storage.rs and wal.rs for critical unwraps
+### Phase 2: Critical WAL (COMPLETED - 1 hour) ✅
+5. ✅ Fix 6 mutex unwraps in wal.rs
+6. ✅ Fix 6 mutex unwraps in table_wal.rs
+7. ✅ All 21 WAL tests passing
+
+**Results**: 12 additional panic points eliminated
+
+### Phase 3: Comprehensive (Future - 4-6 hours)
+8. Audit storage.rs for remaining unwraps
+9. Add .context() to all remaining errors
 6. Add error context to all remaining unwraps
 
 ### Phase 3: Comprehensive (Week 1 - 4-6 hours)
