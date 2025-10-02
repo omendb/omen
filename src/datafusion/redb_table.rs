@@ -169,6 +169,37 @@ impl RedbTable {
 
         None
     }
+
+    /// Detect if this is an IN query (WHERE id IN (1, 2, 3, ...))
+    /// Returns Some(Vec<i64>) with the list of IDs if detected
+    fn is_in_query(filters: &[Expr]) -> Option<Vec<i64>> {
+        use datafusion::scalar::ScalarValue;
+
+        for expr in filters {
+            if let Expr::InList(in_list) = expr {
+                // Check if this is "id IN (...)"
+                if let Expr::Column(col) = &*in_list.expr {
+                    if col.name == "id" && !in_list.negated {
+                        // Extract all literal integers from the list
+                        let mut ids = Vec::new();
+                        for list_expr in &in_list.list {
+                            if let Expr::Literal(ScalarValue::Int64(Some(value))) = list_expr {
+                                ids.push(*value);
+                            } else {
+                                // Non-integer or non-literal in list, can't optimize
+                                return None;
+                            }
+                        }
+                        if !ids.is_empty() {
+                            return Some(ids);
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
 }
 
 #[async_trait]
@@ -220,6 +251,21 @@ impl TableProvider for RedbTable {
                     }
                 }
 
+                // Check for IN expression
+                if let Expr::InList(in_list) = filter {
+                    if let Expr::Column(col) = &*in_list.expr {
+                        if col.name == "id" && !in_list.negated {
+                            // Check all items are literals - if so, we can push down
+                            let all_literals = in_list.list.iter().all(|expr| {
+                                matches!(expr, Expr::Literal(_))
+                            });
+                            if all_literals {
+                                return TableProviderFilterPushDown::Exact;
+                            }
+                        }
+                    }
+                }
+
                 TableProviderFilterPushDown::Unsupported
             })
             .collect())
@@ -233,8 +279,11 @@ impl TableProvider for RedbTable {
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
         // Determine query type and create appropriate RedbExec
+        // Check in order of specificity: Point > IN > Range > FullScan
         let query_type = if let Some(key) = Self::is_point_query(filters) {
             QueryType::Point(key)
+        } else if let Some(ids) = Self::is_in_query(filters) {
+            QueryType::In(ids)
         } else if let Some((start_key, end_key)) = Self::is_range_query(filters) {
             QueryType::Range(start_key, end_key)
         } else {
@@ -261,6 +310,8 @@ enum QueryType {
     Point(i64),
     /// Range query: SELECT * FROM table WHERE id BETWEEN X AND Y
     Range(i64, i64),
+    /// IN query: SELECT * FROM table WHERE id IN (1, 2, 3, ...)
+    In(Vec<i64>),
     /// Full table scan
     FullScan,
 }
@@ -330,6 +381,7 @@ impl DisplayAs for RedbExec {
             QueryType::Range(start, end) => {
                 write!(f, "RedbExec: range_query({}, {})", start, end)
             }
+            QueryType::In(ids) => write!(f, "RedbExec: in_query({} keys)", ids.len()),
             QueryType::FullScan => write!(f, "RedbExec: full_scan"),
         }
     }
@@ -418,6 +470,23 @@ impl RedbStream {
                             )))
                         }
                     }
+                }
+                QueryType::In(ids) => {
+                    // Execute multiple point queries for IN clause
+                    let mut results = Vec::new();
+                    for key in ids {
+                        match storage_guard.point_query(*key) {
+                            Ok(Some(value)) => results.push((*key, value)),
+                            Ok(None) => {} // Skip missing keys
+                            Err(e) => {
+                                return Err(DataFusionError::Execution(format!(
+                                    "IN query failed for key {}: {}",
+                                    key, e
+                                )))
+                            }
+                        }
+                    }
+                    results
                 }
                 QueryType::Range(start, end) => storage_guard
                     .range_query(*start, *end)
@@ -983,5 +1052,151 @@ mod tests {
         );
 
         println!("✅ LIMIT pushdown test passed");
+    }
+
+    #[tokio::test]
+    async fn test_in_clause() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_in.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Insert 1000 rows
+        let batch: Vec<(i64, Vec<u8>)> = (0..1000)
+            .map(|i| (i, format!("value_{}", i).into_bytes()))
+            .collect();
+        storage.insert_batch(batch).unwrap();
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Test IN with 5 specific IDs
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id IN (10, 25, 50, 100, 500)")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 5, "IN with 5 IDs should return 5 rows");
+
+        // Verify we got the right IDs
+        let id_array = results[0]
+            .column(0)
+            .as_any()
+            .downcast_ref::<Int64Array>()
+            .unwrap();
+        let mut ids: Vec<i64> = (0..id_array.len()).map(|i| id_array.value(i)).collect();
+        ids.sort();
+        assert_eq!(ids, vec![10, 25, 50, 100, 500]);
+
+        println!("✅ IN clause test passed");
+    }
+
+    #[tokio::test]
+    async fn test_in_clause_large() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_in_large.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Insert 10000 rows
+        let batch: Vec<(i64, Vec<u8>)> = (0..10000)
+            .map(|i| (i, format!("value_{}", i).into_bytes()))
+            .collect();
+        storage.insert_batch(batch).unwrap();
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Test IN with 100 IDs (simulates a more realistic use case)
+        let ids_str: String = (0..100).map(|i| i.to_string()).collect::<Vec<_>>().join(", ");
+        let sql = format!("SELECT * FROM test_table WHERE id IN ({})", ids_str);
+
+        let df = ctx.sql(&sql).await.unwrap();
+        let results = df.collect().await.unwrap();
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 100, "IN with 100 IDs should return 100 rows");
+
+        println!("✅ IN clause large test passed");
+    }
+
+    #[tokio::test]
+    async fn test_in_clause_with_missing_keys() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_in_missing.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Insert only even numbers from 0-100
+        for i in (0..100).step_by(2) {
+            storage
+                .insert(i, format!("value_{}", i).as_bytes())
+                .unwrap();
+        }
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Query for both even and odd numbers - should only return even ones
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id IN (10, 11, 20, 21, 30, 31)")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+
+        // Should only get 10, 20, 30 (the even numbers)
+        assert_eq!(total_rows, 3, "IN with missing keys should only return existing rows");
+
+        let id_array = results[0]
+            .column(0)
+            .as_any()
+            .downcast_ref::<Int64Array>()
+            .unwrap();
+        let mut ids: Vec<i64> = (0..id_array.len()).map(|i| id_array.value(i)).collect();
+        ids.sort();
+        assert_eq!(ids, vec![10, 20, 30], "Should only return existing keys");
+
+        println!("✅ IN clause with missing keys test passed");
+    }
+
+    #[tokio::test]
+    async fn test_in_clause_with_limit() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_in_limit.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Insert 1000 rows
+        let batch: Vec<(i64, Vec<u8>)> = (0..1000)
+            .map(|i| (i, format!("value_{}", i).into_bytes()))
+            .collect();
+        storage.insert_batch(batch).unwrap();
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Test IN with LIMIT - should stop after 3 rows even though IN has 10 IDs
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10) LIMIT 3")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 3, "IN with LIMIT 3 should return exactly 3 rows");
+
+        println!("✅ IN clause with LIMIT test passed");
     }
 }
