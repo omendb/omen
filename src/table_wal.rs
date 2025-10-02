@@ -174,7 +174,10 @@ impl TableWalManager {
 
         // Add to buffer
         {
-            let mut buffer = self.buffer.lock().unwrap();
+            let mut buffer = self
+                .buffer
+                .lock()
+                .map_err(|e| anyhow!("Table WAL buffer mutex poisoned: {}", e))?;
             buffer.push_back(entry.clone());
 
             // Flush if buffer is full
@@ -190,7 +193,10 @@ impl TableWalManager {
     /// Flush buffer to disk
     pub fn flush(&self) -> Result<()> {
         let entries: Vec<TableWalEntry> = {
-            let mut buffer = self.buffer.lock().unwrap();
+            let mut buffer = self
+                .buffer
+                .lock()
+                .map_err(|e| anyhow!("Table WAL buffer mutex poisoned: {}", e))?;
             buffer.drain(..).collect()
         };
 
@@ -198,7 +204,10 @@ impl TableWalManager {
             return Ok(());
         }
 
-        let mut writer = self.writer.lock().unwrap();
+        let mut writer = self
+            .writer
+            .lock()
+            .map_err(|e| anyhow!("Table WAL writer mutex poisoned: {}", e))?;
         let writer = writer
             .as_mut()
             .ok_or_else(|| anyhow!("WAL writer not initialized"))?;
@@ -288,10 +297,16 @@ impl TableWalManager {
             .open(&file_path)
             .context("Failed to open WAL file")?;
 
-        let mut writer = self.writer.lock().unwrap();
+        let mut writer = self
+            .writer
+            .lock()
+            .map_err(|e| anyhow!("Table WAL writer mutex poisoned during open: {}", e))?;
         *writer = Some(BufWriter::new(file));
 
-        let mut current = self.current_file.lock().unwrap();
+        let mut current = self
+            .current_file
+            .lock()
+            .map_err(|e| anyhow!("Table WAL current_file mutex poisoned: {}", e))?;
         *current = Some(filename);
 
         Ok(())
@@ -314,7 +329,10 @@ impl TableWalManager {
 
         // Close current writer
         {
-            let mut writer = self.writer.lock().unwrap();
+            let mut writer = self
+                .writer
+                .lock()
+                .map_err(|e| anyhow!("Table WAL writer mutex poisoned during rotation: {}", e))?;
             *writer = None;
         }
 

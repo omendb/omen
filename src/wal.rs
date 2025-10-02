@@ -1,7 +1,7 @@
 //! Write-Ahead Logging (WAL) for durability and crash recovery
 //! Ensures ACID properties and data persistence
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use bincode;
 use chrono::{DateTime, Utc};
 use crc32fast::Hasher;
@@ -126,7 +126,10 @@ impl WalManager {
             .context("Failed to open WAL file")?;
 
         let writer = BufWriter::new(file);
-        *self.writer.lock().unwrap() = Some(writer);
+        *self
+            .writer
+            .lock()
+            .map_err(|e| anyhow!("WAL writer mutex poisoned: {}", e))? = Some(writer);
 
         // Recover sequence number from existing WAL
         if exists_before_open {
@@ -150,7 +153,10 @@ impl WalManager {
 
         // Add to buffer
         {
-            let mut buffer = self.buffer.lock().unwrap();
+            let mut buffer = self
+                .buffer
+                .lock()
+                .map_err(|e| anyhow!("WAL buffer mutex poisoned: {}", e))?;
             buffer.push_back(entry.clone());
 
             // Flush if buffer is full
@@ -169,12 +175,20 @@ impl WalManager {
 
     /// Flush buffer to disk
     pub fn flush(&self) -> Result<()> {
-        let mut buffer = self.buffer.lock().unwrap();
+        let mut buffer = self
+            .buffer
+            .lock()
+            .map_err(|e| anyhow!("WAL buffer mutex poisoned: {}", e))?;
         self.flush_buffer_locked(&mut buffer)
     }
 
     fn flush_buffer_locked(&self, buffer: &mut VecDeque<WalEntry>) -> Result<()> {
-        if let Some(writer) = self.writer.lock().unwrap().as_mut() {
+        if let Some(writer) = self
+            .writer
+            .lock()
+            .map_err(|e| anyhow!("WAL writer mutex poisoned: {}", e))?
+            .as_mut()
+        {
             while let Some(entry) = buffer.pop_front() {
                 let data = bincode::serialize(&entry).context("Failed to serialize WAL entry")?;
 
@@ -194,7 +208,12 @@ impl WalManager {
     pub fn sync(&self) -> Result<()> {
         self.flush()?;
 
-        if let Some(writer) = self.writer.lock().unwrap().as_mut() {
+        if let Some(writer) = self
+            .writer
+            .lock()
+            .map_err(|e| anyhow!("WAL writer mutex poisoned: {}", e))?
+            .as_mut()
+        {
             writer
                 .get_mut()
                 .sync_all()
@@ -227,7 +246,10 @@ impl WalManager {
     fn rotate(&self) -> Result<()> {
         // Close current writer
         {
-            let mut writer = self.writer.lock().unwrap();
+            let mut writer = self
+                .writer
+                .lock()
+                .map_err(|e| anyhow!("WAL writer mutex poisoned during rotation: {}", e))?;
             if let Some(w) = writer.as_mut() {
                 w.flush()?;
                 w.get_mut().sync_all()?;
