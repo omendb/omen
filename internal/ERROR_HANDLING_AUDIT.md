@@ -197,12 +197,8 @@ fn test_learned_index_correctness_edge_cases() {
 ### Phase 3: Comprehensive (Future - 4-6 hours)
 8. Audit storage.rs for remaining unwraps
 9. Add .context() to all remaining errors
-6. Add error context to all remaining unwraps
-
-### Phase 3: Comprehensive (Week 1 - 4-6 hours)
-7. Search and fix remaining production unwraps
-8. Add integration tests for error paths
-9. Set up CI enforcement: `#![deny(clippy::unwrap_used)]` in production code
+10. Add integration tests for error paths
+11. Set up CI enforcement: `#![deny(clippy::unwrap_used)]` in production code
 
 ---
 
