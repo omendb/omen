@@ -1,9 +1,34 @@
 # OmenDB Current Status
 
-**Last Updated:** October 1, 2025 (Week 2, Day 1 Final - Architecture Documented + Performance Tests)
-**Phase:** PostgreSQL + REST API + Learned Index Verification ✅
-**Maturity:** 70% (20% → 30% → 45% → 50% → 55% → 65% → 70%) → Target: 95% production-ready
+**Last Updated:** October 1, 2025 (Week 2, Day 1 Final - CRITICAL ARCHITECTURAL FINDINGS)
+**Phase:** 🚨 **BLOCKING ISSUE - Architectural Decision Required** 🚨
+**Maturity:** 70% → **BLOCKED** (learned index architecture fundamentally flawed)
 **Test Coverage:** 249 tests passing (198 core + 42 integration + 9 performance)
+
+---
+
+## 🚨 **CRITICAL FINDINGS - BLOCKING ISSUE**
+
+### Large Dataset Testing Reveals Fundamental Flaw
+
+**50K Row Test Results:**
+- **Insert performance:** 195 rows/sec (expected 100K+/sec) - **500x SLOWER**
+- **Point query:** 117.8ms (expected <10ms) - **10x SLOWER**
+- **Full scan:** 117.4ms
+- **Speedup:** **1.0x** (NO BENEFIT - expected 10x+)
+- **Time to insert 1M rows:** 4.3 hours (unacceptable)
+
+**Root Cause Identified:**
+1. ❌ `point_query()` bypasses learned index entirely (direct B-tree lookup)
+2. ❌ Fundamental architecture mismatch (learned indexes require array storage, we use B-tree)
+3. ❌ Catastrophic insert performance (one transaction per insert, learned index overhead)
+4. ❌ Learned index maintained but never used for queries
+
+**See:** `CRITICAL_FINDINGS.md` for full analysis
+
+**Decision Required:** Fix (2-3 weeks) vs Pivot away from learned indexes (1 week)
+
+**Recommendation:** **PIVOT** - Ship working PostgreSQL-compatible database now, revisit learned indexes in 6 months
 
 ---
 
@@ -289,7 +314,34 @@
 - ✅ Cross-protocol consistency (same data visible both ways)
 - ✅ Production readiness under load
 
-### ✅ Completed (Week 2, Day 1 Final - October 1, 2025)
+### 🚨 Completed (Week 2, Day 1 Final - October 1, 2025) - CRITICAL FINDINGS
+
+**Large Dataset Performance Tests (314 lines):**
+1. ✅ Created `tests/learned_index_large_dataset_tests.rs`
+2. ✅ Implemented helper to create tables with 50K-1M rows
+3. ✅ Test suite for 50K, 100K, 500K, 1M row datasets
+4. ✅ Comprehensive performance measurement
+5. 🚨 **CRITICAL DISCOVERY:** Learned index provides 1.0x speedup (no benefit)
+6. 🚨 **CRITICAL DISCOVERY:** Insert performance 195 rows/sec (500x slower)
+7. 🚨 **ROOT CAUSE:** `point_query()` bypasses learned index entirely
+8. 🚨 **ARCHITECTURE FLAW:** B-tree storage incompatible with learned indexes
+
+**Critical Findings Documentation (267 lines):**
+1. ✅ Created `CRITICAL_FINDINGS.md` with comprehensive analysis
+2. ✅ Documented test results and performance gaps
+3. ✅ Root cause analysis of 4 critical issues
+4. ✅ Identified architectural incompatibility
+5. ✅ Proposed 3 solution options
+6. ✅ Recommendation to PIVOT away from learned indexes
+7. ✅ Timeline impact assessment (weeks, not days)
+
+**Impact:**
+- ❌ Cannot integrate RedbTable as default (makes database worse)
+- ❌ Core value proposition invalid (no speedup achieved)
+- ❌ Marketing claims unsupported (10x speedup doesn't exist)
+- ⚠️ Architectural decision required: Fix (2-3 weeks) or Pivot (1 week)
+
+### ✅ Completed (Week 2, Day 1 Evening - October 1, 2025)
 
 **Learned Index Performance Tests + Architecture Documentation (640 lines):**
 

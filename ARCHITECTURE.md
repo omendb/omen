@@ -2,10 +2,31 @@
 
 **Last Updated:** October 1, 2025
 **Version:** 0.1.0 (Pre-production)
+**Status:** 🚨 **CRITICAL ARCHITECTURAL ISSUE DISCOVERED** - See below
+
+## ⚠️ CRITICAL ISSUE: Learned Index Architecture Flawed
+
+**Discovered:** October 1, 2025 (50K row performance test)
+
+**Problem:** Learned index provides **NO speedup** (1.0x vs expected 10x+) and insert performance is **500x slower than expected** (195 rows/sec vs 100K+/sec).
+
+**Root Cause:**
+1. `point_query()` in `src/redb_storage.rs:137-146` uses direct B-tree lookup, bypassing learned index entirely
+2. Fundamental architecture mismatch: Learned indexes require array storage for position-based access, but redb is a B-tree database with hash-based lookups
+3. Catastrophic insert performance due to one transaction per insert + learned index overhead
+
+**Impact:**
+- ❌ Cannot integrate RedbTable as default (makes database worse)
+- ❌ Core value proposition invalid (10x speedup doesn't exist)
+- ⚠️ Architectural decision required: Fix (2-3 weeks) or Pivot (1 week)
+
+**See:** `CRITICAL_FINDINGS.md` for full analysis and recommended solutions
+
+---
 
 ## Overview
 
-OmenDB is a PostgreSQL-compatible database that combines DataFusion's SQL engine with learned index optimization for improved query performance on large datasets.
+OmenDB is a PostgreSQL-compatible database that combines DataFusion's SQL engine with redb storage. **Note:** Learned index optimization is currently non-functional due to architectural incompatibility (see critical issue above).
 
 ## Current Architecture (v0.1)
 
