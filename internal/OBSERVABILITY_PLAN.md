@@ -167,6 +167,8 @@ $ grep -r "record_search\|record_insert" src/redb_storage.rs
 
 ### Phase 3: Add Structured Logging (2 hours)
 
+#### Phase 3a: Storage Layer Logging ✅ COMPLETE
+
 **Tasks**:
 1. Add logging to `src/redb_storage.rs`:
    ```rust
@@ -199,7 +201,14 @@ $ grep -r "record_search\|record_insert" src/redb_storage.rs
 
 4. **Test**: Verify log output in tests
 
-**Deliverable**: Comprehensive logging for debugging
+**Deliverable**: ✅ Storage layer logging complete (Commit 5d70bd4)
+- All storage methods instrumented with #[instrument]
+- Debug/info/warn logs for all operations
+- Slow query detection (>100ms warnings)
+- Throughput logging for batch operations
+- Index rebuild event logging
+
+#### Phase 3b: SQL Engine & Index Logging (Pending)
 
 ---
 
@@ -366,7 +375,7 @@ Prometheus alerting rules:
 1. ✅ Create this observability plan document (Commit cce66a0)
 2. ✅ Add learned index metrics (Phase 1) (Commit 6ca61f4)
 3. ✅ Integrate metrics into storage layer (Phase 2) (Commit 1230d5c)
-4. ⏳ Add structured logging to storage (Phase 3a)
+4. ✅ Add structured logging to storage (Phase 3a) (Commit 5d70bd4)
 5. ⏳ Add structured logging to SQL engine (Phase 3b)
 6. ⏳ Add query tracing infrastructure (Phase 4)
 7. ⏳ Add observability tests
