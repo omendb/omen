@@ -9,9 +9,17 @@ use datafusion::datasource::TableProvider;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::logical_expr::{Expr, TableProviderFilterPushDown, TableType};
 use datafusion::physical_plan::memory::MemoryExec;
-use datafusion::physical_plan::ExecutionPlan;
+use datafusion::physical_plan::{
+    DisplayAs, DisplayFormatType, ExecutionMode, ExecutionPlan, Partitioning, PlanProperties,
+    RecordBatchStream, SendableRecordBatchStream,
+};
+use datafusion::physical_expr::EquivalenceProperties;
+use futures::stream::Stream;
 use std::any::Any;
+use std::fmt;
+use std::pin::Pin;
 use std::sync::{Arc, RwLock};
+use std::task::{Context, Poll};
 
 /// TableProvider that wraps redb storage with learned index optimization
 #[derive(Debug)]
@@ -161,126 +169,6 @@ impl RedbTable {
 
         None
     }
-
-    /// Execute a point query using learned index
-    fn execute_point_query(&self, key: i64) -> Result<RecordBatch> {
-        let storage = self
-            .storage
-            .read()
-            .map_err(|e| DataFusionError::Execution(format!("Lock error: {}", e)))?;
-
-        match storage.point_query(key) {
-            Ok(Some(value_bytes)) => {
-                let value_str = String::from_utf8_lossy(&value_bytes).to_string();
-
-                let id_array = Int64Array::from(vec![key]);
-                let value_array = StringArray::from(vec![value_str]);
-
-                let batch = RecordBatch::try_new(
-                    self.schema.clone(),
-                    vec![
-                        Arc::new(id_array) as ArrayRef,
-                        Arc::new(value_array) as ArrayRef,
-                    ],
-                )?;
-
-                Ok(batch)
-            }
-            Ok(None) => {
-                // Return empty batch
-                let empty_id = Int64Array::from(Vec::<i64>::new());
-                let empty_value = StringArray::from(Vec::<String>::new());
-
-                let batch = RecordBatch::try_new(
-                    self.schema.clone(),
-                    vec![
-                        Arc::new(empty_id) as ArrayRef,
-                        Arc::new(empty_value) as ArrayRef,
-                    ],
-                )?;
-
-                Ok(batch)
-            }
-            Err(e) => Err(DataFusionError::Execution(format!(
-                "Point query failed: {}",
-                e
-            ))),
-        }
-    }
-
-    /// Execute a range query using learned index
-    fn execute_range_query(&self, start_key: i64, end_key: i64) -> Result<RecordBatch> {
-        let storage = self
-            .storage
-            .read()
-            .map_err(|e| DataFusionError::Execution(format!("Lock error: {}", e)))?;
-
-        match storage.range_query(start_key, end_key) {
-            Ok(rows) => {
-                let mut ids = Vec::with_capacity(rows.len());
-                let mut values = Vec::with_capacity(rows.len());
-
-                for (id, value_bytes) in rows {
-                    ids.push(id);
-                    values.push(String::from_utf8_lossy(&value_bytes).to_string());
-                }
-
-                let id_array = Int64Array::from(ids);
-                let value_array = StringArray::from(values);
-
-                let batch = RecordBatch::try_new(
-                    self.schema.clone(),
-                    vec![
-                        Arc::new(id_array) as ArrayRef,
-                        Arc::new(value_array) as ArrayRef,
-                    ],
-                )?;
-
-                Ok(batch)
-            }
-            Err(e) => Err(DataFusionError::Execution(format!(
-                "Range query failed: {}",
-                e
-            ))),
-        }
-    }
-
-    /// Execute a full table scan
-    fn execute_full_scan(&self) -> Result<RecordBatch> {
-        let storage = self
-            .storage
-            .read()
-            .map_err(|e| DataFusionError::Execution(format!("Lock error: {}", e)))?;
-
-        match storage.scan_all() {
-            Ok(rows) => {
-                let mut ids = Vec::with_capacity(rows.len());
-                let mut values = Vec::with_capacity(rows.len());
-
-                for (id, value_bytes) in rows {
-                    ids.push(id);
-                    values.push(String::from_utf8_lossy(&value_bytes).to_string());
-                }
-
-                let id_array = Int64Array::from(ids);
-                let value_array = StringArray::from(values);
-
-                let batch = RecordBatch::try_new(
-                    self.schema.clone(),
-                    vec![
-                        Arc::new(id_array) as ArrayRef,
-                        Arc::new(value_array) as ArrayRef,
-                    ],
-                )?;
-
-                Ok(batch)
-            }
-            Err(e) => Err(DataFusionError::Execution(format!(
-                "Full scan failed: {}",
-                e
-            ))),
-        }
-    }
 }
 
 #[async_trait]
@@ -344,52 +232,274 @@ impl TableProvider for RedbTable {
         filters: &[Expr],
         _limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        // Check if this is a point query (most specific)
-        if let Some(key) = Self::is_point_query(filters) {
-            // Use learned index for point query
-            let batch = self.execute_point_query(key)?;
-
-            // Apply projection if needed
-            let batch = if let Some(proj) = projection {
-                batch.project(proj)?
-            } else {
-                batch
-            };
-
-            let exec =
-                MemoryExec::try_new(&[vec![batch]], self.schema.clone(), projection.cloned())?;
-            return Ok(Arc::new(exec));
-        }
-
-        // Check if this is a range query
-        if let Some((start_key, end_key)) = Self::is_range_query(filters) {
-            // Use learned index for range query
-            let batch = self.execute_range_query(start_key, end_key)?;
-
-            // Apply projection if needed
-            let batch = if let Some(proj) = projection {
-                batch.project(proj)?
-            } else {
-                batch
-            };
-
-            let exec =
-                MemoryExec::try_new(&[vec![batch]], self.schema.clone(), projection.cloned())?;
-            return Ok(Arc::new(exec));
-        }
-
-        // Fall back to full scan
-        let batch = self.execute_full_scan()?;
-
-        // Apply projection if needed
-        let batch = if let Some(proj) = projection {
-            batch.project(proj)?
+        // Determine query type and create appropriate RedbExec
+        let query_type = if let Some(key) = Self::is_point_query(filters) {
+            QueryType::Point(key)
+        } else if let Some((start_key, end_key)) = Self::is_range_query(filters) {
+            QueryType::Range(start_key, end_key)
         } else {
-            batch
+            QueryType::FullScan
         };
 
-        let exec = MemoryExec::try_new(&[vec![batch]], self.schema.clone(), projection.cloned())?;
+        // Create streaming execution plan
+        let exec = RedbExec::new(
+            self.storage.clone(),
+            self.schema.clone(),
+            query_type,
+            projection.cloned(),
+        );
+
         Ok(Arc::new(exec))
+    }
+}
+
+/// Query type for RedbExec execution plan
+#[derive(Debug, Clone)]
+enum QueryType {
+    /// Point query: SELECT * FROM table WHERE id = X
+    Point(i64),
+    /// Range query: SELECT * FROM table WHERE id BETWEEN X AND Y
+    Range(i64, i64),
+    /// Full table scan
+    FullScan,
+}
+
+/// Custom ExecutionPlan that streams results from redb storage with learned index
+#[derive(Debug)]
+pub struct RedbExec {
+    storage: Arc<RwLock<RedbStorage>>,
+    schema: SchemaRef,
+    query_type: QueryType,
+    projection: Option<Vec<usize>>,
+    properties: PlanProperties,
+}
+
+impl RedbExec {
+    pub fn new(
+        storage: Arc<RwLock<RedbStorage>>,
+        schema: SchemaRef,
+        query_type: QueryType,
+        projection: Option<Vec<usize>>,
+    ) -> Self {
+        // Calculate the projected schema
+        let output_schema = if let Some(ref proj) = projection {
+            let fields: Vec<_> = proj.iter().map(|i| schema.field(*i).clone()).collect();
+            Arc::new(Schema::new(fields))
+        } else {
+            schema.clone()
+        };
+
+        // Create plan properties
+        let properties = PlanProperties::new(
+            EquivalenceProperties::new(output_schema.clone()),
+            Partitioning::UnknownPartitioning(1),
+            ExecutionMode::Bounded,
+        );
+
+        Self {
+            storage,
+            schema,
+            query_type,
+            projection,
+            properties,
+        }
+    }
+
+    /// Apply projection to schema if needed
+    fn projected_schema(&self) -> SchemaRef {
+        if let Some(projection) = &self.projection {
+            let fields: Vec<_> = projection
+                .iter()
+                .map(|i| self.schema.field(*i).clone())
+                .collect();
+            Arc::new(Schema::new(fields))
+        } else {
+            self.schema.clone()
+        }
+    }
+}
+
+impl DisplayAs for RedbExec {
+    fn fmt_as(&self, _t: DisplayFormatType, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.query_type {
+            QueryType::Point(key) => write!(f, "RedbExec: point_query({})", key),
+            QueryType::Range(start, end) => {
+                write!(f, "RedbExec: range_query({}, {})", start, end)
+            }
+            QueryType::FullScan => write!(f, "RedbExec: full_scan"),
+        }
+    }
+}
+
+impl ExecutionPlan for RedbExec {
+    fn name(&self) -> &str {
+        "RedbExec"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn schema(&self) -> SchemaRef {
+        self.projected_schema()
+    }
+
+    fn properties(&self) -> &PlanProperties {
+        &self.properties
+    }
+
+    fn children(&self) -> Vec<&Arc<dyn ExecutionPlan>> {
+        vec![]
+    }
+
+    fn with_new_children(
+        self: Arc<Self>,
+        _children: Vec<Arc<dyn ExecutionPlan>>,
+    ) -> Result<Arc<dyn ExecutionPlan>> {
+        Ok(self)
+    }
+
+    fn execute(
+        &self,
+        _partition: usize,
+        _context: Arc<datafusion::execution::TaskContext>,
+    ) -> Result<SendableRecordBatchStream> {
+        let stream = RedbStream::new(
+            self.storage.clone(),
+            self.schema.clone(),
+            self.query_type.clone(),
+            self.projection.clone(),
+        )?;
+        Ok(Box::pin(stream))
+    }
+}
+
+/// Stream that yields RecordBatches from redb storage
+struct RedbStream {
+    storage: Arc<RwLock<RedbStorage>>,
+    schema: SchemaRef,
+    query_type: QueryType,
+    projection: Option<Vec<usize>>,
+    data: Option<Vec<(i64, Vec<u8>)>>,
+    position: usize,
+    batch_size: usize,
+}
+
+impl RedbStream {
+    fn new(
+        storage: Arc<RwLock<RedbStorage>>,
+        schema: SchemaRef,
+        query_type: QueryType,
+        projection: Option<Vec<usize>>,
+    ) -> Result<Self> {
+        // Fetch data based on query type
+        let data = {
+            let storage_guard = storage
+                .read()
+                .map_err(|e| DataFusionError::Execution(format!("Lock error: {}", e)))?;
+
+            match &query_type {
+                QueryType::Point(key) => {
+                    match storage_guard.point_query(*key) {
+                        Ok(Some(value)) => vec![(*key, value)],
+                        Ok(None) => vec![],
+                        Err(e) => {
+                            return Err(DataFusionError::Execution(format!(
+                                "Point query failed: {}",
+                                e
+                            )))
+                        }
+                    }
+                }
+                QueryType::Range(start, end) => storage_guard
+                    .range_query(*start, *end)
+                    .map_err(|e| DataFusionError::Execution(format!("Range query failed: {}", e)))?,
+                QueryType::FullScan => storage_guard
+                    .scan_all()
+                    .map_err(|e| DataFusionError::Execution(format!("Full scan failed: {}", e)))?,
+            }
+        };
+
+        Ok(Self {
+            storage,
+            schema,
+            query_type,
+            projection,
+            data: Some(data),
+            position: 0,
+            batch_size: 1000, // Default batch size
+        })
+    }
+
+    fn create_batch(&self, rows: Vec<(i64, Vec<u8>)>) -> Result<RecordBatch> {
+        let mut ids = Vec::with_capacity(rows.len());
+        let mut values = Vec::with_capacity(rows.len());
+
+        for (id, value_bytes) in rows {
+            ids.push(id);
+            values.push(String::from_utf8_lossy(&value_bytes).to_string());
+        }
+
+        let id_array = Int64Array::from(ids);
+        let value_array = StringArray::from(values);
+
+        let batch = RecordBatch::try_new(
+            self.schema.clone(),
+            vec![
+                Arc::new(id_array) as ArrayRef,
+                Arc::new(value_array) as ArrayRef,
+            ],
+        )?;
+
+        // Apply projection if needed
+        if let Some(proj) = &self.projection {
+            Ok(batch.project(proj)?)
+        } else {
+            Ok(batch)
+        }
+    }
+}
+
+impl Stream for RedbStream {
+    type Item = Result<RecordBatch>;
+
+    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // Check if data exists
+        if self.data.is_none() {
+            return Poll::Ready(None);
+        }
+
+        // Get data length and check position
+        let data_len = self.data.as_ref().unwrap().len();
+        if self.position >= data_len {
+            self.data = None;
+            return Poll::Ready(None);
+        }
+
+        // Calculate batch boundaries
+        let start = self.position;
+        let end = (start + self.batch_size).min(data_len);
+
+        // Extract batch data
+        let batch_data = self.data.as_ref().unwrap()[start..end].to_vec();
+        self.position = end;
+
+        // Create RecordBatch
+        match self.create_batch(batch_data) {
+            Ok(batch) => Poll::Ready(Some(Ok(batch))),
+            Err(e) => Poll::Ready(Some(Err(e))),
+        }
+    }
+}
+
+impl RecordBatchStream for RedbStream {
+    fn schema(&self) -> SchemaRef {
+        if let Some(proj) = &self.projection {
+            let fields: Vec<_> = proj.iter().map(|i| self.schema.field(*i).clone()).collect();
+            Arc::new(Schema::new(fields))
+        } else {
+            self.schema.clone()
+        }
     }
 }
 
@@ -731,6 +841,66 @@ mod tests {
             "Search metrics should have increased (searches: {} -> {})",
             baseline_searches,
             searches_after
+        );
+    }
+
+    #[tokio::test]
+    async fn test_streaming_large_dataset() {
+        use futures::StreamExt;
+
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_streaming.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Insert 5000 rows to test streaming behavior
+        let batch: Vec<(i64, Vec<u8>)> = (0..5000)
+            .map(|i| (i, format!("value_{}", i).into_bytes()))
+            .collect();
+        storage.insert_batch(batch).unwrap();
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Execute a query that will stream results
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id >= 1000 AND id <= 4000")
+            .await
+            .unwrap();
+
+        // Collect results using the streaming interface
+        let mut stream = df.execute_stream().await.unwrap();
+        let mut total_rows = 0;
+        let mut batch_count = 0;
+
+        while let Some(batch_result) = stream.next().await {
+            let batch = batch_result.unwrap();
+            total_rows += batch.num_rows();
+            batch_count += 1;
+
+            // Verify batch has expected structure
+            assert_eq!(batch.num_columns(), 2);
+            assert_eq!(batch.schema().field(0).name(), "id");
+            assert_eq!(batch.schema().field(1).name(), "value");
+        }
+
+        // Should return 3001 rows (1000 through 4000 inclusive)
+        assert_eq!(total_rows, 3001, "Should return 3001 rows");
+
+        // With default batch size of 1000, we expect at least 3 batches
+        // (could be 4 if there's a final small batch)
+        assert!(
+            batch_count >= 3,
+            "Should have at least 3 batches for 3001 rows (got {})",
+            batch_count
+        );
+
+        println!(
+            "✅ Streaming test passed: {} rows in {} batches",
+            total_rows, batch_count
         );
     }
 }
