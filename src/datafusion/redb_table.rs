@@ -230,7 +230,7 @@ impl TableProvider for RedbTable {
         _state: &dyn Session,
         projection: Option<&Vec<usize>>,
         filters: &[Expr],
-        _limit: Option<usize>,
+        limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
         // Determine query type and create appropriate RedbExec
         let query_type = if let Some(key) = Self::is_point_query(filters) {
@@ -241,12 +241,13 @@ impl TableProvider for RedbTable {
             QueryType::FullScan
         };
 
-        // Create streaming execution plan
+        // Create streaming execution plan with limit pushdown
         let exec = RedbExec::new(
             self.storage.clone(),
             self.schema.clone(),
             query_type,
             projection.cloned(),
+            limit,
         );
 
         Ok(Arc::new(exec))
@@ -271,6 +272,7 @@ pub struct RedbExec {
     schema: SchemaRef,
     query_type: QueryType,
     projection: Option<Vec<usize>>,
+    limit: Option<usize>,
     properties: PlanProperties,
 }
 
@@ -280,6 +282,7 @@ impl RedbExec {
         schema: SchemaRef,
         query_type: QueryType,
         projection: Option<Vec<usize>>,
+        limit: Option<usize>,
     ) -> Self {
         // Calculate the projected schema
         let output_schema = if let Some(ref proj) = projection {
@@ -301,6 +304,7 @@ impl RedbExec {
             schema,
             query_type,
             projection,
+            limit,
             properties,
         }
     }
@@ -369,6 +373,7 @@ impl ExecutionPlan for RedbExec {
             self.schema.clone(),
             self.query_type.clone(),
             self.projection.clone(),
+            self.limit,
         )?;
         Ok(Box::pin(stream))
     }
@@ -380,8 +385,10 @@ struct RedbStream {
     schema: SchemaRef,
     query_type: QueryType,
     projection: Option<Vec<usize>>,
+    limit: Option<usize>,
     data: Option<Vec<(i64, Vec<u8>)>>,
     position: usize,
+    rows_returned: usize,
     batch_size: usize,
 }
 
@@ -391,6 +398,7 @@ impl RedbStream {
         schema: SchemaRef,
         query_type: QueryType,
         projection: Option<Vec<usize>>,
+        limit: Option<usize>,
     ) -> Result<Self> {
         // Fetch data based on query type
         let data = {
@@ -425,8 +433,10 @@ impl RedbStream {
             schema,
             query_type,
             projection,
+            limit,
             data: Some(data),
             position: 0,
+            rows_returned: 0,
             batch_size: 1000, // Default batch size
         })
     }
@@ -464,6 +474,14 @@ impl Stream for RedbStream {
     type Item = Result<RecordBatch>;
 
     fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // Check if limit has been reached
+        if let Some(limit) = self.limit {
+            if self.rows_returned >= limit {
+                self.data = None;
+                return Poll::Ready(None);
+            }
+        }
+
         // Check if data exists
         if self.data.is_none() {
             return Poll::Ready(None);
@@ -478,11 +496,19 @@ impl Stream for RedbStream {
 
         // Calculate batch boundaries
         let start = self.position;
-        let end = (start + self.batch_size).min(data_len);
+        let mut end = (start + self.batch_size).min(data_len);
+
+        // Apply limit if set - don't exceed the limit
+        if let Some(limit) = self.limit {
+            let remaining = limit - self.rows_returned;
+            end = end.min(start + remaining);
+        }
 
         // Extract batch data
         let batch_data = self.data.as_ref().unwrap()[start..end].to_vec();
+        let batch_rows = batch_data.len();
         self.position = end;
+        self.rows_returned += batch_rows;
 
         // Create RecordBatch
         match self.create_batch(batch_data) {
@@ -902,5 +928,60 @@ mod tests {
             "✅ Streaming test passed: {} rows in {} batches",
             total_rows, batch_count
         );
+    }
+
+    #[tokio::test]
+    async fn test_limit_pushdown() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_limit.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Insert 10000 rows
+        let batch: Vec<(i64, Vec<u8>)> = (0..10000)
+            .map(|i| (i, format!("value_{}", i).into_bytes()))
+            .collect();
+        storage.insert_batch(batch).unwrap();
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Test LIMIT 100 - should only return 100 rows
+        let df = ctx
+            .sql("SELECT * FROM test_table LIMIT 100")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 100, "LIMIT 100 should return exactly 100 rows");
+
+        // Test LIMIT on range query
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id >= 5000 AND id <= 8000 LIMIT 500")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(
+            total_rows, 500,
+            "Range query with LIMIT 500 should return exactly 500 rows"
+        );
+
+        // Test LIMIT larger than result set (use range query with both bounds)
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id >= 9990 AND id <= 9999 LIMIT 1000")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(
+            total_rows, 10,
+            "LIMIT 1000 on 10 rows should return 10 rows"
+        );
+
+        println!("✅ LIMIT pushdown test passed");
     }
 }
