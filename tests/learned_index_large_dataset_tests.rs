@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use tempfile::tempdir;
 
-/// Helper to create a RedbTable with N rows
+/// Helper to create a RedbTable with N rows using insert_batch for speed
 fn create_large_redb_table(n: usize, name: &str) -> (Arc<RedbTable>, tempfile::TempDir) {
     println!("Creating table with {} rows...", n);
     let start = Instant::now();
@@ -20,14 +20,16 @@ fn create_large_redb_table(n: usize, name: &str) -> (Arc<RedbTable>, tempfile::T
 
     let mut storage = RedbStorage::new(&db_path).unwrap();
 
-    // Insert N rows in batches for better performance
-    let batch_size = 1000;
+    // Use insert_batch for MUCH faster insertion
+    let batch_size = 10_000;
     for batch_start in (0..n).step_by(batch_size) {
         let batch_end = (batch_start + batch_size).min(n);
 
-        for i in batch_start..batch_end {
-            storage.insert(i as i64, format!("v{}", i).as_bytes()).unwrap();
-        }
+        let entries: Vec<(i64, Vec<u8>)> = (batch_start..batch_end)
+            .map(|i| (i as i64, format!("v{}", i).into_bytes()))
+            .collect();
+
+        storage.insert_batch(entries).unwrap();
 
         // Progress indicator
         if batch_start > 0 && batch_start % 10_000 == 0 {
