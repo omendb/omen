@@ -23,6 +23,9 @@ pub struct RedbStorage {
     db: Database,
     learned_index: RecursiveModelIndex,
     row_count: u64,
+    /// Sorted array of keys for position-based learned index lookups
+    /// Learned index predicts position in this array, then we binary search
+    sorted_keys: Vec<i64>,
 }
 
 impl RedbStorage {
@@ -42,6 +45,7 @@ impl RedbStorage {
             db,
             learned_index,
             row_count: 0,
+            sorted_keys: Vec::new(),
         };
 
         storage.load_metadata()?;
@@ -84,15 +88,20 @@ impl RedbStorage {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
-        let keys: Vec<i64> = table.iter()?
+        let mut keys: Vec<i64> = table.iter()?
             .filter_map(|result| result.ok())
             .map(|(key, _)| key.value())
             .collect();
 
-        if !keys.is_empty() {
-            let data: Vec<(i64, usize)> = keys.iter()
+        // Sort keys for position-based lookup
+        keys.sort_unstable();
+        self.sorted_keys = keys;
+
+        if !self.sorted_keys.is_empty() {
+            // Train learned index with (key, position) pairs
+            let data: Vec<(i64, usize)> = self.sorted_keys.iter()
                 .enumerate()
-                .map(|(i, &k)| (k, i))
+                .map(|(pos, &key)| (key, pos))
                 .collect();
             self.learned_index.train(data);
         }
@@ -108,8 +117,18 @@ impl RedbStorage {
         }
         write_txn.commit()?;
 
-        self.learned_index.add_key(key);
-        self.row_count += 1;
+        // Maintain sorted_keys array for position-based lookup
+        match self.sorted_keys.binary_search(&key) {
+            Ok(_) => {
+                // Key already exists, no need to insert again
+            }
+            Err(pos) => {
+                // Insert key at correct sorted position
+                self.sorted_keys.insert(pos, key);
+                self.learned_index.add_key(key);
+                self.row_count += 1;
+            }
+        }
 
         if self.row_count % 1000 == 0 {
             self.save_metadata()?;
@@ -119,22 +138,54 @@ impl RedbStorage {
     }
 
     pub fn insert_batch(&mut self, entries: Vec<(i64, Vec<u8>)>) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+
+        // Single transaction for all inserts (MUCH faster)
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(DATA_TABLE)?;
             for (key, value) in &entries {
                 table.insert(*key, value.as_slice())?;
-                self.learned_index.add_key(*key);
-                self.row_count += 1;
             }
         }
         write_txn.commit()?;
 
+        // Rebuild index once after all inserts (more efficient than incremental updates)
+        self.rebuild_index()?;
+        self.row_count = self.sorted_keys.len() as u64;
         self.save_metadata()?;
+
         Ok(())
     }
 
     pub fn point_query(&self, key: i64) -> Result<Option<Vec<u8>>> {
+        // Use learned index to predict position in sorted_keys array
+        if !self.sorted_keys.is_empty() {
+            if let Some(predicted_pos) = self.learned_index.search(key) {
+                // Define search window around predicted position (learned index error bound)
+                let window_size = 100; // Papers show typical error bound of 10-100
+                let start = predicted_pos.saturating_sub(window_size).min(self.sorted_keys.len());
+                let end = (predicted_pos + window_size).min(self.sorted_keys.len());
+
+                // Binary search in the predicted window
+                if let Ok(_pos) = self.sorted_keys[start..end].binary_search(&key) {
+                    // Found the key, now look up value in redb
+                    let read_txn = self.db.begin_read()?;
+                    let table = read_txn.open_table(DATA_TABLE)?;
+
+                    if let Some(value_guard) = table.get(key)? {
+                        return Ok(Some(value_guard.value().to_vec()));
+                    }
+                }
+
+                // Key not found in predicted window, return None
+                return Ok(None);
+            }
+        }
+
+        // Fallback: if no index, use direct lookup
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
@@ -146,8 +197,48 @@ impl RedbStorage {
     }
 
     pub fn range_query(&self, start_key: i64, end_key: i64) -> Result<Vec<(i64, Vec<u8>)>> {
-        let _positions = self.learned_index.range_search(start_key, end_key);
+        // Use learned index to find range positions
+        if !self.sorted_keys.is_empty() {
+            let positions = self.learned_index.range_search(start_key, end_key);
 
+            if !positions.is_empty() {
+                // Use predicted positions as hint, but expand window for error bounds
+                let window_size = 100;
+                let min_pos = positions.iter().min().unwrap_or(&0);
+                let max_pos = positions.iter().max().unwrap_or(&0);
+
+                let start_pos = min_pos.saturating_sub(window_size);
+                let end_pos = (max_pos + window_size).min(self.sorted_keys.len());
+
+                // Find exact range in sorted_keys using binary search
+                let actual_start = self.sorted_keys[start_pos..end_pos]
+                    .binary_search(&start_key)
+                    .unwrap_or_else(|pos| pos) + start_pos;
+
+                let actual_end = self.sorted_keys[start_pos..end_pos]
+                    .binary_search(&end_key)
+                    .map(|pos| pos + 1)
+                    .unwrap_or_else(|pos| pos) + start_pos;
+
+                // Collect keys in range
+                let keys_in_range = &self.sorted_keys[actual_start..actual_end.min(self.sorted_keys.len())];
+
+                // Batch lookup values from redb
+                let read_txn = self.db.begin_read()?;
+                let table = read_txn.open_table(DATA_TABLE)?;
+
+                let mut results = Vec::with_capacity(keys_in_range.len());
+                for &key in keys_in_range {
+                    if let Some(value_guard) = table.get(key)? {
+                        results.push((key, value_guard.value().to_vec()));
+                    }
+                }
+
+                return Ok(results);
+            }
+        }
+
+        // Fallback: full scan if no index
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
