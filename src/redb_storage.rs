@@ -9,7 +9,8 @@ use redb::{Database, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use tracing::{debug, error, info, instrument, warn};
 
 const DATA_TABLE: TableDefinition<i64, &[u8]> = TableDefinition::new("data");
 const METADATA_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("metadata");
@@ -86,7 +87,11 @@ impl RedbStorage {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn rebuild_index(&mut self) -> Result<()> {
+        info!("Index rebuild started");
+        let start_time = Instant::now();
+
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
@@ -118,10 +123,20 @@ impl RedbStorage {
             metrics::set_learned_index_models(0);
         }
 
+        let duration = start_time.elapsed();
+        info!(
+            duration_ms = duration.as_millis(),
+            keys = self.sorted_keys.len(),
+            models = if self.sorted_keys.is_empty() { 0 } else { self.learned_index.model_count() },
+            "Index rebuild completed"
+        );
+
         Ok(())
     }
 
+    #[instrument(skip(self, value), fields(key = key, value_size = value.len()))]
     pub fn insert(&mut self, key: i64, value: &[u8]) -> Result<()> {
+        debug!("Insert started");
         let start_time = Instant::now();
 
         let write_txn = self.db.begin_write()?;
@@ -149,14 +164,20 @@ impl RedbStorage {
         }
 
         metrics::record_insert(start_time.elapsed().as_secs_f64());
+
+        let duration = start_time.elapsed();
+        debug!(duration_ms = duration.as_millis(), "Insert completed");
+
         Ok(())
     }
 
+    #[instrument(skip(self, entries), fields(batch_size = entries.len()))]
     pub fn insert_batch(&mut self, entries: Vec<(i64, Vec<u8>)>) -> Result<()> {
         if entries.is_empty() {
             return Ok(());
         }
 
+        info!(batch_size = entries.len(), "Batch insert started");
         let start_time = Instant::now();
         let batch_size = entries.len();
 
@@ -182,10 +203,19 @@ impl RedbStorage {
             metrics::record_insert(duration / batch_size as f64);
         }
 
+        info!(
+            batch_size = batch_size,
+            duration_ms = start_time.elapsed().as_millis(),
+            throughput_per_sec = (batch_size as f64 / duration).round() as u64,
+            "Batch insert completed"
+        );
+
         Ok(())
     }
 
+    #[instrument(skip(self), fields(key = key))]
     pub fn point_query(&self, key: i64) -> Result<Option<Vec<u8>>> {
+        debug!("Point query started");
         let start_time = Instant::now();
 
         // Use learned index to predict position in sorted_keys array
@@ -261,10 +291,19 @@ impl RedbStorage {
             result
         };
 
+        let duration = start_time.elapsed();
+        if duration > Duration::from_millis(100) {
+            warn!(duration_ms = duration.as_millis(), key = key, "Slow point query detected");
+        } else {
+            debug!(duration_ms = duration.as_millis(), "Point query completed");
+        }
+
         result
     }
 
+    #[instrument(skip(self), fields(start_key = start_key, end_key = end_key))]
     pub fn range_query(&self, start_key: i64, end_key: i64) -> Result<Vec<(i64, Vec<u8>)>> {
+        debug!("Range query started");
         let start_time = Instant::now();
 
         // Use learned index to find range positions
@@ -337,6 +376,21 @@ impl RedbStorage {
         }
 
         metrics::record_range_query(start_time.elapsed().as_secs_f64(), results.len());
+
+        let duration = start_time.elapsed();
+        debug!(
+            duration_ms = duration.as_millis(),
+            rows_returned = results.len(),
+            "Range query completed"
+        );
+        if duration > Duration::from_millis(100) {
+            warn!(
+                duration_ms = duration.as_millis(),
+                rows = results.len(),
+                "Slow range query detected"
+            );
+        }
+
         Ok(results)
     }
 
@@ -355,7 +409,9 @@ impl RedbStorage {
         results
     }
 
+    #[instrument(skip(self), fields(key = key))]
     pub fn delete(&mut self, key: i64) -> Result<bool> {
+        debug!("Delete started");
         let start_time = Instant::now();
 
         let write_txn = self.db.begin_write()?;
@@ -373,6 +429,14 @@ impl RedbStorage {
         }
 
         metrics::record_delete(start_time.elapsed().as_secs_f64());
+
+        let duration = start_time.elapsed();
+        debug!(
+            duration_ms = duration.as_millis(),
+            deleted = deleted,
+            "Delete completed"
+        );
+
         Ok(deleted)
     }
 
