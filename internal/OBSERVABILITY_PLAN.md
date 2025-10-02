@@ -3,7 +3,7 @@
 **Date**: January 2025
 **Goal**: Add comprehensive logging and metrics for production monitoring
 **Timeline**: 6-8 hours
-**Status**: 🟡 IN PROGRESS
+**Status**: 🟡 IN PROGRESS - Phase 2 complete
 
 ---
 
@@ -108,7 +108,7 @@ $ grep -r "record_search\|record_insert" src/redb_storage.rs
 
 ## Implementation Plan
 
-### Phase 1: Learned Index Metrics (2 hours)
+### Phase 1: Learned Index Metrics ✅ COMPLETE (2 hours)
 
 **Tasks**:
 1. Add learned index metrics to `src/metrics.rs`:
@@ -133,11 +133,11 @@ $ grep -r "record_search\|record_insert" src/redb_storage.rs
 
 3. **Test**: Add metrics validation tests
 
-**Deliverable**: New metrics defined and tested
+**Deliverable**: ✅ New metrics defined and tested (Commit 6ca61f4)
 
 ---
 
-### Phase 2: Integrate Metrics into Storage (2 hours)
+### Phase 2: Integrate Metrics into Storage ✅ COMPLETE (2 hours)
 
 **Tasks**:
 1. Add metrics to `src/redb_storage.rs`:
@@ -158,7 +158,10 @@ $ grep -r "record_search\|record_insert" src/redb_storage.rs
 
 4. **Test**: Validate metrics increment correctly
 
-**Deliverable**: All operations record metrics
+**Deliverable**: ✅ All operations record metrics (Commit 1230d5c)
+- point_query(), range_query(), insert(), insert_batch(), delete(), rebuild_index()
+- Added model_count() to RecursiveModelIndex
+- All tests passing (5 storage + 23 metrics)
 
 ---
 
@@ -360,14 +363,13 @@ Prometheus alerting rules:
 
 ## Commits Plan
 
-1. ✅ Create this observability plan document
-2. Add learned index metrics (Phase 1)
-3. Integrate metrics into storage layer (Phase 2a)
-4. Integrate metrics into index layer (Phase 2b)
-5. Add structured logging to storage (Phase 3a)
-6. Add structured logging to SQL engine (Phase 3b)
-7. Add query tracing infrastructure (Phase 4)
-8. Add observability tests
-9. Create observability guide for operators
+1. ✅ Create this observability plan document (Commit cce66a0)
+2. ✅ Add learned index metrics (Phase 1) (Commit 6ca61f4)
+3. ✅ Integrate metrics into storage layer (Phase 2) (Commit 1230d5c)
+4. ⏳ Add structured logging to storage (Phase 3a)
+5. ⏳ Add structured logging to SQL engine (Phase 3b)
+6. ⏳ Add query tracing infrastructure (Phase 4)
+7. ⏳ Add observability tests
+8. ⏳ Create observability guide for operators
 
 **Target**: 8-10 commits with incremental progress
