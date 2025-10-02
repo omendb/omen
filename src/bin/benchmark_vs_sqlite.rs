@@ -9,7 +9,7 @@
 //! Usage: cargo run --release --bin benchmark_vs_sqlite
 
 use anyhow::Result;
-use omendb::index::learned::LearnedIndex;
+use omendb::index::RecursiveModelIndex;
 use std::time::Instant;
 use tempfile::TempDir;
 
@@ -249,35 +249,32 @@ fn benchmark_sqlite_range_query(size: usize, temp_dir: &TempDir) -> Result<f64> 
 
 // OmenDB Benchmarks
 fn benchmark_omendb_insert(size: usize) -> Result<f64> {
-    let mut index = LearnedIndex::new();
+    let mut data = Vec::with_capacity(size);
+
+    for i in 0..size {
+        data.push((i as i64, i));
+    }
 
     let start = Instant::now();
 
-    // Insert data
-    let mut keys = Vec::with_capacity(size);
-    let mut values = Vec::with_capacity(size);
+    // Build learned index
+    let mut index = RecursiveModelIndex::new(size);
+    index.train(data);
 
-    for i in 0..size {
-        keys.push(i as i64);
-        values.push(format!("value_{}", i));
-    }
-
-    // Bulk insert (simulating transaction)
-    index.build(&keys);
     let elapsed = start.elapsed();
 
     Ok(elapsed.as_secs_f64() * 1000.0)
 }
 
 fn benchmark_omendb_point_query(size: usize) -> Result<f64> {
-    let mut index = LearnedIndex::new();
-    let mut keys = Vec::with_capacity(size);
+    let mut data = Vec::with_capacity(size);
 
     for i in 0..size {
-        keys.push(i as i64);
+        data.push((i as i64, i));
     }
 
-    index.build(&keys);
+    let mut index = RecursiveModelIndex::new(size);
+    index.train(data);
 
     // Benchmark queries
     let num_queries = 1000;
@@ -285,7 +282,7 @@ fn benchmark_omendb_point_query(size: usize) -> Result<f64> {
 
     for i in 0..num_queries {
         let key = (i * (size / num_queries)) as i64;
-        let _pos = index.predict(key);
+        let _pos = index.search(key);
     }
 
     let elapsed = start.elapsed();
@@ -295,14 +292,14 @@ fn benchmark_omendb_point_query(size: usize) -> Result<f64> {
 }
 
 fn benchmark_omendb_range_query(size: usize) -> Result<f64> {
-    let mut index = LearnedIndex::new();
-    let mut keys = Vec::with_capacity(size);
+    let mut data = Vec::with_capacity(size);
 
     for i in 0..size {
-        keys.push(i as i64);
+        data.push((i as i64, i));
     }
 
-    index.build(&keys);
+    let mut index = RecursiveModelIndex::new(size);
+    index.train(data);
 
     // Benchmark range queries (1000 rows each)
     let num_queries = 100;
@@ -313,11 +310,7 @@ fn benchmark_omendb_range_query(size: usize) -> Result<f64> {
         let start_key = (i * (size / num_queries)) as i64;
         let end_key = start_key + range_size as i64;
 
-        let start_pos = index.predict(start_key);
-        let end_pos = index.predict(end_key);
-
-        // Simulate scanning the range
-        let _count = end_pos.saturating_sub(start_pos);
+        let _results = index.range_search(start_key, end_key);
     }
 
     let elapsed = start.elapsed();

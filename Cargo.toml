@@ -87,10 +87,11 @@ tokio-postgres = "0.7"
 # HTTP client for testing REST API
 reqwest = { version = "0.12", features = ["json"] }
 
+[dependencies]
 # SQLite for comparison benchmarks
 rusqlite = { version = "0.32", features = ["bundled"] }
 
-[dependencies]
+
 # SQL Engine - Apache DataFusion
 datafusion = "43"
 
