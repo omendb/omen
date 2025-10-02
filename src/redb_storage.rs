@@ -31,6 +31,8 @@ pub struct RedbStorage {
     sorted_keys: Vec<i64>,
     /// Flag to track if index needs rebuild (lazy rebuild optimization)
     index_dirty: bool,
+    /// Cached error bound (updated after index rebuild)
+    cached_error_bound: usize,
 }
 
 impl RedbStorage {
@@ -52,6 +54,7 @@ impl RedbStorage {
             row_count: 0,
             sorted_keys: Vec::new(),
             index_dirty: false,
+            cached_error_bound: 100, // Default
         };
 
         storage.load_metadata()?;
@@ -118,10 +121,14 @@ impl RedbStorage {
                 .collect();
             self.learned_index.train(data);
 
+            // Cache error bound to avoid recomputing on every query
+            self.cached_error_bound = self.learned_index.max_error_bound();
+
             // Update learned index size metrics
             metrics::set_learned_index_size(self.sorted_keys.len());
             metrics::set_learned_index_models(self.learned_index.model_count());
         } else {
+            self.cached_error_bound = 100; // Default for empty index
             metrics::set_learned_index_size(0);
             metrics::set_learned_index_models(0);
         }
@@ -239,8 +246,8 @@ impl RedbStorage {
         // Use learned index to predict position in sorted_keys array
         let result = if !self.sorted_keys.is_empty() {
             if let Some(predicted_pos) = self.learned_index.search(key) {
-                // Use actual model error bound (not hardcoded!)
-                let window_size = self.learned_index.max_error_bound();
+                // Use cached error bound (computed once during rebuild)
+                let window_size = self.cached_error_bound;
                 let start = predicted_pos
                     .saturating_sub(window_size)
                     .min(self.sorted_keys.len());

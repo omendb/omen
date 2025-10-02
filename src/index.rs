@@ -158,12 +158,14 @@ impl RecursiveModelIndex {
         } else {
             0
         };
+        let max_error_bound = self.second_layer.iter().map(|m| m.max_error).max().unwrap_or(0);
 
         info!(
             duration_ms = duration.as_millis(),
             keys = n,
             models = self.second_layer.len(),
             avg_max_error = avg_max_error,
+            max_error_bound = max_error_bound,
             "Learned index training completed"
         );
 
@@ -263,6 +265,14 @@ impl RecursiveModelIndex {
 
         // Add buffer for safety, cap at reasonable maximum
         let max_error = (p95_error + 5).max(1).min(200);
+
+        debug!(
+            segment_size = seg_len,
+            p95_error = p95_error,
+            final_max_error = max_error,
+            "Trained segment error bounds"
+        );
+
         (slope, intercept, max_error)
     }
 
@@ -440,11 +450,13 @@ impl RecursiveModelIndex {
         if self.second_layer.is_empty() {
             100 // Default fallback
         } else {
-            self.second_layer
+            let max_bound = self.second_layer
                 .iter()
                 .map(|m| m.max_error)
                 .max()
-                .unwrap_or(100)
+                .unwrap_or(100);
+
+            max_bound
         }
     }
 }

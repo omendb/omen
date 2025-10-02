@@ -21,6 +21,8 @@ use omendb::redb_storage::RedbStorage;
 use rusqlite::{Connection, params};
 use std::time::Instant;
 use tempfile::TempDir;
+use tracing_subscriber;
+use tracing_subscriber::EnvFilter;
 
 const SIZES: &[usize] = &[10_000, 100_000, 1_000_000];
 
@@ -40,6 +42,11 @@ impl DataDistribution {
 }
 
 fn main() -> Result<()> {
+    // Initialize tracing
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env().add_directive("omendb=info".parse().unwrap()))
+        .init();
+
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║        HONEST BENCHMARK: OmenDB vs SQLite                   ║");
     println!("║        Full Database Comparison - Both with Persistence     ║");
