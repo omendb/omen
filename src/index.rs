@@ -222,16 +222,16 @@ impl RecursiveModelIndex {
             intercept = intercept * seg_n - slope * min_key;
         }
 
-        // Compute actual max prediction error (don't cap arbitrarily!)
+        // Compute 95th percentile prediction error (not max! max captures outliers)
         // Sample strategically: first 50, middle 50, last 50
-        let mut max_error = 0;
+        let mut errors = Vec::new();
         let seg_len = segment.len();
 
         // Sample first 50
         for (i, (key, _)) in segment.iter().take(50.min(seg_len)).enumerate() {
             let predicted = (slope * (*key as f64) + intercept).round() as i64;
             let error = (predicted - i as i64).abs() as usize;
-            max_error = max_error.max(error);
+            errors.push(error);
         }
 
         // Sample middle 50
@@ -241,7 +241,7 @@ impl RecursiveModelIndex {
                 let actual_i = mid_start + i;
                 let predicted = (slope * (*key as f64) + intercept).round() as i64;
                 let error = (predicted - actual_i as i64).abs() as usize;
-                max_error = max_error.max(error);
+                errors.push(error);
             }
         }
 
@@ -252,12 +252,17 @@ impl RecursiveModelIndex {
                 let actual_i = last_start + i;
                 let predicted = (slope * (*key as f64) + intercept).round() as i64;
                 let error = (predicted - actual_i as i64).abs() as usize;
-                max_error = max_error.max(error);
+                errors.push(error);
             }
         }
 
-        // Add buffer for safety, but don't cap arbitrarily (removed .min(8) limit!)
-        max_error = (max_error + 2).max(1);
+        // Use 95th percentile instead of max (robust to outliers!)
+        errors.sort_unstable();
+        let p95_idx = ((errors.len() as f64 * 0.95) as usize).min(errors.len().saturating_sub(1));
+        let p95_error = errors.get(p95_idx).copied().unwrap_or(0);
+
+        // Add buffer for safety, cap at reasonable maximum
+        let max_error = (p95_error + 5).max(1).min(200);
         (slope, intercept, max_error)
     }
 
