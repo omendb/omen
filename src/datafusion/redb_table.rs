@@ -454,8 +454,8 @@ impl RedbStream {
     ) -> Result<Self> {
         // Fetch data based on query type
         let data = {
-            let storage_guard = storage
-                .read()
+            let mut storage_guard = storage
+                .write()
                 .map_err(|e| DataFusionError::Execution(format!("Lock error: {}", e)))?;
 
             match &query_type {

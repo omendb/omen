@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
         let key = (i * 10) % num_keys;
 
         let start = Instant::now();
-        let storage = storage_arc.read().unwrap();
+        let mut storage = storage_arc.write().unwrap();
         let result = storage.point_query(key)?;
         drop(storage);
         direct_duration += start.elapsed();

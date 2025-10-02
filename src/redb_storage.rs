@@ -29,6 +29,8 @@ pub struct RedbStorage {
     /// Sorted array of keys for position-based learned index lookups
     /// Learned index predicts position in this array, then we binary search
     sorted_keys: Vec<i64>,
+    /// Flag to track if index needs rebuild (lazy rebuild optimization)
+    index_dirty: bool,
 }
 
 impl RedbStorage {
@@ -49,6 +51,7 @@ impl RedbStorage {
             learned_index,
             row_count: 0,
             sorted_keys: Vec::new(),
+            index_dirty: false,
         };
 
         storage.load_metadata()?;
@@ -134,6 +137,17 @@ impl RedbStorage {
         Ok(())
     }
 
+    /// Ensure index is up-to-date before queries (lazy rebuild optimization)
+    #[instrument(skip(self))]
+    fn ensure_index_fresh(&mut self) -> Result<()> {
+        if self.index_dirty {
+            debug!("Index dirty, triggering lazy rebuild");
+            self.rebuild_index()?;
+            self.index_dirty = false;
+        }
+        Ok(())
+    }
+
     #[instrument(skip(self, value), fields(key = key, value_size = value.len()))]
     pub fn insert(&mut self, key: i64, value: &[u8]) -> Result<()> {
         debug!("Insert started");
@@ -191,9 +205,10 @@ impl RedbStorage {
         }
         write_txn.commit()?;
 
-        // Rebuild index once after all inserts (more efficient than incremental updates)
-        self.rebuild_index()?;
-        self.row_count = self.sorted_keys.len() as u64;
+        // Mark index as dirty - DON'T rebuild immediately (lazy rebuild optimization)
+        // Index will rebuild on next query for 10-100x insert speedup
+        self.index_dirty = true;
+        self.row_count += batch_size as u64;
         self.save_metadata()?;
 
         let duration = start_time.elapsed().as_secs_f64();
@@ -214,9 +229,12 @@ impl RedbStorage {
     }
 
     #[instrument(skip(self), fields(key = key))]
-    pub fn point_query(&self, key: i64) -> Result<Option<Vec<u8>>> {
+    pub fn point_query(&mut self, key: i64) -> Result<Option<Vec<u8>>> {
         debug!("Point query started");
         let start_time = Instant::now();
+
+        // Lazy rebuild: ensure index is fresh before querying
+        self.ensure_index_fresh()?;
 
         // Use learned index to predict position in sorted_keys array
         let result = if !self.sorted_keys.is_empty() {
@@ -302,9 +320,12 @@ impl RedbStorage {
     }
 
     #[instrument(skip(self), fields(start_key = start_key, end_key = end_key))]
-    pub fn range_query(&self, start_key: i64, end_key: i64) -> Result<Vec<(i64, Vec<u8>)>> {
+    pub fn range_query(&mut self, start_key: i64, end_key: i64) -> Result<Vec<(i64, Vec<u8>)>> {
         debug!("Range query started");
         let start_time = Instant::now();
+
+        // Lazy rebuild: ensure index is fresh before querying
+        self.ensure_index_fresh()?;
 
         // Use learned index to find range positions
         if !self.sorted_keys.is_empty() {
@@ -394,7 +415,10 @@ impl RedbStorage {
         Ok(results)
     }
 
-    pub fn scan_all(&self) -> Result<Vec<(i64, Vec<u8>)>> {
+    pub fn scan_all(&mut self) -> Result<Vec<(i64, Vec<u8>)>> {
+        // Lazy rebuild: ensure index is fresh
+        self.ensure_index_fresh()?;
+
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
