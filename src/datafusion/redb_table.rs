@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use datafusion::catalog::Session;
 use datafusion::datasource::TableProvider;
 use datafusion::error::{DataFusionError, Result};
-use datafusion::logical_expr::{Expr, TableType};
+use datafusion::logical_expr::{Expr, TableProviderFilterPushDown, TableType};
 use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
 use std::any::Any;
@@ -295,6 +295,46 @@ impl TableProvider for RedbTable {
 
     fn table_type(&self) -> TableType {
         TableType::Base
+    }
+
+    fn supports_filters_pushdown(
+        &self,
+        filters: &[&Expr],
+    ) -> Result<Vec<TableProviderFilterPushDown>> {
+        use datafusion::logical_expr::Operator;
+
+        // Check each filter to see if we can handle it
+        Ok(filters
+            .iter()
+            .map(|filter| {
+                // Check if this is a comparison on the id column
+                // We handle: id = X, id >= X, id <= X, id > X, id < X
+                if let Expr::BinaryExpr(binary) = filter {
+                    if let Expr::Column(col) = &*binary.left {
+                        if col.name == "id" {
+                            match binary.op {
+                                Operator::Eq | Operator::Gt | Operator::Lt |
+                                Operator::GtEq | Operator::LtEq => {
+                                    return TableProviderFilterPushDown::Exact;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+
+                // Check for BETWEEN expression
+                if let Expr::Between(between) = filter {
+                    if let Expr::Column(col) = &*between.expr {
+                        if col.name == "id" {
+                            return TableProviderFilterPushDown::Exact;
+                        }
+                    }
+                }
+
+                TableProviderFilterPushDown::Unsupported
+            })
+            .collect())
     }
 
     async fn scan(
@@ -636,5 +676,61 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].num_columns(), 1, "Should project only id column");
         assert_eq!(results[0].num_rows(), 11, "Should return 11 rows");
+    }
+
+    #[tokio::test]
+    async fn test_learned_index_usage_verification() {
+        use crate::metrics::*;
+
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_learned_index_verify.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Insert 10K rows to ensure learned index is trained
+        let batch: Vec<(i64, Vec<u8>)> = (0..10000)
+            .map(|i| (i, format!("value_{}", i).into_bytes()))
+            .collect();
+        storage.insert_batch(batch).unwrap();
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Record baseline metrics
+        let baseline_learned_path = QUERY_PATH.with_label_values(&["learned_index"]).get();
+        let baseline_searches = TOTAL_SEARCHES.get();
+
+        // Execute range query (should use learned index)
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id BETWEEN 3000 AND 4000")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+
+        // Verify results are correct
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 1001, "Should return 1001 rows");
+
+        // Verify learned index path was taken (metrics should have increased)
+        let learned_path_after = QUERY_PATH.with_label_values(&["learned_index"]).get();
+        let searches_after = TOTAL_SEARCHES.get();
+
+        // The range query should have used the learned_index path
+        assert!(
+            learned_path_after > baseline_learned_path,
+            "Learned index path should have been used (path count: {} -> {})",
+            baseline_learned_path,
+            learned_path_after
+        );
+
+        assert!(
+            searches_after > baseline_searches,
+            "Search metrics should have increased (searches: {} -> {})",
+            baseline_searches,
+            searches_after
+        );
     }
 }
