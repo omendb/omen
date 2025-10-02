@@ -222,16 +222,42 @@ impl RecursiveModelIndex {
             intercept = intercept * seg_n - slope * min_key;
         }
 
-        // Minimal error calculation for speed
+        // Compute actual max prediction error (don't cap arbitrarily!)
+        // Sample strategically: first 50, middle 50, last 50
         let mut max_error = 0;
-        let sample_size = segment.len().min(100);
-        for (i, (key, _)) in segment.iter().take(sample_size).enumerate() {
+        let seg_len = segment.len();
+
+        // Sample first 50
+        for (i, (key, _)) in segment.iter().take(50.min(seg_len)).enumerate() {
             let predicted = (slope * (*key as f64) + intercept).round() as i64;
             let error = (predicted - i as i64).abs() as usize;
             max_error = max_error.max(error);
         }
 
-        max_error = (max_error + 1).min(8).max(1);
+        // Sample middle 50
+        if seg_len > 100 {
+            let mid_start = (seg_len / 2).saturating_sub(25);
+            for (i, (key, _)) in segment.iter().skip(mid_start).take(50).enumerate() {
+                let actual_i = mid_start + i;
+                let predicted = (slope * (*key as f64) + intercept).round() as i64;
+                let error = (predicted - actual_i as i64).abs() as usize;
+                max_error = max_error.max(error);
+            }
+        }
+
+        // Sample last 50
+        if seg_len > 50 {
+            let last_start = seg_len.saturating_sub(50);
+            for (i, (key, _)) in segment.iter().skip(last_start).enumerate() {
+                let actual_i = last_start + i;
+                let predicted = (slope * (*key as f64) + intercept).round() as i64;
+                let error = (predicted - actual_i as i64).abs() as usize;
+                max_error = max_error.max(error);
+            }
+        }
+
+        // Add buffer for safety, but don't cap arbitrarily (removed .min(8) limit!)
+        max_error = (max_error + 2).max(1);
         (slope, intercept, max_error)
     }
 
@@ -402,6 +428,19 @@ impl RecursiveModelIndex {
     /// Get total number of models (root + second layer)
     pub fn model_count(&self) -> usize {
         1 + self.second_layer.len()
+    }
+
+    /// Get maximum error bound across all models (for query window sizing)
+    pub fn max_error_bound(&self) -> usize {
+        if self.second_layer.is_empty() {
+            100 // Default fallback
+        } else {
+            self.second_layer
+                .iter()
+                .map(|m| m.max_error)
+                .max()
+                .unwrap_or(100)
+        }
     }
 }
 

@@ -239,8 +239,8 @@ impl RedbStorage {
         // Use learned index to predict position in sorted_keys array
         let result = if !self.sorted_keys.is_empty() {
             if let Some(predicted_pos) = self.learned_index.search(key) {
-                // Define search window around predicted position (learned index error bound)
-                let window_size = 100; // Papers show typical error bound of 10-100
+                // Use actual model error bound (not hardcoded!)
+                let window_size = self.learned_index.max_error_bound();
                 let start = predicted_pos
                     .saturating_sub(window_size)
                     .min(self.sorted_keys.len());
@@ -332,8 +332,8 @@ impl RedbStorage {
             let positions = self.learned_index.range_search(start_key, end_key);
 
             if !positions.is_empty() {
-                // Use predicted positions as hint, but expand window for error bounds
-                let window_size = 100;
+                // Use actual model error bound (not hardcoded!)
+                let window_size = self.learned_index.max_error_bound();
                 let min_pos = positions.iter().min().unwrap_or(&0);
                 let max_pos = positions.iter().max().unwrap_or(&0);
 
