@@ -229,7 +229,11 @@ impl SqlEngine {
         })?;
 
         // Check if there's already an active transaction
-        let mut current_tx = self.current_transaction.lock().unwrap();
+        let mut current_tx = self
+            .current_transaction
+            .lock()
+            .map_err(|e| anyhow!("Transaction mutex poisoned: {}", e))?;
+
         if current_tx.is_some() {
             return Err(anyhow!(
                 "Transaction already in progress. Commit or rollback first."
@@ -248,7 +252,10 @@ impl SqlEngine {
 
     /// Commit the current transaction
     fn commit_transaction(&self) -> Result<ExecutionResult> {
-        let mut current_tx = self.current_transaction.lock().unwrap();
+        let mut current_tx = self
+            .current_transaction
+            .lock()
+            .map_err(|e| anyhow!("Transaction mutex poisoned: {}", e))?;
 
         let transaction = current_tx
             .take()
@@ -264,7 +271,10 @@ impl SqlEngine {
 
     /// Rollback the current transaction
     fn rollback_transaction(&self) -> Result<ExecutionResult> {
-        let mut current_tx = self.current_transaction.lock().unwrap();
+        let mut current_tx = self
+            .current_transaction
+            .lock()
+            .map_err(|e| anyhow!("Transaction mutex poisoned: {}", e))?;
 
         let transaction = current_tx
             .take()

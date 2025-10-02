@@ -151,58 +151,71 @@ fn arrow_array_to_json(array: &dyn arrow::array::Array, idx: usize) -> serde_jso
     }
 
     match array.data_type() {
-        DataType::Boolean => {
-            let arr = array.as_any().downcast_ref::<BooleanArray>().unwrap();
-            serde_json::Value::Bool(arr.value(idx))
-        }
-        DataType::Int8 => {
-            let arr = array.as_any().downcast_ref::<Int8Array>().unwrap();
-            serde_json::Value::Number(arr.value(idx).into())
-        }
-        DataType::Int16 => {
-            let arr = array.as_any().downcast_ref::<Int16Array>().unwrap();
-            serde_json::Value::Number(arr.value(idx).into())
-        }
-        DataType::Int32 => {
-            let arr = array.as_any().downcast_ref::<Int32Array>().unwrap();
-            serde_json::Value::Number(arr.value(idx).into())
-        }
-        DataType::Int64 => {
-            let arr = array.as_any().downcast_ref::<Int64Array>().unwrap();
-            serde_json::Value::Number(arr.value(idx).into())
-        }
-        DataType::UInt8 => {
-            let arr = array.as_any().downcast_ref::<UInt8Array>().unwrap();
-            serde_json::Value::Number(arr.value(idx).into())
-        }
-        DataType::UInt16 => {
-            let arr = array.as_any().downcast_ref::<UInt16Array>().unwrap();
-            serde_json::Value::Number(arr.value(idx).into())
-        }
-        DataType::UInt32 => {
-            let arr = array.as_any().downcast_ref::<UInt32Array>().unwrap();
-            serde_json::Value::Number(arr.value(idx).into())
-        }
-        DataType::UInt64 => {
-            let arr = array.as_any().downcast_ref::<UInt64Array>().unwrap();
-            serde_json::Value::Number(arr.value(idx).into())
-        }
-        DataType::Float32 => {
-            let arr = array.as_any().downcast_ref::<Float32Array>().unwrap();
-            serde_json::json!(arr.value(idx))
-        }
-        DataType::Float64 => {
-            let arr = array.as_any().downcast_ref::<Float64Array>().unwrap();
-            serde_json::json!(arr.value(idx))
-        }
-        DataType::Utf8 => {
-            let arr = array.as_any().downcast_ref::<StringArray>().unwrap();
-            serde_json::Value::String(arr.value(idx).to_string())
-        }
-        DataType::LargeUtf8 => {
-            let arr = array.as_any().downcast_ref::<LargeStringArray>().unwrap();
-            serde_json::Value::String(arr.value(idx).to_string())
-        }
+        DataType::Boolean => array
+            .as_any()
+            .downcast_ref::<BooleanArray>()
+            .map(|arr| serde_json::Value::Bool(arr.value(idx)))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::Int8 => array
+            .as_any()
+            .downcast_ref::<Int8Array>()
+            .map(|arr| serde_json::Value::Number(arr.value(idx).into()))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::Int16 => array
+            .as_any()
+            .downcast_ref::<Int16Array>()
+            .map(|arr| serde_json::Value::Number(arr.value(idx).into()))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::Int32 => array
+            .as_any()
+            .downcast_ref::<Int32Array>()
+            .map(|arr| serde_json::Value::Number(arr.value(idx).into()))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::Int64 => array
+            .as_any()
+            .downcast_ref::<Int64Array>()
+            .map(|arr| serde_json::Value::Number(arr.value(idx).into()))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::UInt8 => array
+            .as_any()
+            .downcast_ref::<UInt8Array>()
+            .map(|arr| serde_json::Value::Number(arr.value(idx).into()))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::UInt16 => array
+            .as_any()
+            .downcast_ref::<UInt16Array>()
+            .map(|arr| serde_json::Value::Number(arr.value(idx).into()))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::UInt32 => array
+            .as_any()
+            .downcast_ref::<UInt32Array>()
+            .map(|arr| serde_json::Value::Number(arr.value(idx).into()))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::UInt64 => array
+            .as_any()
+            .downcast_ref::<UInt64Array>()
+            .map(|arr| serde_json::Value::Number(arr.value(idx).into()))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::Float32 => array
+            .as_any()
+            .downcast_ref::<Float32Array>()
+            .map(|arr| serde_json::json!(arr.value(idx)))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::Float64 => array
+            .as_any()
+            .downcast_ref::<Float64Array>()
+            .map(|arr| serde_json::json!(arr.value(idx)))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::Utf8 => array
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .map(|arr| serde_json::Value::String(arr.value(idx).to_string()))
+            .unwrap_or(serde_json::Value::Null),
+        DataType::LargeUtf8 => array
+            .as_any()
+            .downcast_ref::<LargeStringArray>()
+            .map(|arr| serde_json::Value::String(arr.value(idx).to_string()))
+            .unwrap_or(serde_json::Value::Null),
         _ => serde_json::Value::String(format!("{:?}", array)),
     }
 }

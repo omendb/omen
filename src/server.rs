@@ -24,7 +24,12 @@ async fn handle_request_with_auth(
                     .status(StatusCode::OK)
                     .header("Content-Type", "text/plain; version=0.0.4")
                     .body(Body::from(metrics))
-                    .unwrap()
+                    .unwrap_or_else(|_| {
+                        Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(Body::from("Failed to build response"))
+                            .unwrap_or_default()
+                    })
             }
             Ok(false) | Err(_) => {
                 let (header_name, header_value) = security_ctx.auth_challenge_header();
@@ -32,7 +37,7 @@ async fn handle_request_with_auth(
                     .status(StatusCode::UNAUTHORIZED)
                     .header(header_name, header_value)
                     .body(Body::from("Authentication required"))
-                    .unwrap()
+                    .unwrap_or_else(|_| Response::default())
             }
         },
 
@@ -50,7 +55,12 @@ async fn handle_request_with_auth(
                     .status(status)
                     .header("Content-Type", "application/json")
                     .body(Body::from(health.to_json()))
-                    .unwrap()
+                    .unwrap_or_else(|_| {
+                        Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(Body::from("{\"error\":\"Failed to build response\"}"))
+                            .unwrap_or_default()
+                    })
             }
             Ok(false) | Err(_) => {
                 let (header_name, header_value) = security_ctx.auth_challenge_header();
@@ -58,7 +68,7 @@ async fn handle_request_with_auth(
                     .status(StatusCode::UNAUTHORIZED)
                     .header(header_name, header_value)
                     .body(Body::from("Authentication required"))
-                    .unwrap()
+                    .unwrap_or_else(|_| Response::default())
             }
         },
 
@@ -67,7 +77,7 @@ async fn handle_request_with_auth(
             .status(StatusCode::OK)
             .header("Content-Type", "text/plain")
             .body(Body::from("ready"))
-            .unwrap(),
+            .unwrap_or_else(|_| Response::default()),
 
         // Status endpoint (public, basic status for monitoring)
         (&Method::GET, "/status") => {
@@ -81,14 +91,14 @@ async fn handle_request_with_auth(
                 .status(StatusCode::OK)
                 .header("Content-Type", "text/plain")
                 .body(Body::from(status_text))
-                .unwrap()
+                .unwrap_or_else(|_| Response::default())
         }
 
         // Default 404
         _ => Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::from("Not Found"))
-            .unwrap(),
+            .unwrap_or_else(|_| Response::default()),
     };
 
     Ok(response)
