@@ -2,6 +2,8 @@
 //! Week 3: Adding range queries to our 8.39x speedup implementation
 
 use std::collections::BTreeMap;
+use std::time::Instant;
+use tracing::{debug, info, instrument, warn};
 
 /// Recursive Model Index with multiple layers for better scaling
 #[derive(Debug)]
@@ -61,22 +63,33 @@ impl RecursiveModelIndex {
 
         // Retrain periodically
         if self.data.len() % 10000 == 0 {
+            info!(
+                total_keys = self.data.len(),
+                "Periodic retrain triggered (every 10,000 keys)"
+            );
             self.retrain();
         }
     }
 
     /// Retrain the index
+    #[instrument(skip(self))]
     pub fn retrain(&mut self) {
+        info!("Retraining learned index");
         let mut data = self.data.clone();
         self.train(data);
     }
 
+    #[instrument(skip(self, data), fields(keys = data.len()))]
     pub fn train(&mut self, mut data: Vec<(i64, usize)>) {
+        info!(keys = data.len(), "Training learned index");
+        let start_time = Instant::now();
+
         data.sort_by_key(|(k, _)| *k);
         self.data = data;
 
         let n = self.data.len();
         if n == 0 {
+            debug!("No data to train");
             return;
         }
 
@@ -137,6 +150,32 @@ impl RecursiveModelIndex {
                 end_idx: end,
                 max_error,
             });
+        }
+
+        let duration = start_time.elapsed();
+        let avg_max_error = if !self.second_layer.is_empty() {
+            self.second_layer.iter().map(|m| m.max_error).sum::<usize>() / self.second_layer.len()
+        } else {
+            0
+        };
+
+        info!(
+            duration_ms = duration.as_millis(),
+            keys = n,
+            models = self.second_layer.len(),
+            avg_max_error = avg_max_error,
+            "Learned index training completed"
+        );
+
+        // Warn if prediction errors are high (>10% of dataset)
+        let error_threshold = (n as f64 * 0.1) as usize;
+        if avg_max_error > error_threshold {
+            warn!(
+                avg_max_error = avg_max_error,
+                threshold = error_threshold,
+                error_percentage = (avg_max_error as f64 / n as f64 * 100.0) as u64,
+                "High prediction error detected in learned index"
+            );
         }
     }
 
