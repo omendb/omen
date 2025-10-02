@@ -164,6 +164,65 @@ pub static SQL_QUERY_ROWS_RETURNED: Lazy<Histogram> = Lazy::new(|| {
     .unwrap()
 });
 
+// Learned Index metrics
+pub static LEARNED_INDEX_HITS: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "omendb_learned_index_hits_total",
+        "Total number of successful learned index predictions"
+    )
+    .unwrap()
+});
+
+pub static LEARNED_INDEX_MISSES: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "omendb_learned_index_misses_total",
+        "Total number of learned index prediction failures (fallback to B-tree)"
+    )
+    .unwrap()
+});
+
+pub static LEARNED_INDEX_PREDICTION_ERROR: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "omendb_learned_index_prediction_error_positions",
+        "Learned index prediction error in array positions",
+        vec![0.0, 1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0]
+    )
+    .unwrap()
+});
+
+pub static QUERY_PATH: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "omendb_query_path_total",
+        "Query execution path distribution",
+        &["path"] // "learned_index", "fallback_btree", "full_scan"
+    )
+    .unwrap()
+});
+
+pub static LEARNED_INDEX_WINDOW_HITS: Lazy<IntCounter> = Lazy::new(|| {
+    register_int_counter!(
+        "omendb_learned_index_window_hits_total",
+        "Queries resolved within initial prediction window"
+    )
+    .unwrap()
+});
+
+pub static LEARNED_INDEX_SIZE_KEYS: Lazy<IntGauge> = Lazy::new(|| {
+    register_int_gauge!(
+        "omendb_learned_index_keys",
+        "Number of keys in the learned index"
+    )
+    .unwrap()
+});
+
+pub static LEARNED_INDEX_MODELS_COUNT: Lazy<IntGauge> = Lazy::new(|| {
+    register_int_gauge!(
+        "omendb_learned_index_models",
+        "Number of models in the learned index (root + second layer)"
+    )
+    .unwrap()
+});
+
 /// Timer for measuring operation duration
 pub struct Timer {
     start: Instant,
@@ -239,6 +298,58 @@ pub fn record_sql_query(query_type: &str, duration_secs: f64, rows_returned: usi
 /// Record SQL query error
 pub fn record_sql_query_error(error_type: &str) {
     SQL_QUERY_ERRORS.with_label_values(&[error_type]).inc();
+}
+
+/// Record learned index hit with prediction accuracy
+pub fn record_learned_index_hit(predicted_pos: usize, actual_pos: usize) {
+    LEARNED_INDEX_HITS.inc();
+
+    // Calculate prediction error
+    let error = if predicted_pos > actual_pos {
+        predicted_pos - actual_pos
+    } else {
+        actual_pos - predicted_pos
+    };
+
+    LEARNED_INDEX_PREDICTION_ERROR.observe(error as f64);
+
+    // Check if hit was within initial window (±100 positions)
+    if error <= 100 {
+        LEARNED_INDEX_WINDOW_HITS.inc();
+    }
+}
+
+/// Record learned index miss (fallback to B-tree or full scan)
+pub fn record_learned_index_miss() {
+    LEARNED_INDEX_MISSES.inc();
+}
+
+/// Record query execution path
+pub fn record_query_path(path: &str) {
+    QUERY_PATH.with_label_values(&[path]).inc();
+}
+
+/// Update learned index size
+pub fn set_learned_index_size(keys: i64) {
+    LEARNED_INDEX_SIZE_KEYS.set(keys);
+}
+
+/// Update learned index model count
+pub fn set_learned_index_models(count: i64) {
+    LEARNED_INDEX_MODELS_COUNT.set(count);
+}
+
+/// Calculate learned index hit rate (0.0 to 1.0)
+pub fn learned_index_hit_rate() -> f64 {
+    let hits = LEARNED_INDEX_HITS.get() as f64;
+    let misses = LEARNED_INDEX_MISSES.get() as f64;
+    let total = hits + misses;
+
+    if total > 0.0 {
+        hits / total
+    } else {
+        0.0
+    }
 }
 
 /// Get metrics in Prometheus text format
@@ -546,5 +657,127 @@ mod tests {
 
         let metrics = get_metrics();
         assert!(metrics.contains("omendb_sql_query_rows_returned"));
+    }
+
+    #[test]
+    fn test_learned_index_metrics() {
+        let hits_before = LEARNED_INDEX_HITS.get();
+        let misses_before = LEARNED_INDEX_MISSES.get();
+
+        // Record some hits with varying accuracy
+        record_learned_index_hit(100, 100); // Perfect prediction
+        record_learned_index_hit(100, 105); // 5 positions off
+        record_learned_index_hit(100, 200); // 100 positions off
+
+        // Record a miss
+        record_learned_index_miss();
+
+        let hits_after = LEARNED_INDEX_HITS.get();
+        let misses_after = LEARNED_INDEX_MISSES.get();
+
+        // Should have at least these increments (may be more due to parallel tests)
+        assert!(hits_after >= hits_before + 3);
+        assert!(misses_after >= misses_before + 1);
+
+        // Verify metrics appear in output
+        let metrics = get_metrics();
+        assert!(metrics.contains("omendb_learned_index_hits_total"));
+        assert!(metrics.contains("omendb_learned_index_misses_total"));
+    }
+
+    #[test]
+    fn test_learned_index_hit_rate_calculation() {
+        // Record operations
+        record_learned_index_hit(100, 100);
+        record_learned_index_hit(200, 210);
+        record_learned_index_hit(300, 320);
+        record_learned_index_miss();
+
+        let hit_rate = learned_index_hit_rate();
+
+        // Hit rate should be > 0 and <= 1.0
+        assert!(hit_rate > 0.0);
+        assert!(hit_rate <= 1.0);
+    }
+
+    #[test]
+    fn test_learned_index_window_tracking() {
+        let window_hits_before = LEARNED_INDEX_WINDOW_HITS.get();
+
+        // Hit within window (error <= 100)
+        record_learned_index_hit(1000, 1050); // 50 positions off - within window
+
+        // Hit outside window (error > 100)
+        record_learned_index_hit(1000, 1200); // 200 positions off - outside window
+
+        let window_hits_after = LEARNED_INDEX_WINDOW_HITS.get();
+
+        // Only the first hit should increment window_hits (at least 1 more)
+        assert!(window_hits_after >= window_hits_before + 1);
+    }
+
+    #[test]
+    fn test_query_path_metrics() {
+        let learned_before = QUERY_PATH.with_label_values(&["learned_index"]).get();
+        let btree_before = QUERY_PATH.with_label_values(&["fallback_btree"]).get();
+        let scan_before = QUERY_PATH.with_label_values(&["full_scan"]).get();
+
+        record_query_path("learned_index");
+        record_query_path("learned_index");
+        record_query_path("fallback_btree");
+        record_query_path("full_scan");
+
+        let learned_after = QUERY_PATH.with_label_values(&["learned_index"]).get();
+        let btree_after = QUERY_PATH.with_label_values(&["fallback_btree"]).get();
+        let scan_after = QUERY_PATH.with_label_values(&["full_scan"]).get();
+
+        // Should have at least these increments (may be more due to parallel tests)
+        assert!(learned_after >= learned_before + 2);
+        assert!(btree_after >= btree_before + 1);
+        assert!(scan_after >= scan_before + 1);
+    }
+
+    #[test]
+    fn test_learned_index_size_tracking() {
+        set_learned_index_size(10_000);
+        assert_eq!(LEARNED_INDEX_SIZE_KEYS.get(), 10_000);
+
+        set_learned_index_size(50_000);
+        assert_eq!(LEARNED_INDEX_SIZE_KEYS.get(), 50_000);
+    }
+
+    #[test]
+    fn test_learned_index_models_tracking() {
+        set_learned_index_models(5); // 1 root + 4 second layer
+        assert_eq!(LEARNED_INDEX_MODELS_COUNT.get(), 5);
+
+        set_learned_index_models(17); // 1 root + 16 second layer
+        assert_eq!(LEARNED_INDEX_MODELS_COUNT.get(), 17);
+    }
+
+    #[test]
+    fn test_learned_index_prediction_accuracy() {
+        let before_count = LEARNED_INDEX_PREDICTION_ERROR.get_sample_count();
+
+        // Perfect predictions
+        record_learned_index_hit(100, 100); // 0 error
+        record_learned_index_hit(200, 200); // 0 error
+
+        // Good predictions
+        record_learned_index_hit(300, 305); // 5 error
+        record_learned_index_hit(400, 410); // 10 error
+
+        // Mediocre predictions
+        record_learned_index_hit(500, 550); // 50 error
+        record_learned_index_hit(600, 700); // 100 error
+
+        let after_count = LEARNED_INDEX_PREDICTION_ERROR.get_sample_count();
+
+        // Should have recorded at least 6 new samples (may be more due to other tests)
+        assert!(after_count >= before_count + 6);
+
+        // Verify histogram appears in metrics
+        let metrics = get_metrics();
+        assert!(metrics.contains("omendb_learned_index_prediction_error_positions"));
     }
 }
