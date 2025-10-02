@@ -66,6 +66,10 @@ path = "src/bin/postgres_server.rs"
 name = "rest_server"
 path = "src/bin/rest_server.rs"
 
+[[bin]]
+name = "benchmark_vs_sqlite"
+path = "src/bin/benchmark_vs_sqlite.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
@@ -82,6 +86,9 @@ tokio-postgres = "0.7"
 
 # HTTP client for testing REST API
 reqwest = { version = "0.12", features = ["json"] }
+
+# SQLite for comparison benchmarks
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [dependencies]
 # SQL Engine - Apache DataFusion
