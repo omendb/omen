@@ -549,4 +549,63 @@ mod tests {
         let range_results = storage.range_query(4000, 6000).unwrap();
         assert!(range_results.len() >= 2000);
     }
+
+    #[test]
+    fn test_observability_integration() {
+        use crate::metrics::*;
+
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_observability.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Record baseline metrics
+        let baseline_searches = TOTAL_SEARCHES.get();
+        let baseline_inserts = TOTAL_INSERTS.get();
+        let baseline_learned_hits = LEARNED_INDEX_HITS.get();
+
+        // Test batch insert (should record metrics and log)
+        let batch: Vec<(i64, Vec<u8>)> = (0..1000)
+            .map(|i| (i, format!("value_{}", i).into_bytes()))
+            .collect();
+        storage.insert_batch(batch).unwrap();
+
+        // Verify insert metrics increased
+        assert!(TOTAL_INSERTS.get() >= baseline_inserts + 1000);
+
+        // Test point queries (should record learned index metrics)
+        for i in (0..1000).step_by(100) {
+            let result = storage.point_query(i).unwrap();
+            assert!(result.is_some());
+        }
+
+        // Verify search metrics increased
+        assert!(TOTAL_SEARCHES.get() >= baseline_searches + 10);
+
+        // Verify learned index metrics are being tracked
+        // After queries, we should have some hits (index was trained)
+        assert!(LEARNED_INDEX_HITS.get() > baseline_learned_hits);
+
+        // Test range query
+        let range_results = storage.range_query(100, 200).unwrap();
+        assert!(!range_results.is_empty());
+
+        // Test delete
+        let deleted = storage.delete(500).unwrap();
+        assert!(deleted);
+
+        // Verify learned index size metrics are set
+        let index_size = LEARNED_INDEX_SIZE_KEYS.get();
+        assert!(index_size > 0, "Learned index size should be tracked");
+
+        let model_count = LEARNED_INDEX_MODELS_COUNT.get();
+        assert!(model_count > 0, "Model count should be tracked");
+
+        // Verify hit rate calculation
+        let hit_rate = learned_index_hit_rate();
+        assert!(
+            hit_rate >= 0.0 && hit_rate <= 1.0,
+            "Hit rate should be between 0 and 1"
+        );
+    }
 }
