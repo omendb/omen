@@ -3,11 +3,11 @@
 
 use crate::row::Row;
 use crate::value::Value;
-use anyhow::{Result, Context, anyhow};
+use anyhow::{anyhow, Context, Result};
 use arrow::datatypes::SchemaRef;
 use chrono::{DateTime, Utc};
 use crc32fast::Hasher;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -24,9 +24,7 @@ pub enum TableWalOperation {
         schema_json: String, // Serialized Arrow schema
     },
     /// Drop table
-    DropTable {
-        table_name: String,
-    },
+    DropTable { table_name: String },
     /// Insert row into table
     InsertRow {
         table_name: String,
@@ -125,7 +123,9 @@ impl TableWalManager {
         primary_key: String,
     ) -> Result<()> {
         // Serialize schema as JSON (fields with name, type, nullable)
-        let schema_fields: Vec<_> = schema.fields().iter()
+        let schema_fields: Vec<_> = schema
+            .fields()
+            .iter()
             .map(|f| {
                 serde_json::json!({
                     "name": f.name(),
@@ -199,7 +199,8 @@ impl TableWalManager {
         }
 
         let mut writer = self.writer.lock().unwrap();
-        let writer = writer.as_mut()
+        let writer = writer
+            .as_mut()
             .ok_or_else(|| anyhow!("WAL writer not initialized"))?;
 
         for entry in entries {
@@ -234,11 +235,7 @@ impl TableWalManager {
         // Read all WAL files in directory
         let mut wal_files: Vec<_> = std::fs::read_dir(&self.wal_dir)?
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .starts_with("wal_")
-            })
+            .filter(|e| e.file_name().to_string_lossy().starts_with("wal_"))
             .collect();
 
         // Sort by filename (timestamp-based)
@@ -376,10 +373,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let wal = TableWalManager::new(temp_dir.path()).unwrap();
 
-        let row = Row::new(vec![
-            Value::Int64(1),
-            Value::Text("Alice".to_string()),
-        ]);
+        let row = Row::new(vec![Value::Int64(1), Value::Text("Alice".to_string())]);
 
         wal.log_insert_row("users".to_string(), &row).unwrap();
         wal.flush().unwrap();
@@ -389,7 +383,10 @@ mod tests {
         assert_eq!(entries.len(), 1);
 
         match &entries[0].operation {
-            TableWalOperation::InsertRow { table_name, row_data } => {
+            TableWalOperation::InsertRow {
+                table_name,
+                row_data,
+            } => {
                 assert_eq!(table_name, "users");
                 assert_eq!(row_data.len(), 2);
             }
@@ -433,9 +430,7 @@ mod tests {
         {
             let wal = TableWalManager::new(temp_dir.path()).unwrap();
 
-            let schema = Arc::new(Schema::new(vec![
-                Field::new("id", DataType::Int64, false),
-            ]));
+            let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
 
             wal.log_create_table("test".to_string(), schema, "id".to_string())
                 .unwrap();

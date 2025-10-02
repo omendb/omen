@@ -46,7 +46,11 @@ fn test_50m_keys_scale() {
     println!("Average lookup time at 50M scale: {} ns", avg_lookup_ns);
 
     // Should maintain <500ns even at 50M scale (262ns measured)
-    assert!(avg_lookup_ns < 500, "Lookup performance degraded at scale: {} ns > 500ns", avg_lookup_ns);
+    assert!(
+        avg_lookup_ns < 500,
+        "Lookup performance degraded at scale: {} ns > 500ns",
+        avg_lookup_ns
+    );
 }
 
 #[test]
@@ -55,9 +59,7 @@ fn test_concurrent_reads() {
     let index = Arc::new(RwLock::new(RecursiveModelIndex::new(1_000_000)));
 
     // Train index
-    let data: Vec<(i64, usize)> = (0..1_000_000)
-        .map(|i| (i as i64 * 10, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..1_000_000).map(|i| (i as i64 * 10, i)).collect();
 
     index.write().unwrap().train(data);
 
@@ -96,12 +98,21 @@ fn test_concurrent_reads() {
 
     let elapsed = start.elapsed();
 
-    println!("100 concurrent threads, 100K total lookups took: {:?}", elapsed);
+    println!(
+        "100 concurrent threads, 100K total lookups took: {:?}",
+        elapsed
+    );
     println!("Total successful lookups: {}", total_found);
 
     // Should complete within reasonable time
-    assert!(elapsed < Duration::from_secs(5), "Concurrent reads too slow");
-    assert!(total_found > 90_000, "Too many failed lookups under concurrency");
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "Concurrent reads too slow"
+    );
+    assert!(
+        total_found > 90_000,
+        "Too many failed lookups under concurrency"
+    );
 }
 
 #[test]
@@ -112,9 +123,7 @@ fn test_memory_usage() {
 
     for size in scales {
         let mut index = RecursiveModelIndex::new(size);
-        let data: Vec<(i64, usize)> = (0..size)
-            .map(|i| (i as i64, i))
-            .collect();
+        let data: Vec<(i64, usize)> = (0..size).map(|i| (i as i64, i)).collect();
 
         index.train(data);
 
@@ -134,9 +143,7 @@ fn test_memory_usage() {
 fn test_sustained_load() {
     // Run for extended period to check for memory leaks or degradation
     let mut index = RecursiveModelIndex::new(1_000_000);
-    let data: Vec<(i64, usize)> = (0..1_000_000)
-        .map(|i| (i as i64, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..1_000_000).map(|i| (i as i64, i)).collect();
 
     index.train(data);
 
@@ -158,9 +165,15 @@ fn test_sustained_load() {
     }
 
     let ops_per_sec = operations as f64 / 30.0;
-    println!("Sustained load test: {} ops/sec over 30 seconds", ops_per_sec);
+    println!(
+        "Sustained load test: {} ops/sec over 30 seconds",
+        ops_per_sec
+    );
 
-    assert!(ops_per_sec > 100_000.0, "Performance degraded during sustained load");
+    assert!(
+        ops_per_sec > 100_000.0,
+        "Performance degraded during sustained load"
+    );
 }
 
 #[test]
@@ -189,7 +202,11 @@ fn test_worst_case_distribution() {
         }
     }
 
-    assert!(found > 90, "Poor performance on clustered data: only {} of 100 keys found", found);
+    assert!(
+        found > 90,
+        "Poor performance on clustered data: only {} of 100 keys found",
+        found
+    );
 }
 
 #[test]
@@ -231,9 +248,7 @@ fn test_recovery_after_errors() {
     let mut index = RecursiveModelIndex::new(1000);
 
     // Train with valid data
-    let data: Vec<(i64, usize)> = (0..100)
-        .map(|i| (i as i64, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..100).map(|i| (i as i64, i)).collect();
     index.train(data);
 
     // Try operations that might cause errors
@@ -251,17 +266,18 @@ fn test_recovery_after_errors() {
 fn test_performance_regression() {
     // Baseline performance test to catch regressions
     let mut index = RecursiveModelIndex::new(1_000_000);
-    let data: Vec<(i64, usize)> = (0..1_000_000)
-        .map(|i| (i as i64 * 10, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..1_000_000).map(|i| (i as i64 * 10, i)).collect();
 
     // Training should be fast
     let train_start = Instant::now();
     index.train(data);
     let train_time = train_start.elapsed();
 
-    assert!(train_time < Duration::from_millis(500),
-        "Training regression: took {:?}", train_time);
+    assert!(
+        train_time < Duration::from_millis(500),
+        "Training regression: took {:?}",
+        train_time
+    );
 
     // Lookups should maintain speed
     let mut total_time = Duration::ZERO;
@@ -273,6 +289,9 @@ fn test_performance_regression() {
     }
 
     let avg_lookup_ns = total_time.as_nanos() / 1000;
-    assert!(avg_lookup_ns < 100,
-        "Lookup regression: {} ns average", avg_lookup_ns);
+    assert!(
+        avg_lookup_ns < 100,
+        "Lookup regression: {} ns average",
+        avg_lookup_ns
+    );
 }

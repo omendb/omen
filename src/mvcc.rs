@@ -12,7 +12,9 @@ pub const MVCC_DELETED_COL: &str = "__mvcc_deleted";
 /// Adds MVCC metadata columns to a user schema
 /// Returns new schema with hidden MVCC columns appended
 pub fn add_mvcc_columns(user_schema: SchemaRef) -> SchemaRef {
-    let mut fields: Vec<Field> = user_schema.fields().iter()
+    let mut fields: Vec<Field> = user_schema
+        .fields()
+        .iter()
         .map(|f| f.as_ref().clone())
         .collect();
 
@@ -26,7 +28,9 @@ pub fn add_mvcc_columns(user_schema: SchemaRef) -> SchemaRef {
 
 /// Extract user schema from MVCC-enhanced schema (removes hidden columns)
 pub fn extract_user_schema(mvcc_schema: SchemaRef) -> SchemaRef {
-    let fields: Vec<Field> = mvcc_schema.fields().iter()
+    let fields: Vec<Field> = mvcc_schema
+        .fields()
+        .iter()
         .filter(|f| {
             let name = f.name();
             name != MVCC_VERSION_COL && name != MVCC_TXN_ID_COL && name != MVCC_DELETED_COL
@@ -58,7 +62,11 @@ impl MvccIndices {
         let txn_id = schema.index_of(MVCC_TXN_ID_COL).ok()?;
         let deleted = schema.index_of(MVCC_DELETED_COL).ok()?;
 
-        Some(Self { version, txn_id, deleted })
+        Some(Self {
+            version,
+            txn_id,
+            deleted,
+        })
     }
 }
 
@@ -101,9 +109,7 @@ mod tests {
 
     #[test]
     fn test_mvcc_indices() {
-        let user_schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int64, false),
-        ]));
+        let user_schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
 
         let mvcc_schema = add_mvcc_columns(user_schema);
         let indices = MvccIndices::from_schema(&mvcc_schema).unwrap();

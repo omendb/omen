@@ -17,7 +17,10 @@ async fn start_dual_servers(rest_port: u16, pg_port: u16) -> anyhow::Result<()> 
 
     // Setup: create table
     let setup_ctx = ctx.clone();
-    setup_ctx.write().await.sql("CREATE TABLE load_test (id INT, value INT, client VARCHAR)")
+    setup_ctx
+        .write()
+        .await
+        .sql("CREATE TABLE load_test (id INT, value INT, client VARCHAR)")
         .await?
         .collect()
         .await?;
@@ -26,7 +29,7 @@ async fn start_dual_servers(rest_port: u16, pg_port: u16) -> anyhow::Result<()> 
     let pg_ctx = ctx.clone();
     let pg_server = PostgresServer::with_addr(
         &format!("127.0.0.1:{}", pg_port),
-        (*pg_ctx.read().await).clone()
+        (*pg_ctx.read().await).clone(),
     );
     tokio::spawn(async move {
         let _ = pg_server.serve().await;
@@ -36,7 +39,7 @@ async fn start_dual_servers(rest_port: u16, pg_port: u16) -> anyhow::Result<()> 
     let rest_ctx = ctx.clone();
     let rest_server = RestServer::with_addr(
         &format!("127.0.0.1:{}", rest_port),
-        (*rest_ctx.read().await).clone()
+        (*rest_ctx.read().await).clone(),
     );
     tokio::spawn(async move {
         let _ = rest_server.serve().await;
@@ -50,7 +53,8 @@ async fn connect_postgres(port: u16) -> anyhow::Result<tokio_postgres::Client> {
     let (client, connection) = tokio_postgres::connect(
         &format!("host=127.0.0.1 port={} user=test dbname=test", port),
         NoTls,
-    ).await?;
+    )
+    .await?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -75,7 +79,12 @@ async fn test_concurrency_multiple_postgres_connections() {
         let handle = tokio::spawn(async move {
             let client = connect_postgres(pg_port).await.unwrap();
             client
-                .simple_query(&format!("INSERT INTO load_test VALUES ({}, {}, 'pg_client_{}')", i, i * 100, i))
+                .simple_query(&format!(
+                    "INSERT INTO load_test VALUES ({}, {}, 'pg_client_{}')",
+                    i,
+                    i * 100,
+                    i
+                ))
                 .await
                 .unwrap();
         });
@@ -94,7 +103,8 @@ async fn test_concurrency_multiple_postgres_connections() {
         .await
         .unwrap();
 
-    let count = results.iter()
+    let count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -144,7 +154,8 @@ async fn test_concurrency_multiple_rest_requests() {
         .await
         .unwrap();
 
-    let count = results.iter()
+    let count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -167,7 +178,10 @@ async fn test_concurrency_mixed_protocol_load() {
         let pg_handle = tokio::spawn(async move {
             let client = connect_postgres(pg_port).await.unwrap();
             client
-                .simple_query(&format!("INSERT INTO load_test VALUES ({}, {}, 'pg_{}')", i, i, i))
+                .simple_query(&format!(
+                    "INSERT INTO load_test VALUES ({}, {}, 'pg_{}')",
+                    i, i, i
+                ))
                 .await
                 .unwrap();
         });
@@ -203,7 +217,8 @@ async fn test_concurrency_mixed_protocol_load() {
         .await
         .unwrap();
 
-    let count = results.iter()
+    let count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -221,7 +236,11 @@ async fn test_concurrency_read_heavy_load() {
     let client = connect_postgres(pg_port).await.unwrap();
     for i in 0..100 {
         client
-            .simple_query(&format!("INSERT INTO load_test VALUES ({}, {}, 'data')", i, i * 10))
+            .simple_query(&format!(
+                "INSERT INTO load_test VALUES ({}, {}, 'data')",
+                i,
+                i * 10
+            ))
             .await
             .unwrap();
     }
@@ -237,7 +256,8 @@ async fn test_concurrency_read_heavy_load() {
                 .await
                 .unwrap();
 
-            let count = results.iter()
+            let count = results
+                .iter()
                 .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
                 .count();
 
@@ -265,7 +285,10 @@ async fn test_concurrency_write_heavy_load() {
         let handle = tokio::spawn(async move {
             let client = connect_postgres(pg_port).await.unwrap();
             client
-                .simple_query(&format!("INSERT INTO load_test VALUES ({}, {}, 'writer_{}')", i, i, i))
+                .simple_query(&format!(
+                    "INSERT INTO load_test VALUES ({}, {}, 'writer_{}')",
+                    i, i, i
+                ))
                 .await
                 .unwrap();
         });
@@ -283,7 +306,8 @@ async fn test_concurrency_write_heavy_load() {
         .await
         .unwrap();
 
-    let count = results.iter()
+    let count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -309,7 +333,10 @@ async fn test_concurrency_connection_churn() {
 
             // Single operation
             client
-                .simple_query(&format!("INSERT INTO load_test VALUES ({}, {}, 'churn')", i, i))
+                .simple_query(&format!(
+                    "INSERT INTO load_test VALUES ({}, {}, 'churn')",
+                    i, i
+                ))
                 .await
                 .unwrap();
 
@@ -329,7 +356,8 @@ async fn test_concurrency_connection_churn() {
         .await
         .unwrap();
 
-    let count = results.iter()
+    let count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -347,7 +375,11 @@ async fn test_concurrency_aggregation_queries() {
     let client = connect_postgres(pg_port).await.unwrap();
     for i in 0..200 {
         client
-            .simple_query(&format!("INSERT INTO load_test VALUES ({}, {}, 'aggregate')", i, i % 10))
+            .simple_query(&format!(
+                "INSERT INTO load_test VALUES ({}, {}, 'aggregate')",
+                i,
+                i % 10
+            ))
             .await
             .unwrap();
     }
@@ -363,7 +395,8 @@ async fn test_concurrency_aggregation_queries() {
                 .await
                 .unwrap();
 
-            let count = results.iter()
+            let count = results
+                .iter()
                 .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
                 .count();
 

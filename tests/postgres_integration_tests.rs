@@ -12,7 +12,7 @@ use datafusion::prelude::*;
 use omendb::postgres::PostgresServer;
 use std::time::Duration;
 use tokio::time::sleep;
-use tokio_postgres::{NoTls, Client};
+use tokio_postgres::{Client, NoTls};
 
 /// Helper to start PostgreSQL server on a test port
 async fn start_test_server(port: u16) -> anyhow::Result<()> {
@@ -83,7 +83,10 @@ async fn test_postgres_simple_select() {
         .unwrap();
 
     // Simple query returns SimpleQueryMessage enum, count Row variants
-    let row_count = results.iter().filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_))).count();
+    let row_count = results
+        .iter()
+        .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
+        .count();
     assert_eq!(row_count, 3, "Should return 3 rows");
 }
 
@@ -98,7 +101,10 @@ async fn test_postgres_where_clause() {
         .await
         .unwrap();
 
-    let row_count = results.iter().filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_))).count();
+    let row_count = results
+        .iter()
+        .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
+        .count();
     assert_eq!(row_count, 1, "Should return 1 row");
 }
 
@@ -125,7 +131,10 @@ async fn test_postgres_insert() {
         .await
         .unwrap();
 
-    let row_count = results.iter().filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_))).count();
+    let row_count = results
+        .iter()
+        .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
+        .count();
     assert_eq!(row_count, 1);
 }
 
@@ -189,7 +198,10 @@ async fn test_postgres_multiple_queries() {
             .await
             .unwrap();
 
-        let row_count = results.iter().filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_))).count();
+        let row_count = results
+            .iter()
+            .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
+            .count();
         assert_eq!(row_count, 1, "Should return 1 row for id = {}", i);
     }
 }
@@ -242,7 +254,10 @@ async fn test_postgres_null_values() {
         .await
         .unwrap();
 
-    let row_count = results.iter().filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_))).count();
+    let row_count = results
+        .iter()
+        .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
+        .count();
     assert_eq!(row_count, 1, "Should return 1 row");
 
     // Simple query protocol returns all values as strings, so we can't test NULL the same way

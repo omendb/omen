@@ -2,10 +2,10 @@
 //! Represents a single row of data with any schema
 
 use crate::value::Value;
+use anyhow::{anyhow, Result};
 use arrow::array::*;
 use arrow::datatypes::{Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
-use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -27,12 +27,17 @@ impl Row {
         let mut values = Vec::with_capacity(schema.fields().len());
 
         for field in schema.fields() {
-            let value = map.get(field.name())
+            let value = map
+                .get(field.name())
                 .ok_or_else(|| anyhow!("Missing value for column {}", field.name()))?;
 
             if !value.matches_type(field.data_type()) {
-                return Err(anyhow!("Type mismatch for column {}: expected {:?}, got {:?}",
-                    field.name(), field.data_type(), value.arrow_type()));
+                return Err(anyhow!(
+                    "Type mismatch for column {}: expected {:?}, got {:?}",
+                    field.name(),
+                    field.data_type(),
+                    value.arrow_type()
+                ));
             }
 
             values.push(value.clone());
@@ -43,7 +48,8 @@ impl Row {
 
     /// Get value by column index
     pub fn get(&self, index: usize) -> Result<&Value> {
-        self.values.get(index)
+        self.values
+            .get(index)
             .ok_or_else(|| anyhow!("Column index {} out of bounds", index))
     }
 
@@ -71,15 +77,22 @@ impl Row {
     /// Validate row matches schema
     pub fn validate(&self, schema: &SchemaRef) -> Result<()> {
         if self.values.len() != schema.fields().len() {
-            return Err(anyhow!("Row has {} values but schema has {} fields",
-                self.values.len(), schema.fields().len()));
+            return Err(anyhow!(
+                "Row has {} values but schema has {} fields",
+                self.values.len(),
+                schema.fields().len()
+            ));
         }
 
         for (i, value) in self.values.iter().enumerate() {
             let field = schema.field(i);
             if !value.matches_type(field.data_type()) {
-                return Err(anyhow!("Type mismatch for column {}: expected {:?}, got value {:?}",
-                    field.name(), field.data_type(), value));
+                return Err(anyhow!(
+                    "Type mismatch for column {}: expected {:?}, got value {:?}",
+                    field.name(),
+                    field.data_type(),
+                    value
+                ));
             }
         }
 
@@ -105,8 +118,11 @@ impl Row {
     /// Extract row from RecordBatch at given index
     pub fn from_batch(batch: &RecordBatch, row_index: usize) -> Result<Self> {
         if row_index >= batch.num_rows() {
-            return Err(anyhow!("Row index {} out of bounds (batch has {} rows)",
-                row_index, batch.num_rows()));
+            return Err(anyhow!(
+                "Row index {} out of bounds (batch has {} rows)",
+                row_index,
+                batch.num_rows()
+            ));
         }
 
         let mut values = Vec::with_capacity(batch.num_columns());
@@ -124,7 +140,9 @@ impl Row {
     pub fn rows_to_batch(rows: &[Row], schema: &SchemaRef) -> Result<RecordBatch> {
         if rows.is_empty() {
             // Create empty arrays for each column
-            let empty_arrays: Vec<ArrayRef> = schema.fields().iter()
+            let empty_arrays: Vec<ArrayRef> = schema
+                .fields()
+                .iter()
                 .map(|field| {
                     let array = create_array_builder(field.data_type(), 0)
                         .expect("Failed to create builder")
@@ -159,7 +177,8 @@ impl Row {
         }
 
         // Finish builders and create arrays
-        let arrays: Vec<ArrayRef> = builders.iter_mut()
+        let arrays: Vec<ArrayRef> = builders
+            .iter_mut()
             .map(|builder| builder.finish())
             .collect();
 
@@ -173,24 +192,14 @@ fn value_to_array(value: &Value, data_type: &arrow::datatypes::DataType) -> Resu
     use arrow::datatypes::DataType;
 
     match (value, data_type) {
-        (Value::Int64(v), DataType::Int64) => {
-            Ok(Arc::new(Int64Array::from(vec![*v])))
-        }
-        (Value::UInt64(v), DataType::UInt64) => {
-            Ok(Arc::new(UInt64Array::from(vec![*v])))
-        }
-        (Value::Float64(v), DataType::Float64) => {
-            Ok(Arc::new(Float64Array::from(vec![*v])))
-        }
-        (Value::Text(v), DataType::Utf8) => {
-            Ok(Arc::new(StringArray::from(vec![v.as_str()])))
-        }
+        (Value::Int64(v), DataType::Int64) => Ok(Arc::new(Int64Array::from(vec![*v]))),
+        (Value::UInt64(v), DataType::UInt64) => Ok(Arc::new(UInt64Array::from(vec![*v]))),
+        (Value::Float64(v), DataType::Float64) => Ok(Arc::new(Float64Array::from(vec![*v]))),
+        (Value::Text(v), DataType::Utf8) => Ok(Arc::new(StringArray::from(vec![v.as_str()]))),
         (Value::Timestamp(v), DataType::Timestamp(_, _)) => {
             Ok(Arc::new(TimestampMicrosecondArray::from(vec![*v])))
         }
-        (Value::Boolean(v), DataType::Boolean) => {
-            Ok(Arc::new(BooleanArray::from(vec![*v])))
-        }
+        (Value::Boolean(v), DataType::Boolean) => Ok(Arc::new(BooleanArray::from(vec![*v]))),
         (Value::Null, _) => {
             // Create single-element null array of appropriate type
             match data_type {
@@ -198,17 +207,26 @@ fn value_to_array(value: &Value, data_type: &arrow::datatypes::DataType) -> Resu
                 DataType::UInt64 => Ok(Arc::new(UInt64Array::from(vec![None as Option<u64>]))),
                 DataType::Float64 => Ok(Arc::new(Float64Array::from(vec![None as Option<f64>]))),
                 DataType::Utf8 => Ok(Arc::new(StringArray::from(vec![None as Option<&str>]))),
-                DataType::Timestamp(_, _) => Ok(Arc::new(TimestampMicrosecondArray::from(vec![None as Option<i64>]))),
+                DataType::Timestamp(_, _) => Ok(Arc::new(TimestampMicrosecondArray::from(vec![
+                    None as Option<i64>,
+                ]))),
                 DataType::Boolean => Ok(Arc::new(BooleanArray::from(vec![None as Option<bool>]))),
                 _ => Err(anyhow!("Unsupported data type for NULL: {:?}", data_type)),
             }
         }
-        _ => Err(anyhow!("Type mismatch: value {:?} doesn't match type {:?}", value, data_type)),
+        _ => Err(anyhow!(
+            "Type mismatch: value {:?} doesn't match type {:?}",
+            value,
+            data_type
+        )),
     }
 }
 
 /// Create appropriate ArrayBuilder for data type
-fn create_array_builder(data_type: &arrow::datatypes::DataType, capacity: usize) -> Result<Box<dyn ArrayBuilder>> {
+fn create_array_builder(
+    data_type: &arrow::datatypes::DataType,
+    capacity: usize,
+) -> Result<Box<dyn ArrayBuilder>> {
     use arrow::datatypes::DataType;
 
     match data_type {
@@ -216,9 +234,14 @@ fn create_array_builder(data_type: &arrow::datatypes::DataType, capacity: usize)
         DataType::UInt64 => Ok(Box::new(UInt64Builder::with_capacity(capacity))),
         DataType::Float64 => Ok(Box::new(Float64Builder::with_capacity(capacity))),
         DataType::Utf8 => Ok(Box::new(StringBuilder::with_capacity(capacity, 1024))),
-        DataType::Timestamp(_, _) => Ok(Box::new(TimestampMicrosecondBuilder::with_capacity(capacity))),
+        DataType::Timestamp(_, _) => Ok(Box::new(TimestampMicrosecondBuilder::with_capacity(
+            capacity,
+        ))),
         DataType::Boolean => Ok(Box::new(BooleanBuilder::with_capacity(capacity))),
-        _ => Err(anyhow!("Unsupported data type for builder: {:?}", data_type)),
+        _ => Err(anyhow!(
+            "Unsupported data type for builder: {:?}",
+            data_type
+        )),
     }
 }
 
@@ -226,32 +249,44 @@ fn create_array_builder(data_type: &arrow::datatypes::DataType, capacity: usize)
 fn append_value_to_builder(builder: &mut Box<dyn ArrayBuilder>, value: &Value) -> Result<()> {
     match value {
         Value::Int64(v) => {
-            let b = builder.as_any_mut().downcast_mut::<Int64Builder>()
+            let b = builder
+                .as_any_mut()
+                .downcast_mut::<Int64Builder>()
                 .ok_or_else(|| anyhow!("Builder type mismatch"))?;
             b.append_value(*v);
         }
         Value::UInt64(v) => {
-            let b = builder.as_any_mut().downcast_mut::<UInt64Builder>()
+            let b = builder
+                .as_any_mut()
+                .downcast_mut::<UInt64Builder>()
                 .ok_or_else(|| anyhow!("Builder type mismatch"))?;
             b.append_value(*v);
         }
         Value::Float64(v) => {
-            let b = builder.as_any_mut().downcast_mut::<Float64Builder>()
+            let b = builder
+                .as_any_mut()
+                .downcast_mut::<Float64Builder>()
                 .ok_or_else(|| anyhow!("Builder type mismatch"))?;
             b.append_value(*v);
         }
         Value::Text(v) => {
-            let b = builder.as_any_mut().downcast_mut::<StringBuilder>()
+            let b = builder
+                .as_any_mut()
+                .downcast_mut::<StringBuilder>()
                 .ok_or_else(|| anyhow!("Builder type mismatch"))?;
             b.append_value(v);
         }
         Value::Timestamp(v) => {
-            let b = builder.as_any_mut().downcast_mut::<TimestampMicrosecondBuilder>()
+            let b = builder
+                .as_any_mut()
+                .downcast_mut::<TimestampMicrosecondBuilder>()
                 .ok_or_else(|| anyhow!("Builder type mismatch"))?;
             b.append_value(*v);
         }
         Value::Boolean(v) => {
-            let b = builder.as_any_mut().downcast_mut::<BooleanBuilder>()
+            let b = builder
+                .as_any_mut()
+                .downcast_mut::<BooleanBuilder>()
                 .ok_or_else(|| anyhow!("Builder type mismatch"))?;
             b.append_value(*v);
         }
@@ -265,7 +300,10 @@ fn append_value_to_builder(builder: &mut Box<dyn ArrayBuilder>, value: &Value) -
                 b.append_null();
             } else if let Some(b) = builder.as_any_mut().downcast_mut::<StringBuilder>() {
                 b.append_null();
-            } else if let Some(b) = builder.as_any_mut().downcast_mut::<TimestampMicrosecondBuilder>() {
+            } else if let Some(b) = builder
+                .as_any_mut()
+                .downcast_mut::<TimestampMicrosecondBuilder>()
+            {
                 b.append_null();
             } else if let Some(b) = builder.as_any_mut().downcast_mut::<BooleanBuilder>() {
                 b.append_null();
@@ -285,10 +323,7 @@ mod tests {
 
     #[test]
     fn test_row_creation() {
-        let row = Row::new(vec![
-            Value::Int64(42),
-            Value::Text("hello".into()),
-        ]);
+        let row = Row::new(vec![Value::Int64(42), Value::Text("hello".into())]);
 
         assert_eq!(row.len(), 2);
         assert_eq!(row.get(0).unwrap(), &Value::Int64(42));
@@ -302,16 +337,10 @@ mod tests {
             Field::new("name", DataType::Utf8, false),
         ]));
 
-        let valid_row = Row::new(vec![
-            Value::Int64(1),
-            Value::Text("Alice".into()),
-        ]);
+        let valid_row = Row::new(vec![Value::Int64(1), Value::Text("Alice".into())]);
         assert!(valid_row.validate(&schema).is_ok());
 
-        let invalid_row = Row::new(vec![
-            Value::Text("wrong type".into()),
-            Value::Int64(123),
-        ]);
+        let invalid_row = Row::new(vec![Value::Text("wrong type".into()), Value::Int64(123)]);
         assert!(invalid_row.validate(&schema).is_err());
     }
 
@@ -322,10 +351,7 @@ mod tests {
             Field::new("value", DataType::Float64, false),
         ]));
 
-        let row = Row::new(vec![
-            Value::Int64(42),
-            Value::Float64(3.14),
-        ]);
+        let row = Row::new(vec![Value::Int64(42), Value::Float64(3.14)]);
 
         let batch = row.to_record_batch(&schema).unwrap();
         assert_eq!(batch.num_rows(), 1);
@@ -345,7 +371,8 @@ mod tests {
                 Arc::new(Int64Array::from(vec![1, 2, 3])),
                 Arc::new(StringArray::from(vec!["a", "b", "c"])),
             ],
-        ).unwrap();
+        )
+        .unwrap();
 
         let row = Row::from_batch(&batch, 1).unwrap();
         assert_eq!(row.get(0).unwrap(), &Value::Int64(2));

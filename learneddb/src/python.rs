@@ -1,12 +1,12 @@
 //! Python bindings for OmenDB using PyO3
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
-use pyo3::exceptions::PyValueError;
-use std::sync::{Arc, Mutex};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
-use crate::{OmenDB as RustDB, IndexType, IsolationLevel};
+use crate::{IndexType, IsolationLevel, OmenDB as RustDB};
 
 /// Python wrapper for OmenDB
 #[pyclass(name = "OmenDB")]
@@ -24,7 +24,11 @@ impl PyOmenDB {
             Some("linear") => IndexType::Linear,
             Some("rmi") => IndexType::RMI,
             Some("none") | None => IndexType::None,
-            _ => return Err(PyValueError::new_err("Invalid index type. Use 'linear', 'rmi', or 'none'")),
+            _ => {
+                return Err(PyValueError::new_err(
+                    "Invalid index type. Use 'linear', 'rmi', or 'none'",
+                ))
+            }
         };
 
         let db = RustDB::open_with_index(path, index_type)

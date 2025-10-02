@@ -1,13 +1,13 @@
 //! Large-scale performance and reliability tests
 //! Essential for validating enterprise production readiness
 
-use crate::storage::ArrowStorage;
 use crate::index::RecursiveModelIndex;
-use crate::OmenDB;
 use crate::metrics::*;
-use std::time::{Duration, Instant};
+use crate::storage::ArrowStorage;
+use crate::OmenDB;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::{Duration, Instant};
 
 /// Comprehensive scale testing configuration
 #[derive(Debug, Clone)]
@@ -26,7 +26,7 @@ impl Default for ScaleTestConfig {
             batch_size: 10_000,
             concurrent_threads: 4,
             test_duration_secs: 300, // 5 minutes
-            memory_limit_mb: 1024, // 1GB limit
+            memory_limit_mb: 1024,   // 1GB limit
         }
     }
 }
@@ -58,8 +58,14 @@ impl ScaleTestResults {
         println!("=====================");
         println!("Records Inserted: {}", format_number(self.records_inserted));
         println!("Total Duration: {:.2}s", self.total_duration_secs);
-        println!("Avg Insert Rate: {:.0} records/sec", self.avg_insertion_rate);
-        println!("Peak Insert Rate: {:.0} records/sec", self.peak_insertion_rate);
+        println!(
+            "Avg Insert Rate: {:.0} records/sec",
+            self.avg_insertion_rate
+        );
+        println!(
+            "Peak Insert Rate: {:.0} records/sec",
+            self.peak_insertion_rate
+        );
         println!("Avg Query Latency: {:.2}ms", self.avg_query_latency_ms);
         println!("P95 Query Latency: {:.2}ms", self.p95_query_latency_ms);
         println!("Memory Usage: {} MB", self.memory_usage_mb);
@@ -77,23 +83,38 @@ impl ScaleTestResults {
     fn print_failure_analysis(&self) {
         println!("\n🔍 FAILURE ANALYSIS:");
         if self.success_rate <= 0.999 {
-            println!("  - Success rate {:.3}% below 99.9% requirement", self.success_rate * 100.0);
+            println!(
+                "  - Success rate {:.3}% below 99.9% requirement",
+                self.success_rate * 100.0
+            );
         }
         if self.avg_insertion_rate <= 5000.0 {
-            println!("  - Insert rate {:.0}/sec below 5K/sec requirement", self.avg_insertion_rate);
+            println!(
+                "  - Insert rate {:.0}/sec below 5K/sec requirement",
+                self.avg_insertion_rate
+            );
         }
         if self.p95_query_latency_ms >= 10.0 {
-            println!("  - P95 latency {:.2}ms above 10ms requirement", self.p95_query_latency_ms);
+            println!(
+                "  - P95 latency {:.2}ms above 10ms requirement",
+                self.p95_query_latency_ms
+            );
         }
         if self.memory_usage_mb >= 2048 {
-            println!("  - Memory usage {}MB above 2GB limit", self.memory_usage_mb);
+            println!(
+                "  - Memory usage {}MB above 2GB limit",
+                self.memory_usage_mb
+            );
         }
     }
 }
 
 /// Execute comprehensive scale test
 pub fn run_scale_test(config: ScaleTestConfig) -> ScaleTestResults {
-    println!("🚀 Starting scale test with {} records...", config.target_records);
+    println!(
+        "🚀 Starting scale test with {} records...",
+        config.target_records
+    );
 
     let start_time = Instant::now();
     let mut db = OmenDB::new("scale_test_db");
@@ -110,7 +131,8 @@ pub fn run_scale_test(config: ScaleTestConfig) -> ScaleTestResults {
 
     for batch in 0..(config.target_records / config.batch_size) {
         let batch_start_time = Instant::now();
-        let base_timestamp = 1_600_000_000_000_000 + (batch as i64 * config.batch_size as i64 * 1000);
+        let base_timestamp =
+            1_600_000_000_000_000 + (batch as i64 * config.batch_size as i64 * 1000);
 
         // Insert batch
         for i in 0..config.batch_size {
@@ -174,7 +196,7 @@ pub fn run_scale_test(config: ScaleTestConfig) -> ScaleTestResults {
         let end_timestamp = start_timestamp + 50000; // 50 second range
 
         match db.range_query(start_timestamp, end_timestamp) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => errors += 1,
         }
 
@@ -209,7 +231,10 @@ pub fn run_scale_test(config: ScaleTestConfig) -> ScaleTestResults {
 
 /// Concurrent stress test with multiple threads
 pub fn run_concurrent_stress_test(config: ScaleTestConfig) -> ScaleTestResults {
-    println!("🔥 Starting concurrent stress test with {} threads...", config.concurrent_threads);
+    println!(
+        "🔥 Starting concurrent stress test with {} threads...",
+        config.concurrent_threads
+    );
 
     let db = Arc::new(Mutex::new(OmenDB::new("concurrent_stress_test")));
     let results = Arc::new(Mutex::new(Vec::new()));
@@ -231,7 +256,8 @@ pub fn run_concurrent_stress_test(config: ScaleTestConfig) -> ScaleTestResults {
 
             for i in 0..records_per_thread {
                 let op_start = Instant::now();
-                let timestamp = 1_600_000_000_000_000 + (thread_id as i64 * 1_000_000) + (i as i64 * 1000);
+                let timestamp =
+                    1_600_000_000_000_000 + (thread_id as i64 * 1_000_000) + (i as i64 * 1000);
                 let value = (thread_id * 1_000_000 + i) as f64;
 
                 {
@@ -257,7 +283,10 @@ pub fn run_concurrent_stress_test(config: ScaleTestConfig) -> ScaleTestResults {
                 }
             }
 
-            results_clone.lock().unwrap().push((thread_records, thread_errors, thread_latencies));
+            results_clone
+                .lock()
+                .unwrap()
+                .push((thread_records, thread_errors, thread_latencies));
         });
 
         handles.push(handle);
@@ -274,7 +303,8 @@ pub fn run_concurrent_stress_test(config: ScaleTestConfig) -> ScaleTestResults {
 
     let total_records: usize = results_lock.iter().map(|(r, _, _)| r).sum();
     let total_errors: usize = results_lock.iter().map(|(_, e, _)| e).sum();
-    let mut all_latencies: Vec<f64> = results_lock.iter()
+    let mut all_latencies: Vec<f64> = results_lock
+        .iter()
         .flat_map(|(_, _, latencies)| latencies.iter().cloned())
         .collect();
 
@@ -399,7 +429,7 @@ mod tests {
             peak_insertion_rate: 2_000.0,
             avg_query_latency_ms: 15.0, // Too slow
             p95_query_latency_ms: 25.0, // Too slow
-            memory_usage_mb: 3000, // Too much memory
+            memory_usage_mb: 3000,      // Too much memory
             errors_encountered: 1000,
             success_rate: 0.999, // Just at the threshold
         };

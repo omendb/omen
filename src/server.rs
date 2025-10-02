@@ -11,71 +11,72 @@ use std::sync::Arc;
 use tokio;
 
 /// Handle HTTP requests for metrics and health with authentication
-async fn handle_request_with_auth(req: Request<Body>, security_ctx: Arc<SecurityContext>) -> HyperResult<Response<Body>> {
+async fn handle_request_with_auth(
+    req: Request<Body>,
+    security_ctx: Arc<SecurityContext>,
+) -> HyperResult<Response<Body>> {
     let response = match (req.method(), req.uri().path()) {
         // Prometheus metrics endpoint (requires authentication)
-        (&Method::GET, "/metrics") => {
-            match security_ctx.authenticate_request(req.headers()) {
-                Ok(true) => {
-                    let metrics = get_metrics();
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header("Content-Type", "text/plain; version=0.0.4")
-                        .body(Body::from(metrics))
-                        .unwrap()
-                }
-                Ok(false) | Err(_) => {
-                    let (header_name, header_value) = security_ctx.auth_challenge_header();
-                    Response::builder()
-                        .status(StatusCode::UNAUTHORIZED)
-                        .header(header_name, header_value)
-                        .body(Body::from("Authentication required"))
-                        .unwrap()
-                }
+        (&Method::GET, "/metrics") => match security_ctx.authenticate_request(req.headers()) {
+            Ok(true) => {
+                let metrics = get_metrics();
+                Response::builder()
+                    .status(StatusCode::OK)
+                    .header("Content-Type", "text/plain; version=0.0.4")
+                    .body(Body::from(metrics))
+                    .unwrap()
             }
-        }
+            Ok(false) | Err(_) => {
+                let (header_name, header_value) = security_ctx.auth_challenge_header();
+                Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header(header_name, header_value)
+                    .body(Body::from("Authentication required"))
+                    .unwrap()
+            }
+        },
 
         // Health check endpoint (requires authentication for detailed info)
-        (&Method::GET, "/health") => {
-            match security_ctx.authenticate_request(req.headers()) {
-                Ok(true) => {
-                    let health = health_check();
-                    let status = if health.healthy {
-                        StatusCode::OK
-                    } else {
-                        StatusCode::SERVICE_UNAVAILABLE
-                    };
+        (&Method::GET, "/health") => match security_ctx.authenticate_request(req.headers()) {
+            Ok(true) => {
+                let health = health_check();
+                let status = if health.healthy {
+                    StatusCode::OK
+                } else {
+                    StatusCode::SERVICE_UNAVAILABLE
+                };
 
-                    Response::builder()
-                        .status(status)
-                        .header("Content-Type", "application/json")
-                        .body(Body::from(health.to_json()))
-                        .unwrap()
-                }
-                Ok(false) | Err(_) => {
-                    let (header_name, header_value) = security_ctx.auth_challenge_header();
-                    Response::builder()
-                        .status(StatusCode::UNAUTHORIZED)
-                        .header(header_name, header_value)
-                        .body(Body::from("Authentication required"))
-                        .unwrap()
-                }
+                Response::builder()
+                    .status(status)
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(health.to_json()))
+                    .unwrap()
             }
-        }
+            Ok(false) | Err(_) => {
+                let (header_name, header_value) = security_ctx.auth_challenge_header();
+                Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header(header_name, header_value)
+                    .body(Body::from("Authentication required"))
+                    .unwrap()
+            }
+        },
 
         // Ready check endpoint (public, no auth required for load balancers)
-        (&Method::GET, "/ready") => {
-            Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "text/plain")
-                .body(Body::from("ready"))
-                .unwrap()
-        }
+        (&Method::GET, "/ready") => Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "text/plain")
+            .body(Body::from("ready"))
+            .unwrap(),
 
         // Status endpoint (public, basic status for monitoring)
         (&Method::GET, "/status") => {
             let health = health_check();
-            let status_text = if health.healthy { "healthy" } else { "unhealthy" };
+            let status_text = if health.healthy {
+                "healthy"
+            } else {
+                "unhealthy"
+            };
             Response::builder()
                 .status(StatusCode::OK)
                 .header("Content-Type", "text/plain")
@@ -84,12 +85,10 @@ async fn handle_request_with_auth(req: Request<Body>, security_ctx: Arc<Security
         }
 
         // Default 404
-        _ => {
-            Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(Body::from("Not Found"))
-                .unwrap()
-        }
+        _ => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::from("Not Found"))
+            .unwrap(),
     };
 
     Ok(response)
@@ -104,11 +103,17 @@ async fn handle_request(req: Request<Body>) -> HyperResult<Response<Body>> {
 }
 
 /// Start the monitoring HTTP server with authentication
-pub async fn start_secure_monitoring_server(port: u16, security_ctx: SecurityContext) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn start_secure_monitoring_server(
+    port: u16,
+    security_ctx: SecurityContext,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
     // Print configuration before moving into Arc
-    println!("🔒 Secure monitoring server running on http://0.0.0.0:{}", port);
+    println!(
+        "🔒 Secure monitoring server running on http://0.0.0.0:{}",
+        port
+    );
     if security_ctx.auth.enabled {
         println!("🔐 Authentication: ENABLED");
         println!("   Default credentials: admin:admin123 (CHANGE IN PRODUCTION!)");
@@ -138,7 +143,9 @@ pub async fn start_secure_monitoring_server(port: u16, security_ctx: SecurityCon
 }
 
 /// Start the monitoring HTTP server (legacy, no authentication)
-pub async fn start_monitoring_server(port: u16) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn start_monitoring_server(
+    port: u16,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut security_ctx = SecurityContext::default();
     security_ctx.auth.enabled = false; // Disable auth for legacy compatibility
 
@@ -181,7 +188,10 @@ mod tests {
             .unwrap();
 
         let response = handle_request(req).await.unwrap();
-        assert!(response.status() == StatusCode::OK || response.status() == StatusCode::SERVICE_UNAVAILABLE);
+        assert!(
+            response.status() == StatusCode::OK
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE
+        );
 
         let body_bytes = hyper::body::to_bytes(response.into_body()).await.unwrap();
         let json = String::from_utf8(body_bytes.to_vec()).unwrap();
@@ -201,7 +211,10 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let headers = response.headers();
-        assert_eq!(headers.get("content-type").unwrap(), "text/plain; version=0.0.4");
+        assert_eq!(
+            headers.get("content-type").unwrap(),
+            "text/plain; version=0.0.4"
+        );
     }
 
     #[tokio::test]
@@ -214,7 +227,10 @@ mod tests {
 
         let response = handle_request(req).await.unwrap();
         // Should be OK unless error rate is too high
-        assert!(response.status() == StatusCode::OK || response.status() == StatusCode::SERVICE_UNAVAILABLE);
+        assert!(
+            response.status() == StatusCode::OK
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE
+        );
 
         let headers = response.headers();
         assert_eq!(headers.get("content-type").unwrap(), "application/json");
@@ -281,7 +297,9 @@ mod tests {
         // Should contain Prometheus metrics format
         assert!(!body_str.is_empty());
         // Basic Prometheus format check
-        assert!(body_str.contains("TYPE") || body_str.contains("HELP") || body_str.contains("omendb_"));
+        assert!(
+            body_str.contains("TYPE") || body_str.contains("HELP") || body_str.contains("omendb_")
+        );
     }
 
     #[tokio::test]
@@ -337,7 +355,12 @@ mod tests {
                 .unwrap();
 
             let response = handle_request(req).await.unwrap();
-            assert_eq!(response.status(), expected_status, "Failed for path: {}", path);
+            assert_eq!(
+                response.status(),
+                expected_status,
+                "Failed for path: {}",
+                path
+            );
         }
     }
 
@@ -373,7 +396,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_valid_authentication() {
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
 
         let security_ctx = Arc::new(SecurityContext::default());
 
@@ -391,7 +414,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_invalid_credentials() {
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
 
         let security_ctx = Arc::new(SecurityContext::default());
 

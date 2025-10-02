@@ -2,7 +2,7 @@
 //! Tests the full stack: Catalog, Table, SQL Engine, Storage, and Learned Index
 
 use crate::catalog::Catalog;
-use crate::sql_engine::{SqlEngine, ExecutionResult};
+use crate::sql_engine::{ExecutionResult, SqlEngine};
 use crate::value::Value;
 use anyhow::Result;
 use tempfile::TempDir;
@@ -18,10 +18,16 @@ mod integration_tests {
         let mut engine = SqlEngine::new(catalog);
 
         // Create users table
-        engine.execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)").unwrap();
+        engine
+            .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+            .unwrap();
 
         // Create orders table
-        engine.execute("CREATE TABLE orders (order_id BIGINT PRIMARY KEY, user_id BIGINT, amount DOUBLE)").unwrap();
+        engine
+            .execute(
+                "CREATE TABLE orders (order_id BIGINT PRIMARY KEY, user_id BIGINT, amount DOUBLE)",
+            )
+            .unwrap();
 
         // Create logs table (time-series)
         engine.execute("CREATE TABLE logs (timestamp BIGINT PRIMARY KEY, level VARCHAR(50), message VARCHAR(500))").unwrap();
@@ -40,7 +46,11 @@ mod integration_tests {
         let mut engine = SqlEngine::new(catalog);
 
         // Create tables
-        engine.execute("CREATE TABLE products (id BIGINT PRIMARY KEY, name VARCHAR(255), price DOUBLE)").unwrap();
+        engine
+            .execute(
+                "CREATE TABLE products (id BIGINT PRIMARY KEY, name VARCHAR(255), price DOUBLE)",
+            )
+            .unwrap();
         engine.execute("CREATE TABLE inventory (id BIGINT PRIMARY KEY, product_id BIGINT, quantity BIGINT)").unwrap();
 
         // Insert into products
@@ -54,9 +64,9 @@ mod integration_tests {
         }
 
         // Insert into inventory
-        let result = engine.execute(
-            "INSERT INTO inventory VALUES (1, 1, 50), (2, 2, 200), (3, 3, 75)"
-        ).unwrap();
+        let result = engine
+            .execute("INSERT INTO inventory VALUES (1, 1, 50), (2, 2, 200), (3, 3, 75)")
+            .unwrap();
 
         match result {
             ExecutionResult::Inserted { rows } => assert_eq!(rows, 3),
@@ -92,7 +102,9 @@ mod integration_tests {
         let mut engine = SqlEngine::new(catalog);
 
         // Table 1: Simple integers
-        engine.execute("CREATE TABLE simple (id BIGINT PRIMARY KEY)").unwrap();
+        engine
+            .execute("CREATE TABLE simple (id BIGINT PRIMARY KEY)")
+            .unwrap();
 
         // Table 2: Mixed types
         engine.execute(
@@ -105,9 +117,15 @@ mod integration_tests {
         ).unwrap();
 
         // Insert different data types
-        engine.execute("INSERT INTO simple VALUES (1), (2), (3)").unwrap();
-        engine.execute("INSERT INTO mixed VALUES (1, 'test', 1.5, true)").unwrap();
-        engine.execute("INSERT INTO documents VALUES (1, 'Title', 'Content here')").unwrap();
+        engine
+            .execute("INSERT INTO simple VALUES (1), (2), (3)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO mixed VALUES (1, 'test', 1.5, true)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO documents VALUES (1, 'Title', 'Content here')")
+            .unwrap();
 
         // Verify each table has correct schema
         let simple = engine.catalog().get_table("simple").unwrap();
@@ -127,15 +145,23 @@ mod integration_tests {
         let mut engine = SqlEngine::new(catalog);
 
         // Create tables
-        engine.execute("CREATE TABLE events (timestamp BIGINT PRIMARY KEY, event_type VARCHAR(50))").unwrap();
-        engine.execute("CREATE TABLE metrics (timestamp BIGINT PRIMARY KEY, value DOUBLE)").unwrap();
+        engine
+            .execute("CREATE TABLE events (timestamp BIGINT PRIMARY KEY, event_type VARCHAR(50))")
+            .unwrap();
+        engine
+            .execute("CREATE TABLE metrics (timestamp BIGINT PRIMARY KEY, value DOUBLE)")
+            .unwrap();
 
         // Insert 1000 records into each table
         for i in 0..1000 {
             let sql = format!("INSERT INTO events VALUES ({}, 'event_{}')", i, i % 10);
             engine.execute(&sql).unwrap();
 
-            let sql = format!("INSERT INTO metrics VALUES ({}, {})", i + 10000, i as f64 * 1.5);
+            let sql = format!(
+                "INSERT INTO metrics VALUES ({}, {})",
+                i + 10000,
+                i as f64 * 1.5
+            );
             engine.execute(&sql).unwrap();
         }
 
@@ -167,12 +193,20 @@ mod integration_tests {
         let mut engine = SqlEngine::new(catalog);
 
         // Create two tables with same schema
-        engine.execute("CREATE TABLE table1 (id BIGINT PRIMARY KEY, value BIGINT)").unwrap();
-        engine.execute("CREATE TABLE table2 (id BIGINT PRIMARY KEY, value BIGINT)").unwrap();
+        engine
+            .execute("CREATE TABLE table1 (id BIGINT PRIMARY KEY, value BIGINT)")
+            .unwrap();
+        engine
+            .execute("CREATE TABLE table2 (id BIGINT PRIMARY KEY, value BIGINT)")
+            .unwrap();
 
         // Insert different data
-        engine.execute("INSERT INTO table1 VALUES (1, 100), (2, 200)").unwrap();
-        engine.execute("INSERT INTO table2 VALUES (1, 999), (2, 888)").unwrap();
+        engine
+            .execute("INSERT INTO table1 VALUES (1, 100), (2, 200)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO table2 VALUES (1, 999), (2, 888)")
+            .unwrap();
 
         // Query table1 - should only see table1 data
         let result = engine.execute("SELECT * FROM table1").unwrap();
@@ -218,7 +252,9 @@ mod integration_tests {
         let mut engine = SqlEngine::new(catalog);
 
         // Create table
-        engine.execute("CREATE TABLE test (id BIGINT PRIMARY KEY)").unwrap();
+        engine
+            .execute("CREATE TABLE test (id BIGINT PRIMARY KEY)")
+            .unwrap();
 
         // Try to create again - should fail
         let result = engine.execute("CREATE TABLE test (id BIGINT PRIMARY KEY)");
@@ -236,11 +272,19 @@ mod integration_tests {
             let catalog = Catalog::new(db_path.clone()).unwrap();
             let mut engine = SqlEngine::new(catalog);
 
-            engine.execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))").unwrap();
-            engine.execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, amount DOUBLE)").unwrap();
+            engine
+                .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))")
+                .unwrap();
+            engine
+                .execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, amount DOUBLE)")
+                .unwrap();
 
-            engine.execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')").unwrap();
-            engine.execute("INSERT INTO orders VALUES (1, 99.99), (2, 149.99)").unwrap();
+            engine
+                .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')")
+                .unwrap();
+            engine
+                .execute("INSERT INTO orders VALUES (1, 99.99), (2, 149.99)")
+                .unwrap();
 
             // Tables exist before closing
             assert!(engine.catalog().table_exists("users"));
@@ -272,8 +316,12 @@ mod integration_tests {
         let mut engine = SqlEngine::new(catalog);
 
         // Create tables with different primary keys
-        engine.execute("CREATE TABLE sequential (id BIGINT PRIMARY KEY, value BIGINT)").unwrap();
-        engine.execute("CREATE TABLE timestamps (ts BIGINT PRIMARY KEY, value BIGINT)").unwrap();
+        engine
+            .execute("CREATE TABLE sequential (id BIGINT PRIMARY KEY, value BIGINT)")
+            .unwrap();
+        engine
+            .execute("CREATE TABLE timestamps (ts BIGINT PRIMARY KEY, value BIGINT)")
+            .unwrap();
 
         // Insert sequential data
         for i in 0..100 {
@@ -314,23 +362,36 @@ mod integration_tests {
         let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
         let mut engine = SqlEngine::new(catalog);
 
-        engine.execute("CREATE TABLE test (id BIGINT PRIMARY KEY, name VARCHAR(255))").unwrap();
-        engine.execute("INSERT INTO test VALUES (1, 'Alice'), (10, 'Bob'), (100, 'Charlie')").unwrap();
+        engine
+            .execute("CREATE TABLE test (id BIGINT PRIMARY KEY, name VARCHAR(255))")
+            .unwrap();
+        engine
+            .execute("INSERT INTO test VALUES (1, 'Alice'), (10, 'Bob'), (100, 'Charlie')")
+            .unwrap();
 
         let table = engine.catalog().get_table("test").unwrap();
 
         // Test point queries using learned index
         let row = table.get(&Value::Int64(1)).unwrap();
         assert!(row.is_some());
-        assert_eq!(row.unwrap().get(1).unwrap(), &Value::Text("Alice".to_string()));
+        assert_eq!(
+            row.unwrap().get(1).unwrap(),
+            &Value::Text("Alice".to_string())
+        );
 
         let row = table.get(&Value::Int64(10)).unwrap();
         assert!(row.is_some());
-        assert_eq!(row.unwrap().get(1).unwrap(), &Value::Text("Bob".to_string()));
+        assert_eq!(
+            row.unwrap().get(1).unwrap(),
+            &Value::Text("Bob".to_string())
+        );
 
         let row = table.get(&Value::Int64(100)).unwrap();
         assert!(row.is_some());
-        assert_eq!(row.unwrap().get(1).unwrap(), &Value::Text("Charlie".to_string()));
+        assert_eq!(
+            row.unwrap().get(1).unwrap(),
+            &Value::Text("Charlie".to_string())
+        );
 
         // Non-existent key
         let row = table.get(&Value::Int64(999)).unwrap();
@@ -343,19 +404,21 @@ mod integration_tests {
         let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
         let mut engine = SqlEngine::new(catalog);
 
-        engine.execute(
-            "CREATE TABLE all_types (
+        engine
+            .execute(
+                "CREATE TABLE all_types (
                 id BIGINT PRIMARY KEY,
                 int_col BIGINT,
                 float_col DOUBLE,
                 text_col VARCHAR(255),
                 bool_col BOOLEAN
-            )"
-        ).unwrap();
+            )",
+            )
+            .unwrap();
 
-        engine.execute(
-            "INSERT INTO all_types VALUES (1, 42, 3.14, 'test', true)"
-        ).unwrap();
+        engine
+            .execute("INSERT INTO all_types VALUES (1, 42, 3.14, 'test', true)")
+            .unwrap();
 
         let result = engine.execute("SELECT * FROM all_types").unwrap();
         match result {
@@ -384,8 +447,12 @@ mod integration_tests {
             let mut engine = SqlEngine::new(catalog);
 
             // These operations should be logged to WAL
-            engine.execute("CREATE TABLE test1 (id BIGINT PRIMARY KEY)").unwrap();
-            engine.execute("CREATE TABLE test2 (id BIGINT PRIMARY KEY, name VARCHAR(255))").unwrap();
+            engine
+                .execute("CREATE TABLE test1 (id BIGINT PRIMARY KEY)")
+                .unwrap();
+            engine
+                .execute("CREATE TABLE test2 (id BIGINT PRIMARY KEY, name VARCHAR(255))")
+                .unwrap();
         }
 
         // Phase 2: Check WAL contains the operations
@@ -394,11 +461,20 @@ mod integration_tests {
             let wal = TableWalManager::new(&wal_dir).unwrap();
             let entries = wal.recover().unwrap();
 
-            assert!(entries.len() >= 2, "Expected at least 2 WAL entries (2 CREATE TABLEs)");
+            assert!(
+                entries.len() >= 2,
+                "Expected at least 2 WAL entries (2 CREATE TABLEs)"
+            );
 
             // Verify we have CREATE TABLE operations
-            let create_count = entries.iter()
-                .filter(|e| matches!(e.operation, crate::table_wal::TableWalOperation::CreateTable { .. }))
+            let create_count = entries
+                .iter()
+                .filter(|e| {
+                    matches!(
+                        e.operation,
+                        crate::table_wal::TableWalOperation::CreateTable { .. }
+                    )
+                })
                 .count();
             assert_eq!(create_count, 2, "Expected 2 CREATE TABLE operations in WAL");
         }
@@ -416,8 +492,12 @@ mod integration_tests {
             let catalog = Catalog::new(db_path.clone()).unwrap();
             let mut engine = SqlEngine::new(catalog);
 
-            engine.execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))").unwrap();
-            engine.execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, amount DOUBLE)").unwrap();
+            engine
+                .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))")
+                .unwrap();
+            engine
+                .execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, amount DOUBLE)")
+                .unwrap();
         }
 
         // Phase 2: Verify WAL can be recovered
@@ -427,7 +507,8 @@ mod integration_tests {
             let entries = wal.recover().unwrap();
 
             // Find CREATE TABLE operations
-            let creates: Vec<_> = entries.iter()
+            let creates: Vec<_> = entries
+                .iter()
                 .filter_map(|e| match &e.operation {
                     TableWalOperation::CreateTable { table_name, .. } => Some(table_name.clone()),
                     _ => None,

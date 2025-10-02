@@ -1,10 +1,10 @@
 //! Generic value type system for OmenDB
 //! Supports any SQL data type with proper ordering semantics
 
+use anyhow::{anyhow, Result};
 use arrow::array::*;
 use arrow::datatypes::DataType;
-use anyhow::{Result, anyhow};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
 
@@ -56,32 +56,44 @@ impl Value {
 
         match array.data_type() {
             DataType::Int64 => {
-                let arr = array.as_any().downcast_ref::<Int64Array>()
+                let arr = array
+                    .as_any()
+                    .downcast_ref::<Int64Array>()
                     .ok_or_else(|| anyhow!("Failed to downcast to Int64Array"))?;
                 Ok(Value::Int64(arr.value(index)))
             }
             DataType::UInt64 => {
-                let arr = array.as_any().downcast_ref::<UInt64Array>()
+                let arr = array
+                    .as_any()
+                    .downcast_ref::<UInt64Array>()
                     .ok_or_else(|| anyhow!("Failed to downcast to UInt64Array"))?;
                 Ok(Value::UInt64(arr.value(index)))
             }
             DataType::Float64 => {
-                let arr = array.as_any().downcast_ref::<Float64Array>()
+                let arr = array
+                    .as_any()
+                    .downcast_ref::<Float64Array>()
                     .ok_or_else(|| anyhow!("Failed to downcast to Float64Array"))?;
                 Ok(Value::Float64(arr.value(index)))
             }
             DataType::Utf8 => {
-                let arr = array.as_any().downcast_ref::<StringArray>()
+                let arr = array
+                    .as_any()
+                    .downcast_ref::<StringArray>()
                     .ok_or_else(|| anyhow!("Failed to downcast to StringArray"))?;
                 Ok(Value::Text(arr.value(index).to_string()))
             }
             DataType::Timestamp(_, _) => {
-                let arr = array.as_any().downcast_ref::<TimestampMicrosecondArray>()
+                let arr = array
+                    .as_any()
+                    .downcast_ref::<TimestampMicrosecondArray>()
                     .ok_or_else(|| anyhow!("Failed to downcast to TimestampArray"))?;
                 Ok(Value::Timestamp(arr.value(index)))
             }
             DataType::Boolean => {
-                let arr = array.as_any().downcast_ref::<BooleanArray>()
+                let arr = array
+                    .as_any()
+                    .downcast_ref::<BooleanArray>()
                     .ok_or_else(|| anyhow!("Failed to downcast to BooleanArray"))?;
                 Ok(Value::Boolean(arr.value(index)))
             }
@@ -108,12 +120,13 @@ impl Value {
 
     /// Check if this value type is orderable (can be used as primary key)
     pub fn is_orderable(&self) -> bool {
-        matches!(self,
-            Value::Int64(_) |
-            Value::UInt64(_) |
-            Value::Timestamp(_) |
-            Value::Float64(_) |
-            Value::Boolean(_)
+        matches!(
+            self,
+            Value::Int64(_)
+                | Value::UInt64(_)
+                | Value::Timestamp(_)
+                | Value::Float64(_)
+                | Value::Boolean(_)
         )
     }
 
@@ -124,7 +137,9 @@ impl Value {
             Value::UInt64(_) => DataType::UInt64,
             Value::Float64(_) => DataType::Float64,
             Value::Text(_) => DataType::Utf8,
-            Value::Timestamp(_) => DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None),
+            Value::Timestamp(_) => {
+                DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None)
+            }
             Value::Boolean(_) => DataType::Boolean,
             Value::Null => DataType::Null,
         }
@@ -164,12 +179,22 @@ impl fmt::Display for Value {
 
 /// Helper function to check if Arrow data type is orderable
 pub fn is_orderable_type(data_type: &DataType) -> bool {
-    matches!(data_type,
-        DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 |
-        DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 |
-        DataType::Float32 | DataType::Float64 |
-        DataType::Timestamp(_, _) | DataType::Date32 | DataType::Date64 |
-        DataType::Boolean
+    matches!(
+        data_type,
+        DataType::Int8
+            | DataType::Int16
+            | DataType::Int32
+            | DataType::Int64
+            | DataType::UInt8
+            | DataType::UInt16
+            | DataType::UInt32
+            | DataType::UInt64
+            | DataType::Float32
+            | DataType::Float64
+            | DataType::Timestamp(_, _)
+            | DataType::Date32
+            | DataType::Date64
+            | DataType::Boolean
     )
 }
 
@@ -212,7 +237,10 @@ mod tests {
     #[test]
     fn test_is_orderable_type() {
         assert!(is_orderable_type(&DataType::Int64));
-        assert!(is_orderable_type(&DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None)));
+        assert!(is_orderable_type(&DataType::Timestamp(
+            arrow::datatypes::TimeUnit::Microsecond,
+            None
+        )));
         assert!(!is_orderable_type(&DataType::Utf8));
     }
 }

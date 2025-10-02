@@ -1,9 +1,9 @@
 //! Week 3: Arrow Integration and Range Query Benchmarks
 //! Testing our learned index with columnar storage
 
-use omendb::{OmenDB, index::RecursiveModelIndex};
-use std::time::Instant;
+use omendb::{index::RecursiveModelIndex, OmenDB};
 use std::collections::BTreeMap;
+use std::time::Instant;
 
 fn main() {
     println!("🚀 OmenDB Week 3: Arrow Storage + Range Queries");
@@ -49,7 +49,8 @@ fn benchmark_range_queries(num_keys: usize) {
 
     // Train the learned index
     let train_start = Instant::now();
-    let training_data: Vec<(i64, usize)> = data.iter()
+    let training_data: Vec<(i64, usize)> = data
+        .iter()
         .enumerate()
         .map(|(i, (ts, _))| (*ts, i))
         .collect();
@@ -92,14 +93,20 @@ fn benchmark_range_queries(num_keys: usize) {
     println!("\n⚡ Range Query Performance:");
     println!("  OmenDB:  {:.0} ns/query", omendb_ns);
     println!("  B-tree:  {:.0} ns/query", btree_ns);
-    println!("  Speedup: {:.2}x {}",
-             speedup,
-             if speedup > 2.0 { "✅" } else { "⚠️" });
+    println!(
+        "  Speedup: {:.2}x {}",
+        speedup,
+        if speedup > 2.0 { "✅" } else { "⚠️" }
+    );
 
     // Test aggregations
     let start = Instant::now();
-    let sum = db.sum(base_timestamp, base_timestamp + (num_keys as i64 * 1000)).unwrap();
-    let avg = db.avg(base_timestamp, base_timestamp + (num_keys as i64 * 1000)).unwrap();
+    let sum = db
+        .sum(base_timestamp, base_timestamp + (num_keys as i64 * 1000))
+        .unwrap();
+    let avg = db
+        .avg(base_timestamp, base_timestamp + (num_keys as i64 * 1000))
+        .unwrap();
     let agg_time = start.elapsed();
 
     println!("\n📊 Aggregations:");

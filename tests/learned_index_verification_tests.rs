@@ -118,7 +118,10 @@ fn test_learned_index_provides_speedup_10k_rows() {
     } else if speedup >= 2.0 {
         println!("✓ GOOD: {:.1}x speedup", speedup);
     } else {
-        println!("✓ MARGINAL: {:.1}x speedup (acceptable for 10K rows)", speedup);
+        println!(
+            "✓ MARGINAL: {:.1}x speedup (acceptable for 10K rows)",
+            speedup
+        );
     }
 }
 
@@ -155,7 +158,10 @@ fn test_learned_index_batch_insert_performance() {
     );
 
     if rows_per_sec >= 50_000.0 {
-        println!("✅ EXCELLENT: {:.0} rows/sec (production-ready)", rows_per_sec);
+        println!(
+            "✅ EXCELLENT: {:.0} rows/sec (production-ready)",
+            rows_per_sec
+        );
     } else if rows_per_sec >= 10_000.0 {
         println!("✓ VERY GOOD: {:.0} rows/sec", rows_per_sec);
     } else if rows_per_sec >= 5_000.0 {
@@ -180,14 +186,24 @@ fn test_learned_index_range_query_uses_predictions() {
     let range_time = start.elapsed();
 
     // Verify correctness
-    assert_eq!(results.len(), 2001, "Should return 2001 rows (inclusive range)");
+    assert_eq!(
+        results.len(),
+        2001,
+        "Should return 2001 rows (inclusive range)"
+    );
     assert_eq!(results[0].0, 4000, "First key should be 4000");
     assert_eq!(results[2000].0, 6000, "Last key should be 6000");
 
-    println!("Range query (4000-6000): {:.3}ms", range_time.as_secs_f64() * 1000.0);
+    println!(
+        "Range query (4000-6000): {:.3}ms",
+        range_time.as_secs_f64() * 1000.0
+    );
     println!("Results: {} rows", results.len());
     println!("✓ Range query correctness verified");
-    println!("✓ Performance measured: {:.3}ms for 2001 rows", range_time.as_secs_f64() * 1000.0);
+    println!(
+        "✓ Performance measured: {:.3}ms for 2001 rows",
+        range_time.as_secs_f64() * 1000.0
+    );
 }
 
 #[test]
@@ -270,8 +286,14 @@ fn test_learned_index_rebuild_after_batch() {
     storage.insert_batch(batch2).unwrap();
 
     // Verify both batches are queryable
-    assert!(storage.point_query(500).unwrap().is_some(), "Batch 1 key should exist");
-    assert!(storage.point_query(1500).unwrap().is_some(), "Batch 2 key should exist");
+    assert!(
+        storage.point_query(500).unwrap().is_some(),
+        "Batch 1 key should exist"
+    );
+    assert!(
+        storage.point_query(1500).unwrap().is_some(),
+        "Batch 2 key should exist"
+    );
 
     println!("✓ Index rebuilt correctly after multiple batches");
     println!("✓ Queries work across all inserted data");

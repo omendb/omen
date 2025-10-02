@@ -1,11 +1,11 @@
 //! redb-based transactional storage with learned index integration
 
 use crate::index::RecursiveModelIndex;
-use crate::value::Value;
 use crate::row::Row;
-use anyhow::{Result, anyhow};
+use crate::value::Value;
+use anyhow::{anyhow, Result};
 use redb::{Database, ReadableTable, TableDefinition};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -88,7 +88,8 @@ impl RedbStorage {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
-        let mut keys: Vec<i64> = table.iter()?
+        let mut keys: Vec<i64> = table
+            .iter()?
             .filter_map(|result| result.ok())
             .map(|(key, _)| key.value())
             .collect();
@@ -99,7 +100,9 @@ impl RedbStorage {
 
         if !self.sorted_keys.is_empty() {
             // Train learned index with (key, position) pairs
-            let data: Vec<(i64, usize)> = self.sorted_keys.iter()
+            let data: Vec<(i64, usize)> = self
+                .sorted_keys
+                .iter()
                 .enumerate()
                 .map(|(pos, &key)| (key, pos))
                 .collect();
@@ -166,7 +169,9 @@ impl RedbStorage {
             if let Some(predicted_pos) = self.learned_index.search(key) {
                 // Define search window around predicted position (learned index error bound)
                 let window_size = 100; // Papers show typical error bound of 10-100
-                let start = predicted_pos.saturating_sub(window_size).min(self.sorted_keys.len());
+                let start = predicted_pos
+                    .saturating_sub(window_size)
+                    .min(self.sorted_keys.len());
                 let end = (predicted_pos + window_size).min(self.sorted_keys.len());
 
                 // Binary search in the predicted window
@@ -213,15 +218,18 @@ impl RedbStorage {
                 // Find exact range in sorted_keys using binary search
                 let actual_start = self.sorted_keys[start_pos..end_pos]
                     .binary_search(&start_key)
-                    .unwrap_or_else(|pos| pos) + start_pos;
+                    .unwrap_or_else(|pos| pos)
+                    + start_pos;
 
                 let actual_end = self.sorted_keys[start_pos..end_pos]
                     .binary_search(&end_key)
                     .map(|pos| pos + 1)
-                    .unwrap_or_else(|pos| pos) + start_pos;
+                    .unwrap_or_else(|pos| pos)
+                    + start_pos;
 
                 // Collect keys in range
-                let keys_in_range = &self.sorted_keys[actual_start..actual_end.min(self.sorted_keys.len())];
+                let keys_in_range =
+                    &self.sorted_keys[actual_start..actual_end.min(self.sorted_keys.len())];
 
                 // Batch lookup values from redb
                 let read_txn = self.db.begin_read()?;
@@ -264,7 +272,8 @@ impl RedbStorage {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
-        let results: Result<Vec<_>> = table.iter()?
+        let results: Result<Vec<_>> = table
+            .iter()?
             .map(|result| {
                 let (key_guard, value_guard) = result?;
                 Ok((key_guard.value(), value_guard.value().to_vec()))

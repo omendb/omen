@@ -2,15 +2,15 @@
 //! Provides authentication, authorization, and TLS encryption
 //! Essential for production and enterprise deployments
 
-use base64::{Engine as _, engine::general_purpose};
+use anyhow::{anyhow, Result};
+use base64::{engine::general_purpose, Engine as _};
 use hyper::{HeaderMap, StatusCode};
-use std::collections::HashMap;
-use std::sync::Arc;
-use anyhow::{Result, anyhow};
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
+use std::sync::Arc;
 
 /// Authentication configuration
 #[derive(Debug, Clone)]
@@ -48,7 +48,8 @@ impl AuthConfig {
 
     /// Add user with password
     pub fn add_user(&mut self, username: &str, password: &str) {
-        self.users.insert(username.to_string(), hash_password(password));
+        self.users
+            .insert(username.to_string(), hash_password(password));
     }
 
     /// Remove user
@@ -125,8 +126,10 @@ impl TlsConfig {
     /// Load from environment variables
     pub fn from_env() -> Self {
         Self {
-            cert_file: std::env::var("OMENDB_TLS_CERT").unwrap_or_else(|_| "certs/server.crt".to_string()),
-            key_file: std::env::var("OMENDB_TLS_KEY").unwrap_or_else(|_| "certs/server.key".to_string()),
+            cert_file: std::env::var("OMENDB_TLS_CERT")
+                .unwrap_or_else(|_| "certs/server.crt".to_string()),
+            key_file: std::env::var("OMENDB_TLS_KEY")
+                .unwrap_or_else(|_| "certs/server.key".to_string()),
             enabled: std::env::var("OMENDB_TLS_ENABLED").unwrap_or_default() == "true",
         }
     }
@@ -197,7 +200,8 @@ impl SecurityContext {
             return Ok(true);
         }
 
-        let auth_header = headers.get("authorization")
+        let auth_header = headers
+            .get("authorization")
             .and_then(|h| h.to_str().ok())
             .ok_or(StatusCode::UNAUTHORIZED)?;
 
@@ -206,11 +210,11 @@ impl SecurityContext {
         }
 
         let encoded = &auth_header[6..];
-        let decoded = general_purpose::STANDARD.decode(encoded)
+        let decoded = general_purpose::STANDARD
+            .decode(encoded)
             .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-        let credentials = String::from_utf8(decoded)
-            .map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let credentials = String::from_utf8(decoded).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
         let parts: Vec<&str> = credentials.splitn(2, ':').collect();
         if parts.len() != 2 {
@@ -258,7 +262,9 @@ pub fn generate_self_signed_cert(cert_path: &str, key_path: &str) -> Result<()> 
     println!("mkdir -p certs");
     println!("openssl req -x509 -newkey rsa:4096 -keyout {} -out {} -days 365 -nodes -subj '/CN=localhost'", key_path, cert_path);
 
-    Err(anyhow!("Please generate certificates manually using the command above"))
+    Err(anyhow!(
+        "Please generate certificates manually using the command above"
+    ))
 }
 
 #[cfg(test)]
@@ -327,7 +333,10 @@ mod tests {
 
         // Valid Basic Auth
         let credentials = general_purpose::STANDARD.encode("admin:admin123");
-        headers.insert("authorization", format!("Basic {}", credentials).parse().unwrap());
+        headers.insert(
+            "authorization",
+            format!("Basic {}", credentials).parse().unwrap(),
+        );
 
         let result = security_ctx.authenticate_request(&headers);
         assert!(result.is_ok());
@@ -364,7 +373,10 @@ mod tests {
 
         // Wrong credentials
         let credentials = general_purpose::STANDARD.encode("admin:wrongpass");
-        headers.insert("authorization", format!("Basic {}", credentials).parse().unwrap());
+        headers.insert(
+            "authorization",
+            format!("Basic {}", credentials).parse().unwrap(),
+        );
 
         let result = security_ctx.authenticate_request(&headers);
         assert!(result.is_err());

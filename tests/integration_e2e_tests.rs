@@ -14,12 +14,18 @@ use tokio::time::sleep;
 use tokio_postgres::NoTls;
 
 /// Start both REST and PostgreSQL servers sharing the same DataFusion context
-async fn start_dual_protocol_servers(rest_port: u16, pg_port: u16) -> anyhow::Result<Arc<RwLock<SessionContext>>> {
+async fn start_dual_protocol_servers(
+    rest_port: u16,
+    pg_port: u16,
+) -> anyhow::Result<Arc<RwLock<SessionContext>>> {
     let ctx = Arc::new(RwLock::new(SessionContext::new()));
 
     // Start REST server
     let rest_ctx = ctx.clone();
-    let rest_server = RestServer::with_addr(&format!("127.0.0.1:{}", rest_port), (*rest_ctx.read().await).clone());
+    let rest_server = RestServer::with_addr(
+        &format!("127.0.0.1:{}", rest_port),
+        (*rest_ctx.read().await).clone(),
+    );
     tokio::spawn(async move {
         if let Err(e) = rest_server.serve().await {
             eprintln!("REST server error: {}", e);
@@ -28,7 +34,10 @@ async fn start_dual_protocol_servers(rest_port: u16, pg_port: u16) -> anyhow::Re
 
     // Start PostgreSQL server
     let pg_ctx = ctx.clone();
-    let pg_server = PostgresServer::with_addr(&format!("127.0.0.1:{}", pg_port), (*pg_ctx.read().await).clone());
+    let pg_server = PostgresServer::with_addr(
+        &format!("127.0.0.1:{}", pg_port),
+        (*pg_ctx.read().await).clone(),
+    );
     tokio::spawn(async move {
         if let Err(e) = pg_server.serve().await {
             eprintln!("PostgreSQL server error: {}", e);
@@ -45,7 +54,8 @@ async fn connect_postgres(port: u16) -> anyhow::Result<tokio_postgres::Client> {
     let (client, connection) = tokio_postgres::connect(
         &format!("host=127.0.0.1 port={} user=test dbname=test", port),
         NoTls,
-    ).await?;
+    )
+    .await?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -61,7 +71,9 @@ async fn test_e2e_rest_insert_postgres_query() {
     let rest_port = 19000;
     let pg_port = 19001;
 
-    let ctx = start_dual_protocol_servers(rest_port, pg_port).await.unwrap();
+    let ctx = start_dual_protocol_servers(rest_port, pg_port)
+        .await
+        .unwrap();
 
     // Create table via REST API
     let http_client = reqwest::Client::new();
@@ -93,11 +105,15 @@ async fn test_e2e_rest_insert_postgres_query() {
         .await
         .unwrap();
 
-    let row_count = results.iter()
+    let row_count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
-    assert_eq!(row_count, 2, "Should return 2 products (Laptop and Keyboard) with price > 50");
+    assert_eq!(
+        row_count, 2,
+        "Should return 2 products (Laptop and Keyboard) with price > 50"
+    );
 }
 
 #[tokio::test]
@@ -105,7 +121,9 @@ async fn test_e2e_postgres_insert_rest_query() {
     let rest_port = 19002;
     let pg_port = 19003;
 
-    let ctx = start_dual_protocol_servers(rest_port, pg_port).await.unwrap();
+    let ctx = start_dual_protocol_servers(rest_port, pg_port)
+        .await
+        .unwrap();
 
     // Create table via PostgreSQL
     let pg_client = connect_postgres(pg_port).await.unwrap();
@@ -148,7 +166,9 @@ async fn test_e2e_cross_protocol_consistency() {
     let rest_port = 19004;
     let pg_port = 19005;
 
-    let ctx = start_dual_protocol_servers(rest_port, pg_port).await.unwrap();
+    let ctx = start_dual_protocol_servers(rest_port, pg_port)
+        .await
+        .unwrap();
 
     // Setup: Create and populate table
     let http_client = reqwest::Client::new();
@@ -193,10 +213,14 @@ async fn test_e2e_cross_protocol_consistency() {
     assert_eq!(rest_total, 225, "REST API should return total of 225");
 
     // PostgreSQL should return RowDescription + Row + CommandComplete
-    let pg_row_count = pg_results.iter()
+    let pg_row_count = pg_results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
-    assert_eq!(pg_row_count, 1, "PostgreSQL should return 1 row with SUM result");
+    assert_eq!(
+        pg_row_count, 1,
+        "PostgreSQL should return 1 row with SUM result"
+    );
 }
 
 #[tokio::test]
@@ -204,7 +228,9 @@ async fn test_e2e_shared_context_updates() {
     let rest_port = 19006;
     let pg_port = 19007;
 
-    let ctx = start_dual_protocol_servers(rest_port, pg_port).await.unwrap();
+    let ctx = start_dual_protocol_servers(rest_port, pg_port)
+        .await
+        .unwrap();
 
     let http_client = reqwest::Client::new();
     let pg_client = connect_postgres(pg_port).await.unwrap();
@@ -262,7 +288,10 @@ async fn test_e2e_shared_context_updates() {
         .unwrap();
 
     // Should see all updates from both protocols
-    assert!(results.len() > 0, "PostgreSQL should return sum of all updates");
+    assert!(
+        results.len() > 0,
+        "PostgreSQL should return sum of all updates"
+    );
 }
 
 #[tokio::test]
@@ -270,7 +299,9 @@ async fn test_e2e_multi_table_join() {
     let rest_port = 19008;
     let pg_port = 19009;
 
-    let ctx = start_dual_protocol_servers(rest_port, pg_port).await.unwrap();
+    let ctx = start_dual_protocol_servers(rest_port, pg_port)
+        .await
+        .unwrap();
 
     let http_client = reqwest::Client::new();
 
@@ -333,7 +364,8 @@ async fn test_e2e_multi_table_join() {
         .await
         .unwrap();
 
-    let row_count = results.iter()
+    let row_count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -345,7 +377,9 @@ async fn test_e2e_complex_aggregation() {
     let rest_port = 19010;
     let pg_port = 19011;
 
-    let ctx = start_dual_protocol_servers(rest_port, pg_port).await.unwrap();
+    let ctx = start_dual_protocol_servers(rest_port, pg_port)
+        .await
+        .unwrap();
 
     let http_client = reqwest::Client::new();
 
@@ -393,5 +427,8 @@ async fn test_e2e_complex_aggregation() {
         .await
         .unwrap();
 
-    assert!(results.len() > 0, "PostgreSQL should return distinct product count");
+    assert!(
+        results.len() > 0,
+        "PostgreSQL should return distinct product count"
+    );
 }

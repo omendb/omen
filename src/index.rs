@@ -32,11 +32,11 @@ impl RecursiveModelIndex {
     pub fn new(data_size: usize) -> Self {
         // Minimal models for maximum speed
         let num_second_models = if data_size > 1_000_000 {
-            16   // Just 16 models for 1M+ keys
+            16 // Just 16 models for 1M+ keys
         } else if data_size > 100_000 {
-            8    // 8 models for 100K+ keys
+            8 // 8 models for 100K+ keys
         } else {
-            4    // 4 models for smaller datasets
+            4 // 4 models for smaller datasets
         };
 
         Self {
@@ -114,7 +114,7 @@ impl RecursiveModelIndex {
 
         self.root.start_idx = 0;
         self.root.end_idx = n;
-        self.root.max_error = 0;  // No error at root level - direct prediction
+        self.root.max_error = 0; // No error at root level - direct prediction
 
         // Train second layer models
         self.second_layer.clear();
@@ -209,20 +209,27 @@ impl RecursiveModelIndex {
 
         let model = &self.second_layer[model_idx];
 
-        if model.start_idx >= self.data.len() || model.end_idx > self.data.len() ||
-           key < self.data[model.start_idx].0 || key > self.data[model.end_idx - 1].0 {
-
+        if model.start_idx >= self.data.len()
+            || model.end_idx > self.data.len()
+            || key < self.data[model.start_idx].0
+            || key > self.data[model.end_idx - 1].0
+        {
             let adj_idx = if key < self.data[model.start_idx].0 && model_idx > 0 {
                 model_idx - 1
-            } else if key > self.data[model.end_idx - 1].0 && model_idx + 1 < self.second_layer.len() {
+            } else if key > self.data[model.end_idx - 1].0
+                && model_idx + 1 < self.second_layer.len()
+            {
                 model_idx + 1
             } else {
                 return None;
             };
 
             let adj_model = &self.second_layer[adj_idx];
-            if adj_model.start_idx >= self.data.len() || adj_model.end_idx > self.data.len() ||
-               key < self.data[adj_model.start_idx].0 || key > self.data[adj_model.end_idx - 1].0 {
+            if adj_model.start_idx >= self.data.len()
+                || adj_model.end_idx > self.data.len()
+                || key < self.data[adj_model.start_idx].0
+                || key > self.data[adj_model.end_idx - 1].0
+            {
                 return None;
             }
 
@@ -238,10 +245,10 @@ impl RecursiveModelIndex {
             .round()
             .max(0.0) as usize;
 
-        let global_pos = (model.start_idx + predicted_pos)
-            .min(model.end_idx.saturating_sub(1));
+        let global_pos = (model.start_idx + predicted_pos).min(model.end_idx.saturating_sub(1));
 
-        let start = global_pos.saturating_sub(model.max_error)
+        let start = global_pos
+            .saturating_sub(model.max_error)
             .max(model.start_idx);
         let end = (global_pos + model.max_error + 1)
             .min(model.end_idx)
@@ -284,13 +291,16 @@ impl RecursiveModelIndex {
             .min((self.second_layer.len() - 1) as f64) as usize;
 
         // Search through relevant models
-        for model_idx in start_model_idx.saturating_sub(1)..=(end_model_idx + 1).min(self.second_layer.len() - 1) {
+        for model_idx in
+            start_model_idx.saturating_sub(1)..=(end_model_idx + 1).min(self.second_layer.len() - 1)
+        {
             let model = &self.second_layer[model_idx];
 
             // Skip models outside range
-            if model.end_idx <= model.start_idx ||
-               self.data[model.end_idx - 1].0 < start_key ||
-               self.data[model.start_idx].0 > end_key {
+            if model.end_idx <= model.start_idx
+                || self.data[model.end_idx - 1].0 < start_key
+                || self.data[model.start_idx].0 > end_key
+            {
                 continue;
             }
 
@@ -336,9 +346,7 @@ impl RecursiveModelIndex {
 
             // Add all positions in range
             for i in start_pos..end_pos {
-                if i < self.data.len() &&
-                   self.data[i].0 >= start_key &&
-                   self.data[i].0 <= end_key {
+                if i < self.data.len() && self.data[i].0 >= start_key && self.data[i].0 <= end_key {
                     results.push(self.data[i].1);
                 }
             }
@@ -356,9 +364,7 @@ impl RecursiveModelIndex {
 // Implement trait for storage integration
 impl crate::storage::LearnedIndexTrait for RecursiveModelIndex {
     fn train(&mut self, keys: &[i64]) {
-        let data: Vec<(i64, usize)> = keys.iter().enumerate()
-            .map(|(i, &k)| (k, i))
-            .collect();
+        let data: Vec<(i64, usize)> = keys.iter().enumerate().map(|(i, &k)| (k, i)).collect();
         self.train(data);
     }
 

@@ -2,19 +2,19 @@
 //! Supports full backups, incremental backups, and point-in-time recovery
 
 use crate::storage::ArrowStorage;
-use crate::wal::{WalManager, WalEntry, WalOperation};
+use crate::wal::{WalEntry, WalManager, WalOperation};
+use anyhow::{bail, Context, Result};
+use chrono::{DateTime, Utc};
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use anyhow::{Result, Context, bail};
-use serde::{Serialize, Deserialize};
-use chrono::{DateTime, Utc};
-use flate2::write::GzEncoder;
-use flate2::read::GzDecoder;
-use flate2::Compression;
-use sha2::{Sha256, Digest};
 
 /// Backup metadata with version tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,11 +151,16 @@ impl BackupManager {
 
         // Save metadata
         self.save_backup_metadata(&backup_path, &metadata)?;
-        self.metadata_index.insert(backup_id.clone(), metadata.clone());
+        self.metadata_index
+            .insert(backup_id.clone(), metadata.clone());
         self.save_metadata_index()?;
 
-        println!("Full backup completed: {} ({} files, {} bytes)",
-                backup_id, metadata.included_files.len(), metadata.total_size_bytes);
+        println!(
+            "Full backup completed: {} ({} files, {} bytes)",
+            backup_id,
+            metadata.included_files.len(),
+            metadata.total_size_bytes
+        );
 
         Ok(metadata)
     }
@@ -163,18 +168,23 @@ impl BackupManager {
     /// Create incremental backup since last backup
     pub fn create_incremental_backup(&mut self, database_name: &str) -> Result<BackupMetadata> {
         // Find the latest backup to use as base
-        let base_backup = self.find_latest_backup(database_name)?
+        let base_backup = self
+            .find_latest_backup(database_name)?
             .context("No previous backup found for incremental backup")?;
 
         let backup_id = generate_backup_id("incremental");
         let backup_path = self.backup_dir.join(&backup_id);
         fs::create_dir_all(&backup_path)?;
 
-        println!("Creating incremental backup: {} (since {})", backup_id, base_backup.backup_id);
+        println!(
+            "Creating incremental backup: {} (since {})",
+            backup_id, base_backup.backup_id
+        );
 
         // Get WAL entries since last backup
         let wal_dir = self.data_dir.join("wal");
-        let incremental_entries = self.get_wal_entries_since_sequence(&wal_dir, base_backup.wal_sequence_end)?;
+        let incremental_entries =
+            self.get_wal_entries_since_sequence(&wal_dir, base_backup.wal_sequence_end)?;
 
         if incremental_entries.is_empty() {
             bail!("No changes found since last backup");
@@ -187,10 +197,15 @@ impl BackupManager {
         let total_size = fs::metadata(&wal_backup_path)?.len();
         let wal_checksum = self.calculate_file_checksum(&wal_backup_path)?;
 
-        let (wal_start, wal_end) = if let (Some(first), Some(last)) = (incremental_entries.first(), incremental_entries.last()) {
+        let (wal_start, wal_end) = if let (Some(first), Some(last)) =
+            (incremental_entries.first(), incremental_entries.last())
+        {
             (first.sequence, last.sequence)
         } else {
-            (base_backup.wal_sequence_end + 1, base_backup.wal_sequence_end + 1)
+            (
+                base_backup.wal_sequence_end + 1,
+                base_backup.wal_sequence_end + 1,
+            )
         };
 
         // Create metadata
@@ -211,18 +226,24 @@ impl BackupManager {
 
         // Save metadata
         self.save_backup_metadata(&backup_path, &metadata)?;
-        self.metadata_index.insert(backup_id.clone(), metadata.clone());
+        self.metadata_index
+            .insert(backup_id.clone(), metadata.clone());
         self.save_metadata_index()?;
 
-        println!("Incremental backup completed: {} ({} WAL entries)",
-                backup_id, incremental_entries.len());
+        println!(
+            "Incremental backup completed: {} ({} WAL entries)",
+            backup_id,
+            incremental_entries.len()
+        );
 
         Ok(metadata)
     }
 
     /// Restore database from backup with point-in-time recovery
     pub fn restore_from_backup(&self, backup_id: &str, target_sequence: Option<u64>) -> Result<()> {
-        let metadata = self.metadata_index.get(backup_id)
+        let metadata = self
+            .metadata_index
+            .get(backup_id)
             .context("Backup not found")?;
 
         println!("Starting restore from backup: {}", backup_id);
@@ -242,7 +263,9 @@ impl BackupManager {
                 // Find base backup and restore chain
                 self.restore_incremental_chain(backup_id, target_sequence)?;
             }
-            BackupType::PointInTime { target_sequence: pts } => {
+            BackupType::PointInTime {
+                target_sequence: pts,
+            } => {
                 self.restore_full_backup(backup_id, Some(*pts))?;
             }
         }
@@ -253,7 +276,9 @@ impl BackupManager {
 
     /// Verify backup integrity
     pub fn verify_backup(&self, backup_id: &str) -> Result<bool> {
-        let metadata = self.metadata_index.get(backup_id)
+        let metadata = self
+            .metadata_index
+            .get(backup_id)
             .context("Backup not found")?;
 
         let backup_path = self.backup_dir.join(backup_id);
@@ -316,7 +341,9 @@ impl BackupManager {
         let mut current_id = Some(backup_id);
 
         while let Some(id) = current_id {
-            let metadata = self.metadata_index.get(id)
+            let metadata = self
+                .metadata_index
+                .get(id)
                 .context(format!("Backup {} not found in chain", id))?;
 
             chain.push(metadata);
@@ -337,7 +364,9 @@ impl BackupManager {
         for (backup_id, metadata) in &self.metadata_index {
             if metadata.created_at < cutoff_time {
                 // Check if other backups depend on this one
-                let has_dependencies = self.metadata_index.values()
+                let has_dependencies = self
+                    .metadata_index
+                    .values()
                     .any(|m| m.depends_on_backup.as_ref() == Some(backup_id));
 
                 if !has_dependencies {
@@ -398,7 +427,11 @@ impl BackupManager {
         Ok(())
     }
 
-    fn restore_incremental_chain(&self, backup_id: &str, target_sequence: Option<u64>) -> Result<()> {
+    fn restore_incremental_chain(
+        &self,
+        backup_id: &str,
+        target_sequence: Option<u64>,
+    ) -> Result<()> {
         let chain = self.get_backup_chain(backup_id)?;
 
         // Restore base backup first
@@ -493,7 +526,11 @@ impl BackupManager {
         }
     }
 
-    fn get_wal_entries_since_sequence(&self, wal_dir: &Path, since_sequence: u64) -> Result<Vec<WalEntry>> {
+    fn get_wal_entries_since_sequence(
+        &self,
+        wal_dir: &Path,
+        since_sequence: u64,
+    ) -> Result<Vec<WalEntry>> {
         let mut entries = Vec::new();
 
         if !wal_dir.exists() {
@@ -534,7 +571,11 @@ impl BackupManager {
         Ok(entries)
     }
 
-    fn export_wal_entries_compressed(&self, entries: &[WalEntry], output_path: &Path) -> Result<()> {
+    fn export_wal_entries_compressed(
+        &self,
+        entries: &[WalEntry],
+        output_path: &Path,
+    ) -> Result<()> {
         let file = File::create(output_path)?;
         let encoder = GzEncoder::new(file, Compression::default());
         let mut writer = BufWriter::new(encoder);
@@ -730,7 +771,10 @@ fn generate_backup_id(backup_type: &str) -> String {
     let random_suffix: String = (0..4)
         .map(|_| char::from(b'a' + (rand::random::<u8>() % 26)))
         .collect();
-    format!("{}_{}_{}_{}", backup_type, timestamp, random_suffix, "omendb")
+    format!(
+        "{}_{}_{}_{}",
+        backup_type, timestamp, random_suffix, "omendb"
+    )
 }
 
 #[cfg(test)]
@@ -760,7 +804,11 @@ mod tests {
         // Create some test data
         fs::write(data_dir.path().join("test.parquet"), b"test data").unwrap();
         fs::create_dir_all(data_dir.path().join("wal")).unwrap();
-        fs::write(data_dir.path().join("wal").join("wal_000001.log"), b"wal data").unwrap();
+        fs::write(
+            data_dir.path().join("wal").join("wal_000001.log"),
+            b"wal data",
+        )
+        .unwrap();
 
         let metadata = manager.create_full_backup("test_db").unwrap();
 

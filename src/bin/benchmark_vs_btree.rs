@@ -2,10 +2,10 @@
 //! Tests with realistic time-series workloads to validate core value proposition
 
 use omendb::index::RecursiveModelIndex;
+use rand::distributions::Distribution;
+use rand::Rng;
 use std::collections::BTreeMap;
 use std::time::Instant;
-use rand::Rng;
-use rand::distributions::Distribution;
 
 #[derive(Debug)]
 struct BenchmarkResult {
@@ -211,28 +211,44 @@ fn print_summary(results: &[BenchmarkResult]) {
     println!("\n\n📋 SUMMARY");
     println!("==========\n");
 
-    println!("{:<30} {:>10} {:>15} {:>15} {:>10}",
-             "Workload", "Size", "B-tree (μs)", "Learned (μs)", "Speedup");
+    println!(
+        "{:<30} {:>10} {:>15} {:>15} {:>10}",
+        "Workload", "Size", "B-tree (μs)", "Learned (μs)", "Speedup"
+    );
     println!("{}", "-".repeat(82));
 
     for result in results {
-        println!("{:<30} {:>10} {:>15.3} {:>15.3} {:>9.2}x",
-                 result.workload_name,
-                 format!("{}", result.data_size),
-                 result.btree_search_us,
-                 result.learned_search_us,
-                 result.speedup);
+        println!(
+            "{:<30} {:>10} {:>15.3} {:>15.3} {:>9.2}x",
+            result.workload_name,
+            format!("{}", result.data_size),
+            result.btree_search_us,
+            result.learned_search_us,
+            result.speedup
+        );
     }
 
     println!("\n🎯 KEY FINDINGS:\n");
 
     let avg_speedup: f64 = results.iter().map(|r| r.speedup).sum::<f64>() / results.len() as f64;
-    let best = results.iter().max_by(|a, b| a.speedup.partial_cmp(&b.speedup).unwrap()).unwrap();
-    let worst = results.iter().min_by(|a, b| a.speedup.partial_cmp(&b.speedup).unwrap()).unwrap();
+    let best = results
+        .iter()
+        .max_by(|a, b| a.speedup.partial_cmp(&b.speedup).unwrap())
+        .unwrap();
+    let worst = results
+        .iter()
+        .min_by(|a, b| a.speedup.partial_cmp(&b.speedup).unwrap())
+        .unwrap();
 
     println!("• Average speedup: {:.2}x", avg_speedup);
-    println!("• Best workload: {} ({:.2}x faster)", best.workload_name, best.speedup);
-    println!("• Worst workload: {} ({:.2}x)", worst.workload_name, worst.speedup);
+    println!(
+        "• Best workload: {} ({:.2}x faster)",
+        best.workload_name, best.speedup
+    );
+    println!(
+        "• Worst workload: {} ({:.2}x)",
+        worst.workload_name, worst.speedup
+    );
 
     let winning_workloads: Vec<_> = results.iter().filter(|r| r.speedup > 1.5).collect();
 
@@ -242,7 +258,10 @@ fn print_summary(results: &[BenchmarkResult]) {
     } else {
         println!("\n✅ Learned indexes WIN on:");
         for result in winning_workloads {
-            println!("   • {} ({:.2}x faster)", result.workload_name, result.speedup);
+            println!(
+                "   • {} ({:.2}x faster)",
+                result.workload_name, result.speedup
+            );
         }
     }
 

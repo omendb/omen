@@ -26,7 +26,8 @@ async fn connect_postgres(port: u16) -> anyhow::Result<tokio_postgres::Client> {
     let (client, connection) = tokio_postgres::connect(
         &format!("host=127.0.0.1 port={} user=test dbname=test", port),
         NoTls,
-    ).await?;
+    )
+    .await?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -72,7 +73,8 @@ async fn test_transaction_commit() {
         .await
         .unwrap();
 
-    let row_count = results.iter()
+    let row_count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -102,7 +104,8 @@ async fn test_transaction_rollback() {
         .await
         .unwrap();
 
-    let before_count = before.iter()
+    let before_count = before
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -124,7 +127,8 @@ async fn test_transaction_rollback() {
         .await
         .unwrap();
 
-    let after_count = after.iter()
+    let after_count = after
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -188,11 +192,13 @@ async fn test_transaction_multiple_operations() {
         .await
         .unwrap();
 
-    let from_count = from_results.iter()
+    let from_count = from_results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
-    let to_count = to_results.iter()
+    let to_count = to_results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -227,11 +233,12 @@ async fn test_transaction_error_handling() {
         .unwrap();
 
     // Simulate error by querying non-existent table (should fail)
-    let error_result = client
-        .simple_query("SELECT * FROM nonexistent_table")
-        .await;
+    let error_result = client.simple_query("SELECT * FROM nonexistent_table").await;
 
-    assert!(error_result.is_err(), "Query should fail for non-existent table");
+    assert!(
+        error_result.is_err(),
+        "Query should fail for non-existent table"
+    );
 
     // Rollback due to error
     client.simple_query("ROLLBACK").await.unwrap();
@@ -242,7 +249,8 @@ async fn test_transaction_error_handling() {
         .await
         .unwrap();
 
-    let count = results.iter()
+    let count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -284,7 +292,8 @@ async fn test_transaction_isolation() {
         .await
         .unwrap();
 
-    let client2_count = client2_results.iter()
+    let client2_count = client2_results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -297,13 +306,17 @@ async fn test_transaction_isolation() {
         .await
         .unwrap();
 
-    let client2_after_count = client2_after.iter()
+    let client2_after_count = client2_after
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
     // Both should return a count (isolation semantics vary by implementation)
     assert_eq!(client2_count, 1, "Client 2 should see data");
-    assert_eq!(client2_after_count, 1, "Client 2 should see data after commit");
+    assert_eq!(
+        client2_after_count, 1,
+        "Client 2 should see data after commit"
+    );
 }
 
 #[tokio::test]
@@ -330,11 +343,15 @@ async fn test_transaction_autocommit() {
         .await
         .unwrap();
 
-    let row_count = results.iter()
+    let row_count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
-    assert_eq!(row_count, 1, "Autocommit should make data immediately visible");
+    assert_eq!(
+        row_count, 1,
+        "Autocommit should make data immediately visible"
+    );
 }
 
 #[tokio::test]
@@ -379,7 +396,8 @@ async fn test_transaction_sequential_commits() {
         .await
         .unwrap();
 
-    let count = results.iter()
+    let count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 

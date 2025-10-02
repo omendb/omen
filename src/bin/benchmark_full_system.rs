@@ -1,11 +1,11 @@
 //! Full system benchmark: Complete multi-table database with learned indexes
 //! Tests end-to-end SQL workload performance for YC demo
 
+use anyhow::Result;
 use omendb::catalog::Catalog;
-use omendb::sql_engine::{SqlEngine, ExecutionResult};
+use omendb::sql_engine::{ExecutionResult, SqlEngine};
 use std::time::Instant;
 use tempfile::TempDir;
-use anyhow::Result;
 
 #[derive(Debug)]
 struct SystemBenchmarkResult {
@@ -69,7 +69,7 @@ fn benchmark_time_series_ingestion() -> Result<SystemBenchmarkResult> {
             sensor_id BIGINT,
             value DOUBLE,
             status VARCHAR(50)
-        )"
+        )",
     )?;
 
     let num_operations = 10_000;
@@ -83,8 +83,8 @@ fn benchmark_time_series_ingestion() -> Result<SystemBenchmarkResult> {
 
         let sql = format!(
             "INSERT INTO metrics VALUES ({}, {}, {}, 'normal')",
-            i * 1000,        // timestamp (ms)
-            i % 100,         // sensor_id (100 sensors)
+            i * 1000,                     // timestamp (ms)
+            i % 100,                      // sensor_id (100 sensors)
             23.5 + (i % 20) as f64 * 0.1  // value
         );
         engine.execute(&sql)?;
@@ -141,14 +141,17 @@ fn benchmark_mixed_workload() -> Result<SystemBenchmarkResult> {
             event_type VARCHAR(100),
             user_id BIGINT,
             timestamp BIGINT
-        )"
+        )",
     )?;
 
     // Pre-populate with data
     for i in 0..5_000 {
         let sql = format!(
             "INSERT INTO events VALUES ({}, 'event_{}', {}, {})",
-            i, i % 10, i % 1000, i * 1000
+            i,
+            i % 10,
+            i % 1000,
+            i * 1000
         );
         engine.execute(&sql)?;
     }
@@ -210,34 +213,39 @@ fn benchmark_multi_table_analytics() -> Result<SystemBenchmarkResult> {
 
     // Create multiple tables
     engine.execute(
-        "CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), created_at BIGINT)"
+        "CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), created_at BIGINT)",
     )?;
     engine.execute(
-        "CREATE TABLE sessions (id BIGINT PRIMARY KEY, user_id BIGINT, duration BIGINT)"
+        "CREATE TABLE sessions (id BIGINT PRIMARY KEY, user_id BIGINT, duration BIGINT)",
     )?;
-    engine.execute(
-        "CREATE TABLE metrics (id BIGINT PRIMARY KEY, session_id BIGINT, value DOUBLE)"
-    )?;
+    engine
+        .execute("CREATE TABLE metrics (id BIGINT PRIMARY KEY, session_id BIGINT, value DOUBLE)")?;
 
     // Populate tables
     for i in 0..1_000 {
         engine.execute(&format!(
             "INSERT INTO users VALUES ({}, 'user_{}', {})",
-            i, i, i * 1000
+            i,
+            i,
+            i * 1000
         ))?;
     }
 
     for i in 0..3_000 {
         engine.execute(&format!(
             "INSERT INTO sessions VALUES ({}, {}, {})",
-            i, i % 1000, 100 + i % 500
+            i,
+            i % 1000,
+            100 + i % 500
         ))?;
     }
 
     for i in 0..10_000 {
         engine.execute(&format!(
             "INSERT INTO metrics VALUES ({}, {}, {})",
-            i, i % 3000, 1.5 * (i % 100) as f64
+            i,
+            i % 3000,
+            1.5 * (i % 100) as f64
         ))?;
     }
 
@@ -295,7 +303,7 @@ fn benchmark_high_throughput_writes() -> Result<SystemBenchmarkResult> {
             loss DOUBLE,
             accuracy DOUBLE,
             epoch BIGINT
-        )"
+        )",
     )?;
 
     let num_operations = 20_000;
@@ -310,8 +318,8 @@ fn benchmark_high_throughput_writes() -> Result<SystemBenchmarkResult> {
         let sql = format!(
             "INSERT INTO training_metrics VALUES ({}, {}, {}, {})",
             i,
-            1.0 / (1.0 + i as f64 / 1000.0),  // Decreasing loss
-            0.5 + 0.4 * (i as f64 / num_operations as f64),  // Increasing accuracy
+            1.0 / (1.0 + i as f64 / 1000.0), // Decreasing loss
+            0.5 + 0.4 * (i as f64 / num_operations as f64), // Increasing accuracy
             i / 1000
         );
         engine.execute(&sql)?;
@@ -354,14 +362,16 @@ fn benchmark_point_queries() -> Result<SystemBenchmarkResult> {
             device_id BIGINT PRIMARY KEY,
             name VARCHAR(255),
             last_seen BIGINT
-        )"
+        )",
     )?;
 
     // Insert test data
     for i in 0..10_000 {
         engine.execute(&format!(
             "INSERT INTO devices VALUES ({}, 'device_{}', {})",
-            i * 100, i, i * 1000
+            i * 100,
+            i,
+            i * 1000
         ))?;
     }
 
@@ -409,16 +419,17 @@ fn print_summary(results: &[SystemBenchmarkResult]) {
     println!("╚════════════════════════════════════════════════════════════════╝");
     println!();
 
-    println!("{:<35} {:>10} {:>15} {:>12}",
-             "Scenario", "Operations", "Throughput", "Avg Latency");
+    println!(
+        "{:<35} {:>10} {:>15} {:>12}",
+        "Scenario", "Operations", "Throughput", "Avg Latency"
+    );
     println!("{}", "─".repeat(75));
 
     for result in results {
-        println!("{:<35} {:>10} {:>12.0}/sec {:>10.1}μs",
-                 result.scenario,
-                 result.operations,
-                 result.ops_per_sec,
-                 result.avg_latency_us);
+        println!(
+            "{:<35} {:>10} {:>12.0}/sec {:>10.1}μs",
+            result.scenario, result.operations, result.ops_per_sec, result.avg_latency_us
+        );
     }
 
     println!("\n");
@@ -431,10 +442,15 @@ fn print_summary(results: &[SystemBenchmarkResult]) {
 
     println!("  • Total operations:      {}", total_ops);
     println!("  • Total runtime:         {:.2}s", total_time_sec);
-    println!("  • Overall throughput:    {:.0} ops/sec", overall_throughput);
+    println!(
+        "  • Overall throughput:    {:.0} ops/sec",
+        overall_throughput
+    );
 
-    let avg_throughput: f64 = results.iter().map(|r| r.ops_per_sec).sum::<f64>() / results.len() as f64;
-    let avg_latency: f64 = results.iter().map(|r| r.avg_latency_us).sum::<f64>() / results.len() as f64;
+    let avg_throughput: f64 =
+        results.iter().map(|r| r.ops_per_sec).sum::<f64>() / results.len() as f64;
+    let avg_latency: f64 =
+        results.iter().map(|r| r.avg_latency_us).sum::<f64>() / results.len() as f64;
     let avg_p99: f64 = results.iter().map(|r| r.p99_latency_us).sum::<f64>() / results.len() as f64;
 
     println!("  • Average throughput:    {:.0} ops/sec", avg_throughput);
@@ -446,19 +462,31 @@ fn print_summary(results: &[SystemBenchmarkResult]) {
     println!("{}", "─".repeat(75));
 
     if avg_throughput > 1000.0 {
-        println!("  ✅ High throughput: {:.0} ops/sec (excellent for production)", avg_throughput);
+        println!(
+            "  ✅ High throughput: {:.0} ops/sec (excellent for production)",
+            avg_throughput
+        );
     } else {
-        println!("  ⚠️  Throughput: {:.0} ops/sec (acceptable but could improve)", avg_throughput);
+        println!(
+            "  ⚠️  Throughput: {:.0} ops/sec (acceptable but could improve)",
+            avg_throughput
+        );
     }
 
     if avg_latency < 1000.0 {
-        println!("  ✅ Low latency: {:.1}μs average (excellent for real-time)", avg_latency);
+        println!(
+            "  ✅ Low latency: {:.1}μs average (excellent for real-time)",
+            avg_latency
+        );
     } else {
         println!("  ⚠️  Latency: {:.1}μs average (acceptable)", avg_latency);
     }
 
     if avg_p99 < 5000.0 {
-        println!("  ✅ Consistent P99: {:.1}μs (excellent tail latency)", avg_p99);
+        println!(
+            "  ✅ Consistent P99: {:.1}μs (excellent tail latency)",
+            avg_p99
+        );
     }
 
     println!("\n");
@@ -474,7 +502,10 @@ fn print_summary(results: &[SystemBenchmarkResult]) {
     println!("🎬 YC DEMO TALKING POINTS:");
     println!("{}", "─".repeat(75));
     println!("  1. \"9.85x faster than B-trees on time-series workloads\"");
-    println!("  2. \"{:.0} ops/sec sustained throughput\"", avg_throughput);
+    println!(
+        "  2. \"{:.0} ops/sec sustained throughput\"",
+        avg_throughput
+    );
     println!("  3. \"Sub-microsecond latency with learned indexes\"");
     println!("  4. \"First production database with only learned indexes\"");
     println!("  5. \"PostgreSQL-compatible SQL interface\"");

@@ -1,10 +1,10 @@
 //! Integration tests for OmenDB
 //! Tests complete end-to-end workflows and component interactions
 
-use crate::*;
 use crate::metrics::*;
 use crate::security::SecurityContext;
-use crate::server::{start_secure_monitoring_server, start_monitoring_server};
+use crate::server::{start_monitoring_server, start_secure_monitoring_server};
+use crate::*;
 use hyper::{Body, Client, Method, Request, StatusCode};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -115,7 +115,10 @@ pub async fn test_database_lifecycle() -> IntegrationTestResults {
     let query_latency_p95 = {
         let mut sorted = query_latencies;
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        sorted.get((sorted.len() as f64 * 0.95) as usize).copied().unwrap_or(0.0)
+        sorted
+            .get((sorted.len() as f64 * 0.95) as usize)
+            .copied()
+            .unwrap_or(0.0)
     };
 
     IntegrationTestResults {
@@ -146,9 +149,8 @@ pub async fn test_http_server_integration() -> IntegrationTestResults {
     let port = 0; // Let OS assign port
 
     // Start server in background
-    let server_handle = tokio::spawn(async move {
-        start_secure_monitoring_server(port, security_ctx).await
-    });
+    let server_handle =
+        tokio::spawn(async move { start_secure_monitoring_server(port, security_ctx).await });
 
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -512,9 +514,8 @@ pub async fn test_complete_end_to_end() -> IntegrationTestResults {
 
     // Phase 2: Start HTTP server with security
     let security_ctx = SecurityContext::default();
-    let server_handle = tokio::spawn(async move {
-        start_secure_monitoring_server(3001, security_ctx).await
-    });
+    let server_handle =
+        tokio::spawn(async move { start_secure_monitoring_server(3001, security_ctx).await });
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
@@ -601,67 +602,106 @@ pub async fn run_all_integration_tests() -> Vec<IntegrationTestResults> {
     println!("\n🔄 Running: Database Lifecycle");
     let result = test_database_lifecycle().await;
     if result.success {
-        println!("✅ PASSED: Database Lifecycle ({:.2}s)", result.duration.as_secs_f64());
+        println!(
+            "✅ PASSED: Database Lifecycle ({:.2}s)",
+            result.duration.as_secs_f64()
+        );
     } else {
-        println!("❌ FAILED: Database Lifecycle - {} errors ({:.2}s)",
-                result.errors_encountered, result.duration.as_secs_f64());
+        println!(
+            "❌ FAILED: Database Lifecycle - {} errors ({:.2}s)",
+            result.errors_encountered,
+            result.duration.as_secs_f64()
+        );
     }
     results.push(result);
 
     println!("\n🔄 Running: Metrics Integration");
     let result = test_metrics_integration().await;
     if result.success {
-        println!("✅ PASSED: Metrics Integration ({:.2}s)", result.duration.as_secs_f64());
+        println!(
+            "✅ PASSED: Metrics Integration ({:.2}s)",
+            result.duration.as_secs_f64()
+        );
     } else {
-        println!("❌ FAILED: Metrics Integration - {} errors ({:.2}s)",
-                result.errors_encountered, result.duration.as_secs_f64());
+        println!(
+            "❌ FAILED: Metrics Integration - {} errors ({:.2}s)",
+            result.errors_encountered,
+            result.duration.as_secs_f64()
+        );
     }
     results.push(result);
 
     println!("\n🔄 Running: WAL Persistence");
     let result = test_wal_persistence_integration().await;
     if result.success {
-        println!("✅ PASSED: WAL Persistence ({:.2}s)", result.duration.as_secs_f64());
+        println!(
+            "✅ PASSED: WAL Persistence ({:.2}s)",
+            result.duration.as_secs_f64()
+        );
     } else {
-        println!("❌ FAILED: WAL Persistence - {} errors ({:.2}s)",
-                result.errors_encountered, result.duration.as_secs_f64());
+        println!(
+            "❌ FAILED: WAL Persistence - {} errors ({:.2}s)",
+            result.errors_encountered,
+            result.duration.as_secs_f64()
+        );
     }
     results.push(result);
 
     println!("\n🔄 Running: Concurrent Operations");
     let result = test_concurrent_operations_integration().await;
     if result.success {
-        println!("✅ PASSED: Concurrent Operations ({:.2}s)", result.duration.as_secs_f64());
+        println!(
+            "✅ PASSED: Concurrent Operations ({:.2}s)",
+            result.duration.as_secs_f64()
+        );
     } else {
-        println!("❌ FAILED: Concurrent Operations - {} errors ({:.2}s)",
-                result.errors_encountered, result.duration.as_secs_f64());
+        println!(
+            "❌ FAILED: Concurrent Operations - {} errors ({:.2}s)",
+            result.errors_encountered,
+            result.duration.as_secs_f64()
+        );
     }
     results.push(result);
 
     println!("\n🔄 Running: HTTP Server Integration");
     let result = test_http_server_integration().await;
     if result.success {
-        println!("✅ PASSED: HTTP Server Integration ({:.2}s)", result.duration.as_secs_f64());
+        println!(
+            "✅ PASSED: HTTP Server Integration ({:.2}s)",
+            result.duration.as_secs_f64()
+        );
     } else {
-        println!("❌ FAILED: HTTP Server Integration - {} errors ({:.2}s)",
-                result.errors_encountered, result.duration.as_secs_f64());
+        println!(
+            "❌ FAILED: HTTP Server Integration - {} errors ({:.2}s)",
+            result.errors_encountered,
+            result.duration.as_secs_f64()
+        );
     }
     results.push(result);
 
     println!("\n🔄 Running: Complete End-to-End");
     let result = test_complete_end_to_end().await;
     if result.success {
-        println!("✅ PASSED: Complete End-to-End ({:.2}s)", result.duration.as_secs_f64());
+        println!(
+            "✅ PASSED: Complete End-to-End ({:.2}s)",
+            result.duration.as_secs_f64()
+        );
     } else {
-        println!("❌ FAILED: Complete End-to-End - {} errors ({:.2}s)",
-                result.errors_encountered, result.duration.as_secs_f64());
+        println!(
+            "❌ FAILED: Complete End-to-End - {} errors ({:.2}s)",
+            result.errors_encountered,
+            result.duration.as_secs_f64()
+        );
     }
     results.push(result);
 
     // Print summary
     let total_tests = results.len();
     let passed_tests = results.iter().filter(|r| r.success).count();
-    let total_operations = results.iter().map(|r| r.operations_completed).sum::<usize>();
+    let total_operations = results
+        .iter()
+        .map(|r| r.operations_completed)
+        .sum::<usize>();
     let total_errors = results.iter().map(|r| r.errors_encountered).sum::<usize>();
 
     println!("\n📊 INTEGRATION TEST SUMMARY");
@@ -669,7 +709,10 @@ pub async fn run_all_integration_tests() -> Vec<IntegrationTestResults> {
     println!("Tests Passed: {}/{}", passed_tests, total_tests);
     println!("Total Operations: {}", total_operations);
     println!("Total Errors: {}", total_errors);
-    println!("Success Rate: {:.1}%", (passed_tests as f64 / total_tests as f64) * 100.0);
+    println!(
+        "Success Rate: {:.1}%",
+        (passed_tests as f64 / total_tests as f64) * 100.0
+    );
 
     if passed_tests == total_tests {
         println!("✅ All integration tests passed!");
@@ -724,6 +767,10 @@ mod tests {
 
         // At least 80% of tests should pass
         let pass_rate = results.iter().filter(|r| r.success).count() as f64 / results.len() as f64;
-        assert!(pass_rate >= 0.8, "Integration test pass rate too low: {:.1}%", pass_rate * 100.0);
+        assert!(
+            pass_rate >= 0.8,
+            "Integration test pass rate too low: {:.1}%",
+            pass_rate * 100.0
+        );
     }
 }

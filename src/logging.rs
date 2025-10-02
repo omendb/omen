@@ -80,8 +80,7 @@ impl LogConfig {
 /// Initialize structured logging with the given configuration
 pub fn init_logging(config: LogConfig) -> Result<()> {
     // Build the filter from config
-    let filter = EnvFilter::try_new(&config.level)
-        .or_else(|_| EnvFilter::try_new("info"))?;
+    let filter = EnvFilter::try_new(&config.level).or_else(|_| EnvFilter::try_new("info"))?;
 
     // Determine span events
     let span_events = if config.log_spans {
@@ -103,9 +102,7 @@ pub fn init_logging(config: LogConfig) -> Result<()> {
             .with_thread_names(true)
             .with_writer(io::stdout);
 
-        let subscriber = Registry::default()
-            .with(filter)
-            .with(fmt_layer);
+        let subscriber = Registry::default().with(filter).with(fmt_layer);
 
         tracing::subscriber::set_global_default(subscriber)?;
     } else {
@@ -117,9 +114,7 @@ pub fn init_logging(config: LogConfig) -> Result<()> {
             .with_thread_ids(false)
             .with_writer(io::stdout);
 
-        let subscriber = Registry::default()
-            .with(filter)
-            .with(fmt_layer);
+        let subscriber = Registry::default().with(filter).with(fmt_layer);
 
         tracing::subscriber::set_global_default(subscriber)?;
     }
@@ -132,8 +127,7 @@ pub fn init_logging(config: LogConfig) -> Result<()> {
 /// OMENDB_LOG_FORMAT - json or pretty (default: json)
 /// OMENDB_LOG_QUERIES - true to enable query logging (default: false)
 pub fn init_from_env() -> Result<()> {
-    let level = std::env::var("RUST_LOG")
-        .unwrap_or_else(|_| "info".to_string());
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
 
     let json_format = std::env::var("OMENDB_LOG_FORMAT")
         .map(|v| v == "json")

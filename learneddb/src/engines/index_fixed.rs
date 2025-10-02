@@ -85,7 +85,8 @@ impl IndexEngine for LearnedLinearEngine {
 
         // Binary search in the error bounds
         let slice = &self.data[start..end];
-        slice.binary_search_by_key(&key, |(k, _)| *k)
+        slice
+            .binary_search_by_key(&key, |(k, _)| *k)
             .ok()
             .map(|i| start + i)
     }
@@ -106,7 +107,10 @@ impl IndexEngine for LearnedLinearEngine {
     fn stats(&self) -> String {
         format!(
             "LearnedLinear: {} keys, slope={:.6}, intercept={:.2}, max_error={}",
-            self.data.len(), self.slope, self.intercept, self.max_error
+            self.data.len(),
+            self.slope,
+            self.intercept,
+            self.max_error
         )
     }
 
@@ -248,7 +252,8 @@ impl IndexEngine for LearnedRMIEngine {
 
         // Binary search in the error bounds
         let slice = &self.data[start..end];
-        slice.binary_search_by_key(&key, |(k, _)| *k)
+        slice
+            .binary_search_by_key(&key, |(k, _)| *k)
             .ok()
             .map(|i| start + i)
     }
@@ -269,7 +274,9 @@ impl IndexEngine for LearnedRMIEngine {
     fn stats(&self) -> String {
         format!(
             "LearnedRMI: {} keys, {} leaf models, max_error={}",
-            self.data.len(), self.leaf_models.len(), self.max_error
+            self.data.len(),
+            self.leaf_models.len(),
+            self.max_error
         )
     }
 

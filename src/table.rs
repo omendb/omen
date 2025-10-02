@@ -2,15 +2,15 @@
 //! Each table has its own schema and primary key for indexing
 //! Supports MVCC for UPDATE/DELETE operations
 
-use crate::row::Row;
-use crate::value::Value;
-use crate::table_storage::TableStorage;
-use crate::table_index::TableIndex;
 use crate::mvcc::{self, MvccIndices};
-use anyhow::{Result, anyhow};
+use crate::row::Row;
+use crate::table_index::TableIndex;
+use crate::table_storage::TableStorage;
+use crate::value::Value;
+use anyhow::{anyhow, Result};
 use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -81,7 +81,10 @@ impl Table {
         // Validate primary key is orderable
         let pk_field = user_schema.field(primary_key_index);
         if !crate::value::is_orderable_type(pk_field.data_type()) {
-            return Err(anyhow!("Primary key '{}' has non-orderable type", primary_key));
+            return Err(anyhow!(
+                "Primary key '{}' has non-orderable type",
+                primary_key
+            ));
         }
 
         // Create internal schema with MVCC columns
@@ -125,7 +128,9 @@ impl Table {
         let metadata: TableMetadata = serde_json::from_str(&json)?;
 
         // Reconstruct user schema
-        let fields: Result<Vec<_>> = metadata.schema.iter()
+        let fields: Result<Vec<_>> = metadata
+            .schema
+            .iter()
             .map(|f| {
                 let data_type = Self::parse_data_type(&f.data_type)?;
                 Ok(arrow::datatypes::Field::new(&f.name, data_type, f.nullable))
@@ -219,7 +224,9 @@ impl Table {
         updated_row.validate(&self.user_schema)?;
 
         // Find existing row
-        let position = self.index.search(key_value)?
+        let position = self
+            .index
+            .search(key_value)?
             .ok_or_else(|| anyhow!("Row with key {:?} not found", key_value))?;
 
         let existing_internal_row = self.storage.get(position)?;
@@ -258,7 +265,9 @@ impl Table {
     /// Creates new version marked as deleted
     pub fn delete(&mut self, key_value: &Value) -> Result<usize> {
         // Find existing row
-        let position = self.index.search(key_value)?
+        let position = self
+            .index
+            .search(key_value)?
             .ok_or_else(|| anyhow!("Row with key {:?} not found", key_value))?;
 
         let existing_internal_row = self.storage.get(position)?;
@@ -273,7 +282,8 @@ impl Table {
         self.next_version += 1;
 
         // Copy all values from existing row
-        let mut internal_values = existing_internal_row.values()[..self.user_schema.fields().len()].to_vec();
+        let mut internal_values =
+            existing_internal_row.values()[..self.user_schema.fields().len()].to_vec();
 
         // Add MVCC metadata with deleted=true
         internal_values.push(Value::UInt64(version)); // __mvcc_version
@@ -300,7 +310,8 @@ impl Table {
 
     /// Strip MVCC metadata from internal row to create user-facing row
     fn strip_mvcc_columns(&self, internal_row: &Row) -> Row {
-        let user_values: Vec<Value> = internal_row.values()
+        let user_values: Vec<Value> = internal_row
+            .values()
             .iter()
             .take(self.user_schema.fields().len())
             .cloned()
@@ -399,7 +410,10 @@ impl Table {
 
     /// Save table metadata (saves user schema, not internal)
     fn save_metadata(&self) -> Result<()> {
-        let schema_fields: Vec<SchemaField> = self.user_schema.fields().iter()
+        let schema_fields: Vec<SchemaField> = self
+            .user_schema
+            .fields()
+            .iter()
             .map(|f| SchemaField {
                 name: f.name().clone(),
                 data_type: Self::format_data_type(f.data_type()),
@@ -443,9 +457,7 @@ impl Table {
             "Float64" => Ok(DataType::Float64),
             "Utf8" => Ok(DataType::Utf8),
             "Boolean" => Ok(DataType::Boolean),
-            _ if s.starts_with("Timestamp") => {
-                Ok(DataType::Timestamp(TimeUnit::Microsecond, None))
-            }
+            _ if s.starts_with("Timestamp") => Ok(DataType::Timestamp(TimeUnit::Microsecond, None)),
             _ => Err(anyhow!("Unsupported data type: {}", s)),
         }
     }
@@ -467,12 +479,7 @@ mod tests {
             Field::new("name", DataType::Utf8, false),
         ]));
 
-        let table = Table::new(
-            "users".to_string(),
-            schema,
-            "id".to_string(),
-            table_dir,
-        ).unwrap();
+        let table = Table::new("users".to_string(), schema, "id".to_string(), table_dir).unwrap();
 
         assert_eq!(table.name(), "users");
         assert_eq!(table.primary_key(), "id");
@@ -494,12 +501,10 @@ mod tests {
             schema.clone(),
             "id".to_string(),
             table_dir,
-        ).unwrap();
+        )
+        .unwrap();
 
-        let row = Row::new(vec![
-            Value::Int64(1),
-            Value::Text("Alice".to_string()),
-        ]);
+        let row = Row::new(vec![Value::Int64(1), Value::Text("Alice".to_string())]);
 
         table.insert(row).unwrap();
         assert_eq!(table.row_count(), 1);
@@ -520,12 +525,10 @@ mod tests {
             schema.clone(),
             "id".to_string(),
             table_dir,
-        ).unwrap();
+        )
+        .unwrap();
 
-        let row = Row::new(vec![
-            Value::Int64(1),
-            Value::Text("Alice".to_string()),
-        ]);
+        let row = Row::new(vec![Value::Int64(1), Value::Text("Alice".to_string())]);
 
         table.insert(row).unwrap();
 
@@ -551,22 +554,19 @@ mod tests {
             schema.clone(),
             "timestamp".to_string(),
             table_dir,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Insert test data
         for i in 0..10 {
-            let row = Row::new(vec![
-                Value::Int64(i),
-                Value::Float64(i as f64 * 1.5),
-            ]);
+            let row = Row::new(vec![Value::Int64(i), Value::Float64(i as f64 * 1.5)]);
             table.insert(row).unwrap();
         }
 
         // Range query
-        let results = table.range_query(
-            &Value::Int64(3),
-            &Value::Int64(7),
-        ).unwrap();
+        let results = table
+            .range_query(&Value::Int64(3), &Value::Int64(7))
+            .unwrap();
 
         assert_eq!(results.len(), 5); // 3, 4, 5, 6, 7
     }
@@ -588,13 +588,11 @@ mod tests {
                 schema.clone(),
                 "id".to_string(),
                 table_dir.clone(),
-            ).unwrap();
+            )
+            .unwrap();
 
             for i in 0..3 {
-                let row = Row::new(vec![
-                    Value::Int64(i),
-                    Value::Text(format!("user_{}", i)),
-                ]);
+                let row = Row::new(vec![Value::Int64(i), Value::Text(format!("user_{}", i))]);
                 table.insert(row).unwrap();
             }
 

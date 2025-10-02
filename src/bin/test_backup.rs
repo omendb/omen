@@ -1,9 +1,9 @@
 //! Test the backup and restore functionality
 
+use anyhow::Result;
 use omendb::backup::BackupManager;
 use std::fs;
 use tempfile::TempDir;
-use anyhow::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -44,10 +44,12 @@ async fn main() -> Result<()> {
     let backups = backup_manager.list_backups();
     println!("   Found {} backup(s)", backups.len());
     for backup in &backups {
-        println!("   - {} [{}] - {}",
-                backup.backup_id,
-                format!("{:?}", backup.backup_type),
-                backup.created_at.format("%Y-%m-%d %H:%M:%S"));
+        println!(
+            "   - {} [{}] - {}",
+            backup.backup_id,
+            format!("{:?}", backup.backup_type),
+            backup.created_at.format("%Y-%m-%d %H:%M:%S")
+        );
     }
     println!();
 
@@ -57,7 +59,10 @@ async fn main() -> Result<()> {
 
     println!("5️⃣ Creating incremental backup...");
     let incremental_backup = backup_manager.create_incremental_backup("test_database")?;
-    println!("✅ Incremental backup created: {}", incremental_backup.backup_id);
+    println!(
+        "✅ Incremental backup created: {}",
+        incremental_backup.backup_id
+    );
     println!("   Depends on: {:?}", incremental_backup.depends_on_backup);
     println!();
 
@@ -66,7 +71,12 @@ async fn main() -> Result<()> {
     let chain = backup_manager.get_backup_chain(&incremental_backup.backup_id)?;
     println!("   Chain has {} backup(s):", chain.len());
     for (i, backup) in chain.iter().enumerate() {
-        println!("   {}. {} [{:?}]", i + 1, backup.backup_id, backup.backup_type);
+        println!(
+            "   {}. {} [{:?}]",
+            i + 1,
+            backup.backup_id,
+            backup.backup_type
+        );
     }
     println!();
 
@@ -118,19 +128,27 @@ async fn main() -> Result<()> {
 
 fn setup_test_data(data_dir: &TempDir) -> Result<()> {
     // Create some test Parquet files
-    fs::write(data_dir.path().join("series_001.parquet"),
-             b"mock parquet data for series 1 with 1000 records")?;
-    fs::write(data_dir.path().join("series_002.parquet"),
-             b"mock parquet data for series 2 with 2000 records")?;
+    fs::write(
+        data_dir.path().join("series_001.parquet"),
+        b"mock parquet data for series 1 with 1000 records",
+    )?;
+    fs::write(
+        data_dir.path().join("series_002.parquet"),
+        b"mock parquet data for series 2 with 2000 records",
+    )?;
 
     // Create WAL directory with test log files
     let wal_dir = data_dir.path().join("wal");
     fs::create_dir_all(&wal_dir)?;
 
-    fs::write(wal_dir.join("wal_000001.log"),
-             b"mock wal entry 1: insert series_1 timestamp=1000000 value=42.5")?;
-    fs::write(wal_dir.join("wal_000002.log"),
-             b"mock wal entry 2: insert series_2 timestamp=1000001 value=43.7")?;
+    fs::write(
+        wal_dir.join("wal_000001.log"),
+        b"mock wal entry 1: insert series_1 timestamp=1000000 value=42.5",
+    )?;
+    fs::write(
+        wal_dir.join("wal_000002.log"),
+        b"mock wal entry 2: insert series_2 timestamp=1000001 value=43.7",
+    )?;
 
     Ok(())
 }
@@ -139,10 +157,14 @@ fn add_incremental_data(data_dir: &TempDir) -> Result<()> {
     let wal_dir = data_dir.path().join("wal");
 
     // Add new WAL entries
-    fs::write(wal_dir.join("wal_000003.log"),
-             b"mock wal entry 3: insert series_1 timestamp=1000002 value=44.1")?;
-    fs::write(wal_dir.join("wal_000004.log"),
-             b"mock wal entry 4: insert series_3 timestamp=1000003 value=45.9")?;
+    fs::write(
+        wal_dir.join("wal_000003.log"),
+        b"mock wal entry 3: insert series_1 timestamp=1000002 value=44.1",
+    )?;
+    fs::write(
+        wal_dir.join("wal_000004.log"),
+        b"mock wal entry 4: insert series_3 timestamp=1000003 value=45.9",
+    )?;
 
     Ok(())
 }

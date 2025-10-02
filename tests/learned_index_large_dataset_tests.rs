@@ -36,16 +36,20 @@ fn create_large_redb_table(n: usize, name: &str) -> (Arc<RedbTable>, tempfile::T
             let elapsed = start.elapsed().as_secs_f64();
             let rate = batch_start as f64 / elapsed;
             let remaining = (n - batch_start) as f64 / rate;
-            println!("  {} / {} rows ({:.0} rows/sec, ~{:.0}s remaining)",
-                     batch_start, n, rate, remaining);
+            println!(
+                "  {} / {} rows ({:.0} rows/sec, ~{:.0}s remaining)",
+                batch_start, n, rate, remaining
+            );
         }
     }
 
     let insert_time = start.elapsed();
-    println!("✓ Created {} rows in {:.2}s ({:.0} rows/sec)",
-             n,
-             insert_time.as_secs_f64(),
-             n as f64 / insert_time.as_secs_f64());
+    println!(
+        "✓ Created {} rows in {:.2}s ({:.0} rows/sec)",
+        n,
+        insert_time.as_secs_f64(),
+        n as f64 / insert_time.as_secs_f64()
+    );
 
     let storage = Arc::new(RwLock::new(storage));
     let table = Arc::new(RedbTable::new(storage, name));
@@ -64,16 +68,27 @@ async fn test_50k_rows_point_query() {
     ctx.register_table("test_50k", table).unwrap();
 
     // Warm up
-    let _ = ctx.sql("SELECT * FROM test_50k WHERE id = 25000").await.unwrap().collect().await;
+    let _ = ctx
+        .sql("SELECT * FROM test_50k WHERE id = 25000")
+        .await
+        .unwrap()
+        .collect()
+        .await;
 
     // Test point query (middle of dataset)
     let start = Instant::now();
-    let df = ctx.sql("SELECT * FROM test_50k WHERE id = 25000").await.unwrap();
+    let df = ctx
+        .sql("SELECT * FROM test_50k WHERE id = 25000")
+        .await
+        .unwrap();
     let results = df.collect().await.unwrap();
     let point_time = start.elapsed();
 
     assert_eq!(results[0].num_rows(), 1, "Should find exactly 1 row");
-    println!("Point query (id=25000): {:.3}ms", point_time.as_secs_f64() * 1000.0);
+    println!(
+        "Point query (id=25000): {:.3}ms",
+        point_time.as_secs_f64() * 1000.0
+    );
 
     // Test full scan for comparison
     let start = Instant::now();
@@ -100,11 +115,17 @@ async fn test_50k_rows_point_query() {
     } else if speedup >= 1.5 {
         println!("⚠ MARGINAL: Only {:.1}x speedup", speedup);
     } else {
-        println!("❌ POOR: Only {:.1}x speedup - investigating needed", speedup);
+        println!(
+            "❌ POOR: Only {:.1}x speedup - investigating needed",
+            speedup
+        );
     }
 
     // Assert reasonable performance
-    assert!(point_time.as_secs_f64() < 1.0, "Point query should be < 1s on 50K rows");
+    assert!(
+        point_time.as_secs_f64() < 1.0,
+        "Point query should be < 1s on 50K rows"
+    );
 
     // Document actual speedup (informational, not hard requirement)
     println!("\nACTUAL PERFORMANCE:");
@@ -124,21 +145,34 @@ async fn test_100k_rows_multiple_point_queries() {
     ctx.register_table("test_100k_multi", table).unwrap();
 
     // Test 10 point queries at different positions
-    let test_ids = vec![100, 10_000, 25_000, 50_000, 75_000, 90_000, 95_000, 99_000, 99_900, 99_999];
+    let test_ids = vec![
+        100, 10_000, 25_000, 50_000, 75_000, 90_000, 95_000, 99_000, 99_900, 99_999,
+    ];
     let mut total_time = 0.0;
 
     for id in &test_ids {
         let start = Instant::now();
-        let df = ctx.sql(&format!("SELECT * FROM test_100k_multi WHERE id = {}", id)).await.unwrap();
+        let df = ctx
+            .sql(&format!("SELECT * FROM test_100k_multi WHERE id = {}", id))
+            .await
+            .unwrap();
         let results = df.collect().await.unwrap();
         let query_time = start.elapsed();
 
         total_time += query_time.as_secs_f64();
-        assert_eq!(results[0].num_rows(), 1, "Should find exactly 1 row for id = {}", id);
+        assert_eq!(
+            results[0].num_rows(),
+            1,
+            "Should find exactly 1 row for id = {}",
+            id
+        );
     }
 
     let avg_time = total_time / test_ids.len() as f64;
-    println!("Average point query time (10 queries): {:.3}ms", avg_time * 1000.0);
+    println!(
+        "Average point query time (10 queries): {:.3}ms",
+        avg_time * 1000.0
+    );
     println!("Total time: {:.3}ms", total_time * 1000.0);
     println!("=====================================\n");
 
@@ -157,14 +191,20 @@ async fn test_100k_rows_range_query() {
 
     // Small range query
     let start = Instant::now();
-    let df = ctx.sql("SELECT * FROM test_100k_range WHERE id >= 50000 AND id < 51000").await.unwrap();
+    let df = ctx
+        .sql("SELECT * FROM test_100k_range WHERE id >= 50000 AND id < 51000")
+        .await
+        .unwrap();
     let results = df.collect().await.unwrap();
     let range_time = start.elapsed();
 
     let row_count: usize = results.iter().map(|b| b.num_rows()).sum();
     assert_eq!(row_count, 1000, "Range query should return 1000 rows");
 
-    println!("Range query (1000 rows): {:.3}ms", range_time.as_secs_f64() * 1000.0);
+    println!(
+        "Range query (1000 rows): {:.3}ms",
+        range_time.as_secs_f64() * 1000.0
+    );
     println!("=====================================\n");
 
     // Range query should be reasonably fast
@@ -182,7 +222,10 @@ async fn test_100k_rows_aggregation() {
 
     // COUNT aggregation
     let start = Instant::now();
-    let df = ctx.sql("SELECT COUNT(*) as count FROM test_100k_agg").await.unwrap();
+    let df = ctx
+        .sql("SELECT COUNT(*) as count FROM test_100k_agg")
+        .await
+        .unwrap();
     let results = df.collect().await.unwrap();
     let count_time = start.elapsed();
 
@@ -190,18 +233,27 @@ async fn test_100k_rows_aggregation() {
 
     // COUNT with filter (should use learned index)
     let start = Instant::now();
-    let df = ctx.sql("SELECT COUNT(*) as count FROM test_100k_agg WHERE id = 50000").await.unwrap();
+    let df = ctx
+        .sql("SELECT COUNT(*) as count FROM test_100k_agg WHERE id = 50000")
+        .await
+        .unwrap();
     let results = df.collect().await.unwrap();
     let filtered_count_time = start.elapsed();
 
-    println!("COUNT(*) with filter: {:.3}ms", filtered_count_time.as_secs_f64() * 1000.0);
+    println!(
+        "COUNT(*) with filter: {:.3}ms",
+        filtered_count_time.as_secs_f64() * 1000.0
+    );
     println!("=====================================\n");
 
     // Filtered aggregation should be much faster
     let speedup = count_time.as_secs_f64() / filtered_count_time.as_secs_f64();
     println!("Filtered speedup: {:.1}x", speedup);
 
-    assert!(filtered_count_time.as_secs_f64() < 1.0, "Filtered COUNT should be < 1s");
+    assert!(
+        filtered_count_time.as_secs_f64() < 1.0,
+        "Filtered COUNT should be < 1s"
+    );
 }
 
 #[tokio::test]
@@ -214,20 +266,24 @@ async fn test_100k_rows_worst_case_lookup() {
     ctx.register_table("test_100k_worst", table).unwrap();
 
     // Test first, middle, and last positions
-    let positions = vec![
-        (0, "first"),
-        (50_000, "middle"),
-        (99_999, "last"),
-    ];
+    let positions = vec![(0, "first"), (50_000, "middle"), (99_999, "last")];
 
     for (id, label) in positions {
         let start = Instant::now();
-        let df = ctx.sql(&format!("SELECT * FROM test_100k_worst WHERE id = {}", id)).await.unwrap();
+        let df = ctx
+            .sql(&format!("SELECT * FROM test_100k_worst WHERE id = {}", id))
+            .await
+            .unwrap();
         let results = df.collect().await.unwrap();
         let query_time = start.elapsed();
 
         assert_eq!(results[0].num_rows(), 1);
-        println!("{:10} (id={}): {:.3}ms", label, id, query_time.as_secs_f64() * 1000.0);
+        println!(
+            "{:10} (id={}): {:.3}ms",
+            label,
+            id,
+            query_time.as_secs_f64() * 1000.0
+        );
     }
 
     println!("=====================================\n");
@@ -244,12 +300,18 @@ async fn test_500k_rows_validation() {
 
     // Point query
     let start = Instant::now();
-    let df = ctx.sql("SELECT * FROM test_500k WHERE id = 250000").await.unwrap();
+    let df = ctx
+        .sql("SELECT * FROM test_500k WHERE id = 250000")
+        .await
+        .unwrap();
     let results = df.collect().await.unwrap();
     let point_time = start.elapsed();
 
     assert_eq!(results[0].num_rows(), 1);
-    println!("Point query (id=250000): {:.3}ms", point_time.as_secs_f64() * 1000.0);
+    println!(
+        "Point query (id=250000): {:.3}ms",
+        point_time.as_secs_f64() * 1000.0
+    );
 
     // Full scan
     let start = Instant::now();
@@ -257,7 +319,10 @@ async fn test_500k_rows_validation() {
     let results = df.collect().await.unwrap();
     let scan_time = start.elapsed();
 
-    println!("Full scan (COUNT): {:.3}ms", scan_time.as_secs_f64() * 1000.0);
+    println!(
+        "Full scan (COUNT): {:.3}ms",
+        scan_time.as_secs_f64() * 1000.0
+    );
 
     let speedup = scan_time.as_secs_f64() / point_time.as_secs_f64();
     println!("Speedup: {:.1}x", speedup);
@@ -284,12 +349,18 @@ async fn test_1m_rows_ultimate() {
 
     // Point query
     let start = Instant::now();
-    let df = ctx.sql("SELECT * FROM test_1m WHERE id = 500000").await.unwrap();
+    let df = ctx
+        .sql("SELECT * FROM test_1m WHERE id = 500000")
+        .await
+        .unwrap();
     let results = df.collect().await.unwrap();
     let point_time = start.elapsed();
 
     assert_eq!(results[0].num_rows(), 1);
-    println!("Point query (id=500000): {:.3}ms", point_time.as_secs_f64() * 1000.0);
+    println!(
+        "Point query (id=500000): {:.3}ms",
+        point_time.as_secs_f64() * 1000.0
+    );
 
     // Full scan
     let start = Instant::now();
@@ -297,7 +368,10 @@ async fn test_1m_rows_ultimate() {
     let results = df.collect().await.unwrap();
     let scan_time = start.elapsed();
 
-    println!("Full scan (COUNT): {:.3}ms", scan_time.as_secs_f64() * 1000.0);
+    println!(
+        "Full scan (COUNT): {:.3}ms",
+        scan_time.as_secs_f64() * 1000.0
+    );
 
     let speedup = scan_time.as_secs_f64() / point_time.as_secs_f64();
     println!("Speedup: {:.1}x", speedup);
@@ -312,5 +386,8 @@ async fn test_1m_rows_ultimate() {
     }
 
     // On 1M rows, learned index should absolutely dominate
-    assert!(speedup >= 5.0, "Should achieve at least 5x speedup on 1M rows");
+    assert!(
+        speedup >= 5.0,
+        "Should achieve at least 5x speedup on 1M rows"
+    );
 }

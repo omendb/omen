@@ -1,12 +1,16 @@
 //! PostgreSQL wire protocol handlers for OmenDB
 
-use super::encoding::{record_batches_to_query_response};
+use super::encoding::record_batches_to_query_response;
 use async_trait::async_trait;
 use datafusion::prelude::*;
 use pgwire::api::auth::noop::NoopStartupHandler;
-use pgwire::api::auth::{AuthSource, DefaultServerParameterProvider, LoginInfo, Password, StartupHandler};
+use pgwire::api::auth::{
+    AuthSource, DefaultServerParameterProvider, LoginInfo, Password, StartupHandler,
+};
 use pgwire::api::copy::NoopCopyHandler;
-use pgwire::api::query::{SimpleQueryHandler, ExtendedQueryHandler, PlaceholderExtendedQueryHandler};
+use pgwire::api::query::{
+    ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler,
+};
 use pgwire::api::results::{Response, Tag};
 use pgwire::api::{ClientInfo, PgWireHandlerFactory};
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
@@ -67,34 +71,29 @@ impl OmenDbQueryHandler {
         let ctx = self.ctx.read().await;
 
         // Execute query with DataFusion
-        let df = ctx
-            .sql(query)
-            .await
-            .map_err(|e| {
-                error!("DataFusion SQL error: {}", e);
-                PgWireError::UserError(Box::new(ErrorInfo::new(
-                    "ERROR".to_owned(),
-                    "42601".to_owned(),
-                    format!("SQL execution error: {}", e),
-                )))
-            })?;
+        let df = ctx.sql(query).await.map_err(|e| {
+            error!("DataFusion SQL error: {}", e);
+            PgWireError::UserError(Box::new(ErrorInfo::new(
+                "ERROR".to_owned(),
+                "42601".to_owned(),
+                format!("SQL execution error: {}", e),
+            )))
+        })?;
 
         // Collect results into RecordBatches
-        let batches = df
-            .collect()
-            .await
-            .map_err(|e| {
-                error!("DataFusion collect error: {}", e);
-                PgWireError::UserError(Box::new(ErrorInfo::new(
-                    "ERROR".to_owned(),
-                    "XX000".to_owned(),
-                    format!("Query execution error: {}", e),
-                )))
-            })?;
+        let batches = df.collect().await.map_err(|e| {
+            error!("DataFusion collect error: {}", e);
+            PgWireError::UserError(Box::new(ErrorInfo::new(
+                "ERROR".to_owned(),
+                "XX000".to_owned(),
+                format!("Query execution error: {}", e),
+            )))
+        })?;
 
         // Check if this is a DML query (INSERT, UPDATE, DELETE)
         let upper = query.trim().to_uppercase();
-        if upper.starts_with("INSERT") || upper.starts_with("UPDATE") || upper.starts_with("DELETE") {
+        if upper.starts_with("INSERT") || upper.starts_with("UPDATE") || upper.starts_with("DELETE")
+        {
             // For DML queries, count affected rows
             let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
 
@@ -116,7 +115,11 @@ impl OmenDbQueryHandler {
 
 #[async_trait]
 impl SimpleQueryHandler for OmenDbQueryHandler {
-    async fn do_query<'a, 'b: 'a, C>(&'b self, _client: &mut C, query: &'a str) -> PgWireResult<Vec<Response<'a>>>
+    async fn do_query<'a, 'b: 'a, C>(
+        &'b self,
+        _client: &mut C,
+        query: &'a str,
+    ) -> PgWireResult<Vec<Response<'a>>>
     where
         C: ClientInfo + futures::Sink<pgwire::messages::PgWireBackendMessage> + Unpin + Send + Sync,
         C::Error: Debug,

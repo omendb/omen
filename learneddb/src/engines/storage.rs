@@ -1,10 +1,10 @@
 //! Storage engine implementations
 
-use super::{StorageEngine, BatchOp, Result};
-use rocksdb::{DB as RocksDB, Options, WriteBatch};
+use super::{BatchOp, Result, StorageEngine};
+use rocksdb::{Options, WriteBatch, DB as RocksDB};
 use std::collections::BTreeMap;
-use std::sync::RwLock;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 /// RocksDB storage engine
 #[derive(Debug)]
@@ -20,9 +20,7 @@ impl RocksDBEngine {
         opts.set_write_buffer_size(64 * 1024 * 1024);
 
         let db = RocksDB::open(&opts, path)?;
-        Ok(Self {
-            db: Arc::new(db),
-        })
+        Ok(Self { db: Arc::new(db) })
     }
 }
 
@@ -43,7 +41,10 @@ impl StorageEngine for RocksDBEngine {
 
     fn scan(&self, start: &[u8], end: &[u8]) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
         let mut results = Vec::new();
-        let iter = self.db.iterator(rocksdb::IteratorMode::From(start, rocksdb::Direction::Forward));
+        let iter = self.db.iterator(rocksdb::IteratorMode::From(
+            start,
+            rocksdb::Direction::Forward,
+        ));
 
         for item in iter {
             let (key, value) = item?;

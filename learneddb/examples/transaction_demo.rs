@@ -1,7 +1,7 @@
-use learneddb::{OmenDB, IndexType, IsolationLevel};
-use std::time::Instant;
-use std::thread;
+use learneddb::{IndexType, IsolationLevel, OmenDB};
 use std::sync::Arc;
+use std::thread;
+use std::time::Instant;
 
 fn main() -> learneddb::Result<()> {
     println!("🚀 OmenDB Transaction Demo");
@@ -17,7 +17,9 @@ fn main() -> learneddb::Result<()> {
     for i in 0..1000 {
         initial_data.push((i * 2, format!("initial_value_{}", i).into_bytes()));
     }
-    Arc::get_mut(&mut db.clone()).unwrap().bulk_insert(initial_data)?;
+    Arc::get_mut(&mut db.clone())
+        .unwrap()
+        .bulk_insert(initial_data)?;
 
     // Demo 1: Basic transaction commit
     println!("\n✅ Demo 1: Basic Transaction Commit");
@@ -31,7 +33,10 @@ fn main() -> learneddb::Result<()> {
 
     // Read within transaction (read-your-writes)
     match db.txn_get(txn1, 2000)? {
-        Some(val) => println!("Read within txn: key=2000, value={}", String::from_utf8_lossy(&val)),
+        Some(val) => println!(
+            "Read within txn: key=2000, value={}",
+            String::from_utf8_lossy(&val)
+        ),
         None => println!("Key 2000 not found"),
     }
 
@@ -40,7 +45,10 @@ fn main() -> learneddb::Result<()> {
 
     // Verify committed data
     match db.get(2000)? {
-        Some(val) => println!("After commit: key=2000, value={}", String::from_utf8_lossy(&val)),
+        Some(val) => println!(
+            "After commit: key=2000, value={}",
+            String::from_utf8_lossy(&val)
+        ),
         None => println!("Key 2000 not found after commit"),
     }
 
@@ -74,7 +82,9 @@ fn main() -> learneddb::Result<()> {
         println!("Thread 1: Transaction {} started", txn);
 
         // Write data
-        db_clone.txn_put(txn, 4000, b"thread1_data".to_vec()).unwrap();
+        db_clone
+            .txn_put(txn, 4000, b"thread1_data".to_vec())
+            .unwrap();
         println!("Thread 1: Wrote key=4000");
 
         // Sleep to simulate work
@@ -105,7 +115,10 @@ fn main() -> learneddb::Result<()> {
 
         // Now should be able to read
         match db_clone2.txn_get(txn, 4000).unwrap() {
-            Some(val) => println!("Thread 2: ✅ Read committed data: {}", String::from_utf8_lossy(&val)),
+            Some(val) => println!(
+                "Thread 2: ✅ Read committed data: {}",
+                String::from_utf8_lossy(&val)
+            ),
             None => println!("Thread 2: ❌ Cannot read committed data"),
         }
 

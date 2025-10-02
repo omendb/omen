@@ -47,18 +47,30 @@ async fn run_all_tests() {
     // Print detailed results
     println!("\nDetailed Results:");
     for result in &results {
-        let status = if result.success { "✅ PASS" } else { "❌ FAIL" };
-        println!("  {} {}: {:.2}s, {} ops, {} errors",
-                status,
-                result.test_name,
-                result.duration.as_secs_f64(),
-                result.operations_completed,
-                result.errors_encountered);
+        let status = if result.success {
+            "✅ PASS"
+        } else {
+            "❌ FAIL"
+        };
+        println!(
+            "  {} {}: {:.2}s, {} ops, {} errors",
+            status,
+            result.test_name,
+            result.duration.as_secs_f64(),
+            result.operations_completed,
+            result.errors_encountered
+        );
     }
 
     // Performance summary
-    let total_ops = results.iter().map(|r| r.operations_completed).sum::<usize>();
-    let total_duration = results.iter().map(|r| r.duration.as_secs_f64()).sum::<f64>();
+    let total_ops = results
+        .iter()
+        .map(|r| r.operations_completed)
+        .sum::<usize>();
+    let total_duration = results
+        .iter()
+        .map(|r| r.duration.as_secs_f64())
+        .sum::<f64>();
     let overall_throughput = total_ops as f64 / total_duration;
 
     println!("\n📈 Performance Summary:");
@@ -67,15 +79,25 @@ async fn run_all_tests() {
     println!("  Overall Throughput: {:.0} ops/sec", overall_throughput);
 
     // Calculate average performance metrics
-    let avg_insert_rate = results.iter()
+    let avg_insert_rate = results
+        .iter()
         .map(|r| r.performance_metrics.insert_rate)
         .filter(|&rate| rate > 0.0)
-        .sum::<f64>() / results.iter().filter(|r| r.performance_metrics.insert_rate > 0.0).count() as f64;
+        .sum::<f64>()
+        / results
+            .iter()
+            .filter(|r| r.performance_metrics.insert_rate > 0.0)
+            .count() as f64;
 
-    let avg_query_latency = results.iter()
+    let avg_query_latency = results
+        .iter()
         .map(|r| r.performance_metrics.query_latency_avg)
         .filter(|&lat| lat > 0.0)
-        .sum::<f64>() / results.iter().filter(|r| r.performance_metrics.query_latency_avg > 0.0).count() as f64;
+        .sum::<f64>()
+        / results
+            .iter()
+            .filter(|r| r.performance_metrics.query_latency_avg > 0.0)
+            .count() as f64;
 
     if !avg_insert_rate.is_nan() {
         println!("  Average Insert Rate: {:.0} records/sec", avg_insert_rate);
@@ -91,7 +113,10 @@ async fn run_all_tests() {
 }
 
 async fn run_single_test(test_name: &str) {
-    println!("\n🎯 RUNNING SINGLE INTEGRATION TEST: {}", test_name.to_uppercase());
+    println!(
+        "\n🎯 RUNNING SINGLE INTEGRATION TEST: {}",
+        test_name.to_uppercase()
+    );
     println!("═══════════════════════════════════════════════════════════════");
 
     let result = match test_name {
@@ -144,14 +169,25 @@ async fn run_single_test(test_name: &str) {
         // Performance details
         println!("\n📈 Performance Metrics:");
         if result.performance_metrics.insert_rate > 0.0 {
-            println!("  Insert Rate: {:.0} records/sec", result.performance_metrics.insert_rate);
+            println!(
+                "  Insert Rate: {:.0} records/sec",
+                result.performance_metrics.insert_rate
+            );
         }
         if result.performance_metrics.query_latency_avg > 0.0 {
-            println!("  Query Latency (avg): {:.2}ms", result.performance_metrics.query_latency_avg);
-            println!("  Query Latency (P95): {:.2}ms", result.performance_metrics.query_latency_p95);
+            println!(
+                "  Query Latency (avg): {:.2}ms",
+                result.performance_metrics.query_latency_avg
+            );
+            println!(
+                "  Query Latency (P95): {:.2}ms",
+                result.performance_metrics.query_latency_p95
+            );
         }
-        println!("  Memory Usage: {:.1}MB", result.performance_metrics.memory_usage_mb);
-
+        println!(
+            "  Memory Usage: {:.1}MB",
+            result.performance_metrics.memory_usage_mb
+        );
     } else {
         println!("❌ FAILED!");
         println!("⏱️  Duration: {:.2}s", result.duration.as_secs_f64());

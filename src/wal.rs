@@ -1,16 +1,16 @@
 //! Write-Ahead Logging (WAL) for durability and crash recovery
 //! Ensures ACID properties and data persistence
 
+use anyhow::{Context, Result};
+use bincode;
+use chrono::{DateTime, Utc};
+use crc32fast::Hasher;
+use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
-use std::collections::VecDeque;
-use serde::{Serialize, Deserialize};
-use anyhow::{Result, Context};
-use bincode;
-use crc32fast::Hasher;
-use chrono::{DateTime, Utc};
 
 /// WAL operation types
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,34 +19,23 @@ pub enum WalOperation {
     Insert {
         timestamp: i64,
         value: f64,
-        series_id: i64
+        series_id: i64,
     },
     /// Delete a key
-    Delete {
-        timestamp: i64
-    },
+    Delete { timestamp: i64 },
     /// Update an existing value
-    Update {
-        timestamp: i64,
-        new_value: f64
-    },
+    Update { timestamp: i64, new_value: f64 },
     /// Checkpoint marker
     Checkpoint {
         sequence: u64,
-        timestamp: DateTime<Utc>
+        timestamp: DateTime<Utc>,
     },
     /// Transaction begin
-    BeginTxn {
-        txn_id: u64
-    },
+    BeginTxn { txn_id: u64 },
     /// Transaction commit
-    CommitTxn {
-        txn_id: u64
-    },
+    CommitTxn { txn_id: u64 },
     /// Transaction rollback
-    RollbackTxn {
-        txn_id: u64
-    },
+    RollbackTxn { txn_id: u64 },
 }
 
 /// WAL entry with metadata
@@ -110,8 +99,7 @@ impl WalManager {
     /// Create new WAL manager
     pub fn new<P: AsRef<Path>>(wal_dir: P) -> Result<Self> {
         let wal_dir = wal_dir.as_ref().to_path_buf();
-        std::fs::create_dir_all(&wal_dir)
-            .context("Failed to create WAL directory")?;
+        std::fs::create_dir_all(&wal_dir).context("Failed to create WAL directory")?;
 
         Ok(Self {
             wal_dir,
@@ -188,8 +176,7 @@ impl WalManager {
     fn flush_buffer_locked(&self, buffer: &mut VecDeque<WalEntry>) -> Result<()> {
         if let Some(writer) = self.writer.lock().unwrap().as_mut() {
             while let Some(entry) = buffer.pop_front() {
-                let data = bincode::serialize(&entry)
-                    .context("Failed to serialize WAL entry")?;
+                let data = bincode::serialize(&entry).context("Failed to serialize WAL entry")?;
 
                 // Write length prefix
                 let len = data.len() as u32;
@@ -208,7 +195,9 @@ impl WalManager {
         self.flush()?;
 
         if let Some(writer) = self.writer.lock().unwrap().as_mut() {
-            writer.get_mut().sync_all()
+            writer
+                .get_mut()
+                .sync_all()
                 .context("Failed to sync WAL to disk")?;
         }
 
@@ -251,8 +240,7 @@ impl WalManager {
             let current = self.current_wal_path();
             if current.exists() {
                 let archive = self.archive_wal_path();
-                std::fs::rename(&current, &archive)
-                    .context("Failed to archive WAL")?;
+                std::fs::rename(&current, &archive).context("Failed to archive WAL")?;
             }
         }
 
@@ -271,15 +259,14 @@ impl WalManager {
         let wal_files = self.find_wal_files()?;
 
         for wal_path in wal_files {
-            let file = File::open(&wal_path)
-                .context("Failed to open WAL file for recovery")?;
+            let file = File::open(&wal_path).context("Failed to open WAL file for recovery")?;
             let mut reader = BufReader::new(file);
 
             loop {
                 // Read length prefix
                 let mut len_bytes = [0u8; 4];
                 match reader.read_exact(&mut len_bytes) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
                     Err(e) => return Err(e.into()),
                 }
@@ -287,18 +274,19 @@ impl WalManager {
                 let len = u32::from_le_bytes(len_bytes) as usize;
 
                 // Sanity check: WAL entries shouldn't be huge
-                if len > 10_000_000 {  // 10MB max per entry
+                if len > 10_000_000 {
+                    // 10MB max per entry
                     stats.corrupted_entries += 1;
-                    break;  // Rest of file likely corrupted
+                    break; // Rest of file likely corrupted
                 }
 
                 // Read entry data
                 let mut data = vec![0u8; len];
                 match reader.read_exact(&mut data) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(_) => {
                         stats.corrupted_entries += 1;
-                        break;  // Can't continue reading
+                        break; // Can't continue reading
                     }
                 }
 
@@ -371,7 +359,7 @@ impl WalManager {
             // Try to read entry
             let mut len_bytes = [0u8; 4];
             match reader.read_exact(&mut len_bytes) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(_) => break,
             }
 
@@ -379,7 +367,7 @@ impl WalManager {
             let mut data = vec![0u8; len];
 
             match reader.read_exact(&mut data) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(_) => break,
             }
 
@@ -494,7 +482,8 @@ impl Transaction {
 
     /// Commit transaction
     pub fn commit(mut self) -> Result<()> {
-        self.wal.write(WalOperation::CommitTxn { txn_id: self.id })?;
+        self.wal
+            .write(WalOperation::CommitTxn { txn_id: self.id })?;
         self.wal.sync()?;
 
         let mut active = self.manager.active_txns.write().unwrap();
@@ -506,7 +495,8 @@ impl Transaction {
 
     /// Rollback transaction
     pub fn rollback(mut self) -> Result<()> {
-        self.wal.write(WalOperation::RollbackTxn { txn_id: self.id })?;
+        self.wal
+            .write(WalOperation::RollbackTxn { txn_id: self.id })?;
 
         let mut active = self.manager.active_txns.write().unwrap();
         active.retain(|&id| id != self.id);
@@ -520,7 +510,9 @@ impl Drop for Transaction {
     fn drop(&mut self) {
         if !self.committed {
             // Auto-rollback on drop
-            let _ = self.wal.write(WalOperation::RollbackTxn { txn_id: self.id });
+            let _ = self
+                .wal
+                .write(WalOperation::RollbackTxn { txn_id: self.id });
 
             let mut active = self.manager.active_txns.write().unwrap();
             active.retain(|&id| id != self.id);
@@ -540,16 +532,20 @@ mod tests {
         wal.open().unwrap();
 
         // Write operations
-        let seq1 = wal.write(WalOperation::Insert {
-            timestamp: 100,
-            value: 1.5,
-            series_id: 1,
-        }).unwrap();
+        let seq1 = wal
+            .write(WalOperation::Insert {
+                timestamp: 100,
+                value: 1.5,
+                series_id: 1,
+            })
+            .unwrap();
 
-        let seq2 = wal.write(WalOperation::Update {
-            timestamp: 100,
-            new_value: 2.5,
-        }).unwrap();
+        let seq2 = wal
+            .write(WalOperation::Update {
+                timestamp: 100,
+                new_value: 2.5,
+            })
+            .unwrap();
 
         assert_eq!(seq1, 0);
         assert_eq!(seq2, 1);
@@ -571,13 +567,15 @@ mod tests {
                 timestamp: 100,
                 value: 1.5,
                 series_id: 1,
-            }).unwrap();
+            })
+            .unwrap();
 
             wal.write(WalOperation::Insert {
                 timestamp: 200,
                 value: 2.5,
                 series_id: 2,
-            }).unwrap();
+            })
+            .unwrap();
 
             wal.sync().unwrap();
         }
@@ -587,10 +585,12 @@ mod tests {
             let wal = WalManager::new(dir.path()).unwrap();
             let mut recovered = Vec::new();
 
-            let stats = wal.recover(|op| {
-                recovered.push(op.clone());
-                Ok(())
-            }).unwrap();
+            let stats = wal
+                .recover(|op| {
+                    recovered.push(op.clone());
+                    Ok(())
+                })
+                .unwrap();
 
             assert_eq!(stats.total_entries, 2);
             assert_eq!(stats.applied_entries, 2);
@@ -611,7 +611,8 @@ mod tests {
             timestamp: 100,
             value: 1.5,
             series_id: 1,
-        }).unwrap();
+        })
+        .unwrap();
         txn.commit().unwrap();
     }
 
@@ -627,7 +628,8 @@ mod tests {
                 timestamp: i * 100,
                 value: i as f64,
                 series_id: 1,
-            }).unwrap();
+            })
+            .unwrap();
         }
 
         // Create checkpoint
@@ -652,17 +654,15 @@ mod tests {
                 timestamp: 100,
                 value: 1.5,
                 series_id: 1,
-            }).unwrap();
+            })
+            .unwrap();
 
             wal.sync().unwrap();
         }
 
         // Append corrupted data directly
         {
-            let mut file = OpenOptions::new()
-                .append(true)
-                .open(&wal_path)
-                .unwrap();
+            let mut file = OpenOptions::new().append(true).open(&wal_path).unwrap();
 
             // Write invalid length prefix
             file.write_all(&[255, 255, 255, 255]).unwrap();
@@ -674,10 +674,12 @@ mod tests {
             let wal = WalManager::new(dir.path()).unwrap();
             let mut recovered = 0;
 
-            let stats = wal.recover(|_| {
-                recovered += 1;
-                Ok(())
-            }).unwrap();
+            let stats = wal
+                .recover(|_| {
+                    recovered += 1;
+                    Ok(())
+                })
+                .unwrap();
 
             assert_eq!(recovered, 1); // Only valid entry recovered
             assert_eq!(stats.applied_entries, 1);

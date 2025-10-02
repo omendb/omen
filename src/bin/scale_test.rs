@@ -1,7 +1,7 @@
 //! Standalone scale testing executable for OmenDB
 //! Run with: cargo run --release --bin scale_test
 
-use omendb::scale_tests::{run_scale_test, run_concurrent_stress_test, ScaleTestConfig};
+use omendb::scale_tests::{run_concurrent_stress_test, run_scale_test, ScaleTestConfig};
 use std::env;
 use std::time::Instant;
 
@@ -46,9 +46,9 @@ fn run_production_scale_test() {
     let config = ScaleTestConfig {
         target_records: 10_000_000,
         batch_size: 50_000,
-        concurrent_threads: 1, // Single threaded first
+        concurrent_threads: 1,    // Single threaded first
         test_duration_secs: 1800, // 30 minutes max
-        memory_limit_mb: 4096, // 4GB limit
+        memory_limit_mb: 4096,    // 4GB limit
     };
 
     print_config(&config);
@@ -140,21 +140,21 @@ fn main() {
     match test_type {
         "quick" => {
             run_quick_validation();
-        },
+        }
         "production" => {
             run_production_scale_test();
-        },
+        }
         "concurrent" => {
             run_concurrent_scale_test();
-        },
+        }
         "all" => {
             run_quick_validation();
             run_concurrent_scale_test();
             run_production_scale_test();
-        },
+        }
         "help" | "--help" | "-h" => {
             print_usage();
-        },
+        }
         _ => {
             println!("❌ Unknown test type: {}", test_type);
             println!();

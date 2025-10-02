@@ -1,22 +1,20 @@
-use rocksdb::{DB as RocksDB, Options, WriteBatch, IteratorMode};
-use omendb::{LinearIndex, RMIIndex, LearnedIndex};
+use omendb::{LearnedIndex, LinearIndex, RMIIndex};
+use rocksdb::{IteratorMode, Options, WriteBatch, DB as RocksDB};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-mod transaction;
 mod engines;
+mod transaction;
 
 #[cfg(feature = "python")]
 mod python;
 
-pub use transaction::{TransactionManager, TxnId, IsolationLevel};
 pub use engines::{
-    IndexEngine, StorageEngine, ComputeEngine, EngineFactory,
-    LearnedLinearEngine, LearnedRMIEngine, BTreeEngine,
-    RocksDBEngine, InMemoryEngine,
-    RustSIMDEngine, ScalarEngine,
+    BTreeEngine, ComputeEngine, EngineFactory, InMemoryEngine, IndexEngine, LearnedLinearEngine,
+    LearnedRMIEngine, RocksDBEngine, RustSIMDEngine, ScalarEngine, StorageEngine,
 };
+pub use transaction::{IsolationLevel, TransactionManager, TxnId};
 
 // Re-export PyO3 module when Python feature is enabled
 #[cfg(feature = "python")]
@@ -34,10 +32,10 @@ pub struct KeyMetadata {
 /// OmenDB: Standalone learned database with hybrid in-memory + persistent storage
 pub struct OmenDB {
     // Hot path: In-memory data with learned indexes (FAST)
-    hot_data: Vec<(i64, Vec<u8>)>,          // Sorted array for O(1) access
-    hot_linear_index: Option<LinearIndex<usize>>,  // Predicts position in hot_data
-    hot_rmi_index: Option<RMIIndex<usize>>,        // Alternative algorithm
-    hot_capacity: usize,                     // Max items in memory
+    hot_data: Vec<(i64, Vec<u8>)>, // Sorted array for O(1) access
+    hot_linear_index: Option<LinearIndex<usize>>, // Predicts position in hot_data
+    hot_rmi_index: Option<RMIIndex<usize>>, // Alternative algorithm
+    hot_capacity: usize,           // Max items in memory
 
     // Cold path: RocksDB for persistence and overflow (FALLBACK)
     cold_storage: Arc<RocksDB>,
@@ -206,7 +204,10 @@ impl OmenDB {
         for item in iter {
             let (key_bytes, value) = item?;
             let key = i64::from_le_bytes(
-                key_bytes.as_ref().try_into().map_err(|_| "Invalid key format")?
+                key_bytes
+                    .as_ref()
+                    .try_into()
+                    .map_err(|_| "Invalid key format")?,
             );
 
             if key > end_key {
@@ -259,8 +260,12 @@ impl OmenDB {
         // Store hot data in memory for O(1) access
         self.hot_data = hot_slice.to_vec();
 
-        println!("Partitioning {} records: {} hot (in-memory), {} cold (RocksDB)",
-            data.len(), hot_data_size, cold_slice.len());
+        println!(
+            "Partitioning {} records: {} hot (in-memory), {} cold (RocksDB)",
+            data.len(),
+            hot_data_size,
+            cold_slice.len()
+        );
 
         // Store cold data in RocksDB
         if !cold_slice.is_empty() {
@@ -273,7 +278,8 @@ impl OmenDB {
 
         // Train learned index on hot data positions (THIS IS THE KEY!)
         if hot_data_size > 100 && !matches!(self.index_type, IndexType::None) {
-            println!("Training {} learned index on {} hot records...",
+            println!(
+                "Training {} learned index on {} hot records...",
                 match self.index_type {
                     IndexType::Linear => "Linear",
                     IndexType::RMI => "RMI",
@@ -283,7 +289,8 @@ impl OmenDB {
             );
 
             // Create training data: Key -> Position in hot_data array
-            let position_training_data: Vec<(i64, usize)> = self.hot_data
+            let position_training_data: Vec<(i64, usize)> = self
+                .hot_data
                 .iter()
                 .enumerate()
                 .map(|(pos, (key, _))| (*key, pos))
@@ -310,8 +317,11 @@ impl OmenDB {
                             let num_models = index.num_leaf_models();
                             self.hot_rmi_index = Some(index);
                             self.use_learned_index = true;
-                            println!("✅ RMI index trained in {:?} with {} leaf models",
-                                start_time.elapsed(), num_models);
+                            println!(
+                                "✅ RMI index trained in {:?} with {} leaf models",
+                                start_time.elapsed(),
+                                num_models
+                            );
                         }
                         Err(e) => {
                             eprintln!("❌ Failed to train RMI index: {:?}", e);
@@ -324,9 +334,14 @@ impl OmenDB {
             }
         }
 
-        println!("🚀 Bulk insert complete: {} total keys, learned index = {}",
+        println!(
+            "🚀 Bulk insert complete: {} total keys, learned index = {}",
             self.total_keys,
-            if self.use_learned_index { "ACTIVE" } else { "INACTIVE" }
+            if self.use_learned_index {
+                "ACTIVE"
+            } else {
+                "INACTIVE"
+            }
         );
 
         Ok(())
@@ -335,10 +350,14 @@ impl OmenDB {
     /// Rebuild learned indexes for hot data (useful after many updates)
     pub fn rebuild_indexes(&mut self) -> Result<()> {
         if !matches!(self.index_type, IndexType::None) && !self.hot_data.is_empty() {
-            println!("Rebuilding learned indexes for {} hot records...", self.hot_data.len());
+            println!(
+                "Rebuilding learned indexes for {} hot records...",
+                self.hot_data.len()
+            );
 
             // Create training data: Key -> Position in hot_data array
-            let position_training_data: Vec<(i64, usize)> = self.hot_data
+            let position_training_data: Vec<(i64, usize)> = self
+                .hot_data
                 .iter()
                 .enumerate()
                 .map(|(pos, (key, _))| (*key, pos))
@@ -365,8 +384,11 @@ impl OmenDB {
                             let num_models = index.num_leaf_models();
                             self.hot_rmi_index = Some(index);
                             self.use_learned_index = true;
-                            println!("✅ RMI index rebuilt in {:?} with {} leaf models",
-                                start_time.elapsed(), num_models);
+                            println!(
+                                "✅ RMI index rebuilt in {:?} with {} leaf models",
+                                start_time.elapsed(),
+                                num_models
+                            );
                         }
                         Err(e) => {
                             eprintln!("❌ Failed to rebuild RMI index: {:?}", e);
@@ -387,32 +409,42 @@ impl OmenDB {
 
     /// Commit a transaction
     pub fn commit(&self, txn_id: TxnId) -> Result<()> {
-        self.txn_manager.commit(txn_id)
-            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)
+        self.txn_manager.commit(txn_id).map_err(|e| {
+            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
+                as Box<dyn std::error::Error>
+        })
     }
 
     /// Rollback a transaction
     pub fn rollback(&self, txn_id: TxnId) -> Result<()> {
-        self.txn_manager.rollback(txn_id)
-            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)
+        self.txn_manager.rollback(txn_id).map_err(|e| {
+            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
+                as Box<dyn std::error::Error>
+        })
     }
 
     /// Get value within a transaction
     pub fn txn_get(&self, txn_id: TxnId, key: i64) -> Result<Option<Vec<u8>>> {
-        self.txn_manager.get(txn_id, key)
-            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)
+        self.txn_manager.get(txn_id, key).map_err(|e| {
+            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
+                as Box<dyn std::error::Error>
+        })
     }
 
     /// Put value within a transaction
     pub fn txn_put(&self, txn_id: TxnId, key: i64, value: Vec<u8>) -> Result<()> {
-        self.txn_manager.put(txn_id, key, value)
-            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)
+        self.txn_manager.put(txn_id, key, value).map_err(|e| {
+            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
+                as Box<dyn std::error::Error>
+        })
     }
 
     /// Delete value within a transaction
     pub fn txn_delete(&self, txn_id: TxnId, key: i64) -> Result<()> {
-        self.txn_manager.delete(txn_id, key)
-            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)
+        self.txn_manager.delete(txn_id, key).map_err(|e| {
+            Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))
+                as Box<dyn std::error::Error>
+        })
     }
 
     /// Get database statistics
@@ -421,16 +453,23 @@ impl OmenDB {
             IndexType::None => "None (standard B-tree performance)".to_string(),
             IndexType::Linear => {
                 if let Some(ref index) = self.hot_linear_index {
-                    format!("Linear (slope: {:.6}, intercept: {:.2}, max_error: {})",
-                        index.slope(), index.intercept(), index.max_error())
+                    format!(
+                        "Linear (slope: {:.6}, intercept: {:.2}, max_error: {})",
+                        index.slope(),
+                        index.intercept(),
+                        index.max_error()
+                    )
                 } else {
                     "Linear (not trained)".to_string()
                 }
             }
             IndexType::RMI => {
                 if let Some(ref index) = self.hot_rmi_index {
-                    format!("RMI ({} leaf models, max_error: {})",
-                        index.num_leaf_models(), index.max_error())
+                    format!(
+                        "RMI ({} leaf models, max_error: {})",
+                        index.num_leaf_models(),
+                        index.max_error()
+                    )
                 } else {
                     "RMI (not trained)".to_string()
                 }
@@ -445,16 +484,20 @@ impl OmenDB {
 
         let performance_estimate = match &self.index_type {
             IndexType::None => format!("Standard performance ({}% hot data)", hot_percentage),
-            IndexType::Linear => if self.use_learned_index {
-                format!("3-8x faster for hot data ({}% of total)", hot_percentage)
-            } else {
-                "Standard".to_string()
-            },
-            IndexType::RMI => if self.use_learned_index {
-                format!("5-15x faster for hot data ({}% of total)", hot_percentage)
-            } else {
-                "Standard".to_string()
-            },
+            IndexType::Linear => {
+                if self.use_learned_index {
+                    format!("3-8x faster for hot data ({}% of total)", hot_percentage)
+                } else {
+                    "Standard".to_string()
+                }
+            }
+            IndexType::RMI => {
+                if self.use_learned_index {
+                    format!("5-15x faster for hot data ({}% of total)", hot_percentage)
+                } else {
+                    "Standard".to_string()
+                }
+            }
         };
 
         format!(
@@ -473,10 +516,16 @@ impl OmenDB {
              Cold Data Access: Standard RocksDB B-tree traversal\n\
              Optimization Target: Sequential workloads (timestamps, IDs)",
             self.total_keys,
-            self.hot_data.len(), hot_percentage,
-            self.total_keys - self.hot_data.len(), 100.0 - hot_percentage,
+            self.hot_data.len(),
+            hot_percentage,
+            self.total_keys - self.hot_data.len(),
+            100.0 - hot_percentage,
             index_info,
-            if self.use_learned_index { "🟢 ACTIVE" } else { "🔴 INACTIVE" },
+            if self.use_learned_index {
+                "🟢 ACTIVE"
+            } else {
+                "🔴 INACTIVE"
+            },
             performance_estimate
         )
     }
@@ -525,10 +574,14 @@ impl OmenDB {
              \n\
              Learned Index: {}\n\
              Expected vs B-tree: {}",
-            num_queries, lookup_time,
+            num_queries,
+            lookup_time,
             qps,
-            found_count, num_queries, (found_count as f64 / num_queries as f64) * 100.0,
-            range_results.len(), range_time,
+            found_count,
+            num_queries,
+            (found_count as f64 / num_queries as f64) * 100.0,
+            range_results.len(),
+            range_time,
             if range_time.as_secs_f64() > 0.0 {
                 range_results.len() as f64 / range_time.as_secs_f64()
             } else {

@@ -1,11 +1,11 @@
 //! WAL (Write-Ahead Logging) tests for durability
 //! Validates crash recovery and data persistence
 
-use crate::wal::{WalManager, WalOperation, TransactionManager};
-use crate::storage::ArrowStorage;
 use crate::concurrent::ConcurrentOmenDB;
-use tempfile::tempdir;
+use crate::storage::ArrowStorage;
+use crate::wal::{TransactionManager, WalManager, WalOperation};
 use std::sync::Arc;
+use tempfile::tempdir;
 
 #[test]
 fn test_wal_basic_write_and_recovery() {
@@ -14,17 +14,21 @@ fn test_wal_basic_write_and_recovery() {
     wal.open().unwrap();
 
     // Write some operations
-    let seq1 = wal.write(WalOperation::Insert {
-        timestamp: 1000,
-        value: 42.0,
-        series_id: 1,
-    }).unwrap();
+    let seq1 = wal
+        .write(WalOperation::Insert {
+            timestamp: 1000,
+            value: 42.0,
+            series_id: 1,
+        })
+        .unwrap();
 
-    let seq2 = wal.write(WalOperation::Insert {
-        timestamp: 2000,
-        value: 43.0,
-        series_id: 1,
-    }).unwrap();
+    let seq2 = wal
+        .write(WalOperation::Insert {
+            timestamp: 2000,
+            value: 43.0,
+            series_id: 1,
+        })
+        .unwrap();
 
     assert_eq!(seq1, 0);
     assert_eq!(seq2, 1);
@@ -108,7 +112,8 @@ fn test_wal_checkpoint_and_rotation() {
             timestamp: i * 1000,
             value: i as f64,
             series_id: 1,
-        }).unwrap();
+        })
+        .unwrap();
     }
 
     // Create checkpoint
@@ -120,15 +125,18 @@ fn test_wal_checkpoint_and_rotation() {
             timestamp: i * 1000,
             value: i as f64,
             series_id: 1,
-        }).unwrap();
+        })
+        .unwrap();
     }
 
     // Recover and verify all data
     let mut recovered_count = 0;
-    let stats = wal.recover(|_| {
-        recovered_count += 1;
-        Ok(())
-    }).unwrap();
+    let stats = wal
+        .recover(|_| {
+            recovered_count += 1;
+            Ok(())
+        })
+        .unwrap();
 
     assert!(recovered_count >= 50, "Should recover post-checkpoint data");
 }
@@ -148,7 +156,8 @@ fn test_transaction_commit_and_rollback() {
             timestamp: 1000,
             value: 42.0,
             series_id: 1,
-        }).unwrap();
+        })
+        .unwrap();
         txn.commit().unwrap();
     }
 
@@ -159,7 +168,8 @@ fn test_transaction_commit_and_rollback() {
             timestamp: 2000,
             value: 43.0,
             series_id: 2,
-        }).unwrap();
+        })
+        .unwrap();
         txn.rollback().unwrap();
     }
 
@@ -168,7 +178,8 @@ fn test_transaction_commit_and_rollback() {
     wal.recover(|op| {
         operations.push(op.clone());
         Ok(())
-    }).unwrap();
+    })
+    .unwrap();
 
     // Should have begin, insert, commit for first txn
     // And begin, insert, rollback for second txn
@@ -190,7 +201,8 @@ fn test_wal_corruption_handling() {
                 timestamp: i * 1000,
                 value: i as f64,
                 series_id: 1,
-            }).unwrap();
+            })
+            .unwrap();
         }
 
         wal.sync().unwrap();
@@ -215,10 +227,12 @@ fn test_wal_corruption_handling() {
         let wal = WalManager::new(&wal_path).unwrap();
 
         let mut recovered = 0;
-        let stats = wal.recover(|_| {
-            recovered += 1;
-            Ok(())
-        }).unwrap();
+        let stats = wal
+            .recover(|_| {
+                recovered += 1;
+                Ok(())
+            })
+            .unwrap();
 
         // Should recover valid entries before corruption
         assert_eq!(recovered, 10, "Should recover valid entries");
@@ -239,7 +253,8 @@ fn test_wal_cleanup_old_files() {
                 timestamp: (checkpoint * 10 + i) * 1000,
                 value: i as f64,
                 series_id: checkpoint,
-            }).unwrap();
+            })
+            .unwrap();
         }
         wal.checkpoint().unwrap();
     }
@@ -263,11 +278,13 @@ fn test_concurrent_wal_writes() {
 
         let handle = std::thread::spawn(move || {
             for i in 0..100 {
-                wal_clone.write(WalOperation::Insert {
-                    timestamp: (thread_id * 1000 + i) as i64,
-                    value: i as f64,
-                    series_id: thread_id,
-                }).unwrap();
+                wal_clone
+                    .write(WalOperation::Insert {
+                        timestamp: (thread_id * 1000 + i) as i64,
+                        value: i as f64,
+                        series_id: thread_id,
+                    })
+                    .unwrap();
             }
         });
 
@@ -287,7 +304,8 @@ fn test_concurrent_wal_writes() {
     wal.recover(|_| {
         count += 1;
         Ok(())
-    }).unwrap();
+    })
+    .unwrap();
 
     assert_eq!(count, 1000, "Should have all 1000 operations");
 }
@@ -310,7 +328,8 @@ fn test_sustained_wal_operations() {
             timestamp: operations,
             value: operations as f64,
             series_id: 1,
-        }).unwrap();
+        })
+        .unwrap();
 
         operations += 1;
 

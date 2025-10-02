@@ -1,4 +1,4 @@
-use learneddb::{OmenDB, IndexType};
+use learneddb::{IndexType, OmenDB};
 use std::time::Instant;
 
 fn main() -> learneddb::Result<()> {
@@ -55,7 +55,11 @@ fn test_index_type(index_type: IndexType, name: &str) -> learneddb::Result<()> {
     let start = Instant::now();
     let range_results = db.range(1000, 5000)?;
     let range_time = start.elapsed();
-    println!("✅ Range query: {} results in {:?}\n", range_results.len(), range_time);
+    println!(
+        "✅ Range query: {} results in {:?}\n",
+        range_results.len(),
+        range_time
+    );
 
     // Show detailed statistics
     println!("Database Statistics:");

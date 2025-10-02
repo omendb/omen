@@ -3,9 +3,9 @@
 
 use crate::table::Table;
 use crate::table_wal::TableWalManager;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use arrow::datatypes::SchemaRef;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -82,14 +82,20 @@ impl Catalog {
 
         // Validate primary key exists in schema
         if schema.index_of(&primary_key).is_err() {
-            return Err(anyhow!("Primary key column '{}' not found in schema", primary_key));
+            return Err(anyhow!(
+                "Primary key column '{}' not found in schema",
+                primary_key
+            ));
         }
 
         // Validate primary key is orderable type
         let pk_field = schema.field_with_name(&primary_key)?;
         if !crate::value::is_orderable_type(pk_field.data_type()) {
-            return Err(anyhow!("Primary key column '{}' has non-orderable type {:?}",
-                primary_key, pk_field.data_type()));
+            return Err(anyhow!(
+                "Primary key column '{}' has non-orderable type {:?}",
+                primary_key,
+                pk_field.data_type()
+            ));
         }
 
         // Log to WAL before making changes
@@ -113,13 +119,15 @@ impl Catalog {
 
     /// Get reference to table
     pub fn get_table(&self, name: &str) -> Result<&Table> {
-        self.tables.get(name)
+        self.tables
+            .get(name)
             .ok_or_else(|| anyhow!("Table '{}' not found", name))
     }
 
     /// Get mutable reference to table
     pub fn get_table_mut(&mut self, name: &str) -> Result<&mut Table> {
-        self.tables.get_mut(name)
+        self.tables
+            .get_mut(name)
             .ok_or_else(|| anyhow!("Table '{}' not found", name))
     }
 
@@ -162,7 +170,9 @@ impl Catalog {
 
     /// Save catalog metadata to disk
     fn save_metadata(&self) -> Result<()> {
-        let metadata: Vec<TableMetadata> = self.tables.values()
+        let metadata: Vec<TableMetadata> = self
+            .tables
+            .values()
             .map(|table| TableMetadata {
                 name: table.name().to_string(),
                 primary_key: table.primary_key().to_string(),
@@ -217,7 +227,9 @@ mod tests {
             Field::new("name", DataType::Utf8, false),
         ]));
 
-        catalog.create_table("users".to_string(), schema, "id".to_string()).unwrap();
+        catalog
+            .create_table("users".to_string(), schema, "id".to_string())
+            .unwrap();
 
         assert!(catalog.table_exists("users"));
         assert_eq!(catalog.list_tables(), vec!["users"]);
@@ -228,11 +240,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let mut catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
 
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int64, false),
-        ]));
+        let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
 
-        catalog.create_table("users".to_string(), schema.clone(), "id".to_string()).unwrap();
+        catalog
+            .create_table("users".to_string(), schema.clone(), "id".to_string())
+            .unwrap();
 
         // Try to create duplicate
         let result = catalog.create_table("users".to_string(), schema, "id".to_string());
@@ -244,18 +256,15 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let mut catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
 
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int64, false),
-        ]));
+        let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
 
         // Non-existent column
-        let result = catalog.create_table("users".to_string(), schema.clone(), "missing".to_string());
+        let result =
+            catalog.create_table("users".to_string(), schema.clone(), "missing".to_string());
         assert!(result.is_err());
 
         // Non-orderable type
-        let schema2 = Arc::new(Schema::new(vec![
-            Field::new("name", DataType::Utf8, false),
-        ]));
+        let schema2 = Arc::new(Schema::new(vec![Field::new("name", DataType::Utf8, false)]));
         let result = catalog.create_table("users".to_string(), schema2, "name".to_string());
         assert!(result.is_err());
     }
@@ -265,11 +274,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let mut catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
 
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int64, false),
-        ]));
+        let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
 
-        catalog.create_table("users".to_string(), schema, "id".to_string()).unwrap();
+        catalog
+            .create_table("users".to_string(), schema, "id".to_string())
+            .unwrap();
         assert!(catalog.table_exists("users"));
 
         catalog.drop_table("users").unwrap();

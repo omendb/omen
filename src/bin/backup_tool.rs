@@ -1,10 +1,10 @@
 //! OmenDB Backup and Restore CLI Tool
 //! Enterprise-grade backup management with compression and verification
 
-use omendb::backup::{BackupManager, BackupType};
-use anyhow::{Result, Context, bail};
-use std::path::PathBuf;
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
+use omendb::backup::{BackupManager, BackupType};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -96,7 +96,8 @@ async fn main() -> Result<()> {
     match &cli.command {
         Commands::FullBackup { database } => {
             println!("Creating full backup for database: {}", database);
-            let metadata = backup_manager.create_full_backup(database)
+            let metadata = backup_manager
+                .create_full_backup(database)
                 .context("Failed to create full backup")?;
 
             println!("✅ Full backup completed successfully!");
@@ -105,17 +106,25 @@ async fn main() -> Result<()> {
 
         Commands::IncrementalBackup { database } => {
             println!("Creating incremental backup for database: {}", database);
-            let metadata = backup_manager.create_incremental_backup(database)
+            let metadata = backup_manager
+                .create_incremental_backup(database)
                 .context("Failed to create incremental backup")?;
 
             println!("✅ Incremental backup completed successfully!");
             print_backup_info(&metadata);
         }
 
-        Commands::Restore { backup_id, sequence, force } => {
+        Commands::Restore {
+            backup_id,
+            sequence,
+            force,
+        } => {
             if !force {
                 println!("⚠️  WARNING: This will overwrite all existing data!");
-                print!("Are you sure you want to restore from backup {}? (yes/no): ", backup_id);
+                print!(
+                    "Are you sure you want to restore from backup {}? (yes/no): ",
+                    backup_id
+                );
 
                 let mut input = String::new();
                 std::io::stdin().read_line(&mut input)?;
@@ -130,7 +139,8 @@ async fn main() -> Result<()> {
                 println!("Point-in-time recovery to sequence: {}", seq);
             }
 
-            backup_manager.restore_from_backup(backup_id, *sequence)
+            backup_manager
+                .restore_from_backup(backup_id, *sequence)
                 .context("Failed to restore from backup")?;
 
             println!("✅ Restore completed successfully!");
@@ -138,7 +148,8 @@ async fn main() -> Result<()> {
 
         Commands::Verify { backup_id } => {
             println!("Verifying backup: {}", backup_id);
-            let is_valid = backup_manager.verify_backup(backup_id)
+            let is_valid = backup_manager
+                .verify_backup(backup_id)
                 .context("Failed to verify backup")?;
 
             if is_valid {
@@ -153,7 +164,10 @@ async fn main() -> Result<()> {
             let backups = backup_manager.list_backups();
 
             let filtered_backups: Vec<_> = if let Some(db_name) = database {
-                backups.into_iter().filter(|b| b.database_name == *db_name).collect()
+                backups
+                    .into_iter()
+                    .filter(|b| b.database_name == *db_name)
+                    .collect()
             } else {
                 backups
             };
@@ -172,13 +186,17 @@ async fn main() -> Result<()> {
 
         Commands::Chain { backup_id } => {
             println!("Analyzing backup chain for: {}", backup_id);
-            let chain = backup_manager.get_backup_chain(backup_id)
+            let chain = backup_manager
+                .get_backup_chain(backup_id)
                 .context("Failed to get backup chain")?;
 
             print_backup_chain(&chain);
         }
 
-        Commands::Cleanup { retention_days, dry_run } => {
+        Commands::Cleanup {
+            retention_days,
+            dry_run,
+        } => {
             println!("Cleaning up backups older than {} days...", retention_days);
 
             if *dry_run {
@@ -189,7 +207,8 @@ async fn main() -> Result<()> {
                 // TODO: Add dry-run method to BackupManager
                 Vec::new()
             } else {
-                backup_manager.cleanup_old_backups(*retention_days)
+                backup_manager
+                    .cleanup_old_backups(*retention_days)
                     .context("Failed to cleanup old backups")?
             };
 
@@ -213,10 +232,18 @@ fn print_backup_info(metadata: &omendb::backup::BackupMetadata) {
     println!("  ID: {}", metadata.backup_id);
     println!("  Type: {:?}", metadata.backup_type);
     println!("  Database: {}", metadata.database_name);
-    println!("  Created: {}", metadata.created_at.format("%Y-%m-%d %H:%M:%S UTC"));
-    println!("  WAL Range: {} - {}", metadata.wal_sequence_start, metadata.wal_sequence_end);
-    println!("  Size: {} bytes ({} compressed)",
-             metadata.total_size_bytes, metadata.compressed_size_bytes);
+    println!(
+        "  Created: {}",
+        metadata.created_at.format("%Y-%m-%d %H:%M:%S UTC")
+    );
+    println!(
+        "  WAL Range: {} - {}",
+        metadata.wal_sequence_start, metadata.wal_sequence_end
+    );
+    println!(
+        "  Size: {} bytes ({} compressed)",
+        metadata.total_size_bytes, metadata.compressed_size_bytes
+    );
     println!("  Files: {}", metadata.included_files.len());
 
     if let Some(depends_on) = &metadata.depends_on_backup {
@@ -226,7 +253,10 @@ fn print_backup_info(metadata: &omendb::backup::BackupMetadata) {
 
 fn print_simple_backup_list(backups: &[&omendb::backup::BackupMetadata]) {
     println!();
-    println!("{:<30} {:<12} {:<20} {:<20}", "BACKUP ID", "TYPE", "DATABASE", "CREATED");
+    println!(
+        "{:<30} {:<12} {:<20} {:<20}",
+        "BACKUP ID", "TYPE", "DATABASE", "CREATED"
+    );
     println!("{}", "-".repeat(85));
 
     for backup in backups {
@@ -236,11 +266,13 @@ fn print_simple_backup_list(backups: &[&omendb::backup::BackupMetadata]) {
             BackupType::PointInTime { .. } => "Point-in-Time",
         };
 
-        println!("{:<30} {:<12} {:<20} {:<20}",
-                 &backup.backup_id[..backup.backup_id.len().min(30)],
-                 backup_type,
-                 &backup.database_name,
-                 backup.created_at.format("%Y-%m-%d %H:%M:%S"));
+        println!(
+            "{:<30} {:<12} {:<20} {:<20}",
+            &backup.backup_id[..backup.backup_id.len().min(30)],
+            backup_type,
+            &backup.database_name,
+            backup.created_at.format("%Y-%m-%d %H:%M:%S")
+        );
     }
 }
 
@@ -267,9 +299,22 @@ fn print_backup_chain(chain: &[&omendb::backup::BackupMetadata]) {
             BackupType::PointInTime { .. } => "Point-in-Time",
         };
 
-        println!("{}{}. {} [{}]", indent, i + 1, backup.backup_id, backup_type);
-        println!("{}   Created: {}", indent, backup.created_at.format("%Y-%m-%d %H:%M:%S"));
-        println!("{}   WAL: {} - {}", indent, backup.wal_sequence_start, backup.wal_sequence_end);
+        println!(
+            "{}{}. {} [{}]",
+            indent,
+            i + 1,
+            backup.backup_id,
+            backup_type
+        );
+        println!(
+            "{}   Created: {}",
+            indent,
+            backup.created_at.format("%Y-%m-%d %H:%M:%S")
+        );
+        println!(
+            "{}   WAL: {} - {}",
+            indent, backup.wal_sequence_start, backup.wal_sequence_end
+        );
 
         if let Some(depends_on) = &backup.depends_on_backup {
             println!("{}   Depends on: {}", indent, depends_on);
@@ -277,5 +322,8 @@ fn print_backup_chain(chain: &[&omendb::backup::BackupMetadata]) {
     }
 
     println!();
-    println!("To restore this backup, all {} backup(s) in the chain will be applied in order.", chain.len());
+    println!(
+        "To restore this backup, all {} backup(s) in the chain will be applied in order.",
+        chain.len()
+    );
 }

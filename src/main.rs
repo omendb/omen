@@ -51,11 +51,11 @@ impl RecursiveModelIndex {
     fn new(data_size: usize) -> Self {
         // Minimal models for maximum speed
         let num_second_models = if data_size > 1_000_000 {
-            16   // Just 16 models for 1M+ keys
+            16 // Just 16 models for 1M+ keys
         } else if data_size > 100_000 {
-            8    // 8 models for 100K+ keys
+            8 // 8 models for 100K+ keys
         } else {
-            4    // 4 models for smaller datasets
+            4 // 4 models for smaller datasets
         };
 
         Self {
@@ -106,7 +106,7 @@ impl RecursiveModelIndex {
 
         self.root.start_idx = 0;
         self.root.end_idx = n;
-        self.root.max_error = 0;  // No error at root level - direct prediction
+        self.root.max_error = 0; // No error at root level - direct prediction
 
         // Train second layer models
         self.second_layer.clear();
@@ -178,7 +178,7 @@ impl RecursiveModelIndex {
 
         // Minimal error calculation for speed
         let mut max_error = 0;
-        let sample_size = segment.len().min(100);  // Sample only first 100 elements
+        let sample_size = segment.len().min(100); // Sample only first 100 elements
         for (i, (key, _)) in segment.iter().take(sample_size).enumerate() {
             let predicted = (slope * (*key as f64) + intercept).round() as i64;
             let error = (predicted - i as i64).abs() as usize;
@@ -206,21 +206,28 @@ impl RecursiveModelIndex {
         let model = &self.second_layer[model_idx];
 
         // Fast bounds check
-        if model.start_idx >= self.data.len() || model.end_idx > self.data.len() ||
-           key < self.data[model.start_idx].0 || key > self.data[model.end_idx - 1].0 {
-
+        if model.start_idx >= self.data.len()
+            || model.end_idx > self.data.len()
+            || key < self.data[model.start_idx].0
+            || key > self.data[model.end_idx - 1].0
+        {
             // Try adjacent model only if needed
             let adj_idx = if key < self.data[model.start_idx].0 && model_idx > 0 {
                 model_idx - 1
-            } else if key > self.data[model.end_idx - 1].0 && model_idx + 1 < self.second_layer.len() {
+            } else if key > self.data[model.end_idx - 1].0
+                && model_idx + 1 < self.second_layer.len()
+            {
                 model_idx + 1
             } else {
                 return None;
             };
 
             let adj_model = &self.second_layer[adj_idx];
-            if adj_model.start_idx >= self.data.len() || adj_model.end_idx > self.data.len() ||
-               key < self.data[adj_model.start_idx].0 || key > self.data[adj_model.end_idx - 1].0 {
+            if adj_model.start_idx >= self.data.len()
+                || adj_model.end_idx > self.data.len()
+                || key < self.data[adj_model.start_idx].0
+                || key > self.data[adj_model.end_idx - 1].0
+            {
                 return None;
             }
 
@@ -237,11 +244,11 @@ impl RecursiveModelIndex {
             .round()
             .max(0.0) as usize;
 
-        let global_pos = (model.start_idx + predicted_pos)
-            .min(model.end_idx.saturating_sub(1));
+        let global_pos = (model.start_idx + predicted_pos).min(model.end_idx.saturating_sub(1));
 
         // Tiny search window for maximum speed
-        let start = global_pos.saturating_sub(model.max_error)
+        let start = global_pos
+            .saturating_sub(model.max_error)
             .max(model.start_idx);
         let end = (global_pos + model.max_error + 1)
             .min(model.end_idx)
@@ -253,7 +260,8 @@ impl RecursiveModelIndex {
         }
 
         // Minimal binary search
-        if start < end && end - start <= 16 {  // Only search if range is tiny
+        if start < end && end - start <= 16 {
+            // Only search if range is tiny
             let slice = &self.data[start..end];
             match slice.binary_search_by_key(&key, |(k, _)| *k) {
                 Ok(idx) => Some(self.data[start + idx].1),
@@ -393,13 +401,14 @@ impl OptimizedLearnedIndex {
                             .round()
                             .max(0.0) as usize;
 
-                        let local_pos = predicted.min(adj_segment.end_idx - adj_segment.start_idx - 1);
+                        let local_pos =
+                            predicted.min(adj_segment.end_idx - adj_segment.start_idx - 1);
                         let global_pos = adj_segment.start_idx + local_pos;
 
-                        let start = global_pos.saturating_sub(adj_segment.max_error)
+                        let start = global_pos
+                            .saturating_sub(adj_segment.max_error)
                             .max(adj_segment.start_idx);
-                        let end = (global_pos + adj_segment.max_error + 1)
-                            .min(adj_segment.end_idx);
+                        let end = (global_pos + adj_segment.max_error + 1).min(adj_segment.end_idx);
 
                         let slice = &self.data[start..end];
                         if let Ok(idx) = slice.binary_search_by_key(&key, |(k, _)| *k) {
@@ -418,10 +427,10 @@ impl OptimizedLearnedIndex {
         let local_pos = predicted.min(segment.end_idx - segment.start_idx - 1);
         let global_pos = segment.start_idx + local_pos;
 
-        let start = global_pos.saturating_sub(segment.max_error)
+        let start = global_pos
+            .saturating_sub(segment.max_error)
             .max(segment.start_idx);
-        let end = (global_pos + segment.max_error + 1)
-            .min(segment.end_idx);
+        let end = (global_pos + segment.max_error + 1).min(segment.end_idx);
 
         let slice = &self.data[start..end];
         match slice.binary_search_by_key(&key, |(k, _)| *k) {
@@ -486,12 +495,14 @@ impl FastSegmentedIndex {
 
         // Calculate optimal segment size based on data size
         self.segment_size = if n > 1_000_000 {
-            n / 100  // 100 segments for large datasets
+            n / 100 // 100 segments for large datasets
         } else if n > 100_000 {
-            n / 50   // 50 segments for medium datasets
+            n / 50 // 50 segments for medium datasets
         } else {
-            n / 10   // 10 segments for small datasets
-        }.max(100).min(10000);
+            n / 10 // 10 segments for small datasets
+        }
+        .max(100)
+        .min(10000);
 
         let num_segments = (n + self.segment_size - 1) / self.segment_size;
         self.segments.clear();
@@ -604,11 +615,12 @@ impl FastSegmentedIndex {
                     .round()
                     .max(0.0) as usize;
 
-                let global_pos = (segment.start_idx + predicted)
-                    .min(segment.end_idx.saturating_sub(1));
+                let global_pos =
+                    (segment.start_idx + predicted).min(segment.end_idx.saturating_sub(1));
 
                 // Binary search within tight error bounds
-                let start = global_pos.saturating_sub(segment.max_error)
+                let start = global_pos
+                    .saturating_sub(segment.max_error)
                     .max(segment.start_idx);
                 let end = (global_pos + segment.max_error + 1)
                     .min(segment.end_idx)
@@ -618,7 +630,7 @@ impl FastSegmentedIndex {
                     let slice = &self.data[start..end];
                     match slice.binary_search_by_key(&key, |(k, _)| *k) {
                         Ok(idx) => return Some(self.data[start + idx].1),
-                        Err(_) => continue,  // Try next segment
+                        Err(_) => continue, // Try next segment
                     }
                 }
             }
@@ -660,7 +672,7 @@ impl CDFLearnedIndex {
 
         for (i, (key, _)) in self.data.iter().enumerate() {
             let x = *key as f64;
-            let y = i as f64;  // Position in sorted array
+            let y = i as f64; // Position in sorted array
 
             sum_x += x;
             sum_y += y;
@@ -715,7 +727,9 @@ impl CDFLearnedIndex {
         // Check nearby positions for exact match
         for offset in 0..=search_error.min(5) {
             // Check position + offset
-            if predicted_pos + offset < self.data.len() && self.data[predicted_pos + offset].0 == key {
+            if predicted_pos + offset < self.data.len()
+                && self.data[predicted_pos + offset].0 == key
+            {
                 return Some(self.data[predicted_pos + offset].1);
             }
             // Check position - offset
@@ -829,11 +843,11 @@ fn benchmark_all(num_keys: usize) {
     for i in 0..num_keys {
         // Add realistic time gaps (mostly regular, some bursts)
         let gap = if i % 100 == 0 {
-            5000  // Occasional larger gap
+            5000 // Occasional larger gap
         } else if i % 10 == 0 {
-            1500  // Small burst
+            1500 // Small burst
         } else {
-            1000  // Regular interval
+            1000 // Regular interval
         };
 
         current_ts += gap;
@@ -957,18 +971,46 @@ fn benchmark_all(num_keys: usize) {
     let btree_ns = btree_time.as_nanos() as f64 / num_queries as f64;
 
     println!("\n📈 Training Time:");
-    println!("  FastSegmented: {:?} ({} segments)", fast_seg_train_time, fast_seg.segments.len());
+    println!(
+        "  FastSegmented: {:?} ({} segments)",
+        fast_seg_train_time,
+        fast_seg.segments.len()
+    );
     println!("  CDF:           {:?}", cdf_train_time);
     println!("  Linear:        {:?}", linear_train_time);
     println!("  Optimized:     {:?}", opt_train_time);
-    println!("  RMI:           {:?} ({} models)", rmi_train_time, rmi.second_layer.len());
+    println!(
+        "  RMI:           {:?} ({} models)",
+        rmi_train_time,
+        rmi.second_layer.len()
+    );
 
     println!("\n⚡ Lookup Latency:");
-    println!("  FastSegmented: {:.0} ns/op (found: {}%)", fast_seg_ns, fast_seg_found * 100 / num_queries);
-    println!("  CDF:           {:.0} ns/op (found: {}%)", cdf_ns, cdf_found * 100 / num_queries);
-    println!("  Linear:        {:.0} ns/op (found: {}%)", linear_ns, linear_found * 100 / num_queries);
-    println!("  Optimized:     {:.0} ns/op (found: {}%)", opt_ns, opt_found * 100 / num_queries);
-    println!("  RMI:           {:.0} ns/op (found: {}%)", rmi_ns, rmi_found * 100 / num_queries);
+    println!(
+        "  FastSegmented: {:.0} ns/op (found: {}%)",
+        fast_seg_ns,
+        fast_seg_found * 100 / num_queries
+    );
+    println!(
+        "  CDF:           {:.0} ns/op (found: {}%)",
+        cdf_ns,
+        cdf_found * 100 / num_queries
+    );
+    println!(
+        "  Linear:        {:.0} ns/op (found: {}%)",
+        linear_ns,
+        linear_found * 100 / num_queries
+    );
+    println!(
+        "  Optimized:     {:.0} ns/op (found: {}%)",
+        opt_ns,
+        opt_found * 100 / num_queries
+    );
+    println!(
+        "  RMI:           {:.0} ns/op (found: {}%)",
+        rmi_ns,
+        rmi_found * 100 / num_queries
+    );
     println!("  B-tree:        {:.0} ns/op (baseline)", btree_ns);
 
     let fast_seg_speedup = btree_ns / fast_seg_ns;
@@ -978,21 +1020,69 @@ fn benchmark_all(num_keys: usize) {
     let rmi_speedup = btree_ns / rmi_ns;
 
     println!("\n🎯 Speedup vs B-tree:");
-    println!("  FastSegmented: {:.2}x {}",
-             fast_seg_speedup,
-             if fast_seg_speedup > 10.0 { "🚀" } else if fast_seg_speedup > 5.0 { "⭐" } else if fast_seg_speedup > 3.0 { "✅" } else if fast_seg_speedup > 2.0 { "🔶" } else { "⚠️" });
-    println!("  CDF:           {:.2}x {}",
-             cdf_speedup,
-             if cdf_speedup > 10.0 { "🚀" } else if cdf_speedup > 5.0 { "⭐" } else if cdf_speedup > 3.0 { "✅" } else if cdf_speedup > 2.0 { "🔶" } else { "⚠️" });
-    println!("  Linear:        {:.2}x {}",
-             linear_speedup,
-             if linear_speedup > 2.0 { "✅" } else { "⚠️" });
-    println!("  Optimized:     {:.2}x {}",
-             opt_speedup,
-             if opt_speedup > 3.0 { "✅" } else if opt_speedup > 2.0 { "🔶" } else { "⚠️" });
-    println!("  RMI:           {:.2}x {}",
-             rmi_speedup,
-             if rmi_speedup > 5.0 { "🚀" } else if rmi_speedup > 3.0 { "✅" } else if rmi_speedup > 2.0 { "🔶" } else { "⚠️" });
+    println!(
+        "  FastSegmented: {:.2}x {}",
+        fast_seg_speedup,
+        if fast_seg_speedup > 10.0 {
+            "🚀"
+        } else if fast_seg_speedup > 5.0 {
+            "⭐"
+        } else if fast_seg_speedup > 3.0 {
+            "✅"
+        } else if fast_seg_speedup > 2.0 {
+            "🔶"
+        } else {
+            "⚠️"
+        }
+    );
+    println!(
+        "  CDF:           {:.2}x {}",
+        cdf_speedup,
+        if cdf_speedup > 10.0 {
+            "🚀"
+        } else if cdf_speedup > 5.0 {
+            "⭐"
+        } else if cdf_speedup > 3.0 {
+            "✅"
+        } else if cdf_speedup > 2.0 {
+            "🔶"
+        } else {
+            "⚠️"
+        }
+    );
+    println!(
+        "  Linear:        {:.2}x {}",
+        linear_speedup,
+        if linear_speedup > 2.0 {
+            "✅"
+        } else {
+            "⚠️"
+        }
+    );
+    println!(
+        "  Optimized:     {:.2}x {}",
+        opt_speedup,
+        if opt_speedup > 3.0 {
+            "✅"
+        } else if opt_speedup > 2.0 {
+            "🔶"
+        } else {
+            "⚠️"
+        }
+    );
+    println!(
+        "  RMI:           {:.2}x {}",
+        rmi_speedup,
+        if rmi_speedup > 5.0 {
+            "🚀"
+        } else if rmi_speedup > 3.0 {
+            "✅"
+        } else if rmi_speedup > 2.0 {
+            "🔶"
+        } else {
+            "⚠️"
+        }
+    );
 
     if fast_seg_speedup > 10.0 {
         println!("\n🏆 ACHIEVED 10X SPEEDUP WITH FAST SEGMENTED INDEX!");
@@ -1002,7 +1092,8 @@ fn benchmark_all(num_keys: usize) {
         println!("\n🏆 ACHIEVED 10X SPEEDUP WITH RMI!");
     } else if opt_speedup > 10.0 {
         println!("\n🏆 ACHIEVED 10X SPEEDUP WITH OPTIMIZED INDEX!");
-    } else if fast_seg_speedup > 5.0 || cdf_speedup > 5.0 || rmi_speedup > 5.0 || opt_speedup > 5.0 {
+    } else if fast_seg_speedup > 5.0 || cdf_speedup > 5.0 || rmi_speedup > 5.0 || opt_speedup > 5.0
+    {
         println!("\n✨ Achieved >5x speedup! Getting closer to 10x goal.");
     }
 }

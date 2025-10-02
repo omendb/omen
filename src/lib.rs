@@ -2,36 +2,36 @@
 //! Production hardening: concurrency, testing, monitoring
 
 // New architecture (proper multi-table database)
-pub mod value;
-pub mod row;
-pub mod table_storage;
-pub mod table_index;
-pub mod table;
 pub mod catalog;
-pub mod sql_engine;
-pub mod table_wal;
 pub mod connection_pool;
 pub mod logging;
 pub mod mvcc;
+pub mod row;
+pub mod sql_engine;
+pub mod table;
+pub mod table_index;
+pub mod table_storage;
+pub mod table_wal;
+pub mod value;
 
 // Re-exports for common types
+pub use connection_pool::{Connection, ConnectionPool, PoolConfig};
+pub use logging::{init_from_env, init_logging, LogConfig};
 pub use sql_engine::QueryConfig;
-pub use connection_pool::{ConnectionPool, PoolConfig, Connection};
-pub use logging::{LogConfig, init_logging, init_from_env};
 
 // Existing modules (will be refactored)
-pub mod storage;
-pub mod redb_storage;
+pub mod backup;
+pub mod concurrent;
 pub mod datafusion;
 pub mod index;
-pub mod concurrent;
-pub mod wal;
 pub mod metrics;
-pub mod server;
-pub mod security;
-pub mod backup;
 pub mod postgres;
+pub mod redb_storage;
 pub mod rest;
+pub mod security;
+pub mod server;
+pub mod storage;
+pub mod wal;
 
 #[cfg(test)]
 mod tests;
@@ -46,10 +46,10 @@ pub mod integration_tests;
 #[cfg(test)]
 mod multi_table_tests;
 
-use storage::ArrowStorage;
+use crate::metrics::{record_insert, record_insert_failure, record_search, record_search_failure};
 use anyhow::Result;
 use std::time::Instant;
-use crate::metrics::{record_search, record_insert, record_search_failure, record_insert_failure};
+use storage::ArrowStorage;
 
 /// Main OmenDB structure combining learned index and Arrow storage
 pub struct OmenDB {
@@ -129,8 +129,14 @@ impl OmenDB {
         for batch in batches {
             // Extract timestamp and value columns
             if let (Some(timestamps), Some(values)) = (
-                batch.column(0).as_any().downcast_ref::<arrow::array::TimestampMicrosecondArray>(),
-                batch.column(1).as_any().downcast_ref::<arrow::array::Float64Array>()
+                batch
+                    .column(0)
+                    .as_any()
+                    .downcast_ref::<arrow::array::TimestampMicrosecondArray>(),
+                batch
+                    .column(1)
+                    .as_any()
+                    .downcast_ref::<arrow::array::Float64Array>(),
             ) {
                 for i in 0..batch.num_rows() {
                     results.push((timestamps.value(i), values.value(i)));

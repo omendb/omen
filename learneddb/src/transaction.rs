@@ -1,10 +1,10 @@
 //! Transaction support for OmenDB with MVCC (Multi-Version Concurrency Control)
 
-use std::collections::{HashMap, BTreeMap};
+use rocksdb::{WriteBatch, DB as RocksDB};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::SystemTime;
-use rocksdb::{WriteBatch, DB as RocksDB};
 
 /// Transaction ID type
 pub type TxnId = u64;
@@ -121,7 +121,8 @@ impl TransactionManager {
     /// Read a value within a transaction
     pub fn get(&self, txn_id: TxnId, key: i64) -> Result<Option<Vec<u8>>, String> {
         let active_txns = self.active_txns.read().unwrap();
-        let txn = active_txns.get(&txn_id)
+        let txn = active_txns
+            .get(&txn_id)
             .ok_or_else(|| format!("Transaction {} not found", txn_id))?;
 
         if txn.state != TxnState::Active {
@@ -146,11 +147,12 @@ impl TransactionManager {
                     // Read latest version, even uncommitted
                     versions.last()
                 }
-                IsolationLevel::ReadCommitted |
-                IsolationLevel::RepeatableRead |
-                IsolationLevel::Serializable => {
+                IsolationLevel::ReadCommitted
+                | IsolationLevel::RepeatableRead
+                | IsolationLevel::Serializable => {
                     // Read latest committed version before transaction start
-                    versions.iter()
+                    versions
+                        .iter()
                         .rev()
                         .find(|v| v.version <= txn.start_version)
                 }
@@ -160,7 +162,9 @@ impl TransactionManager {
                 if !v.deleted {
                     // Track read for validation
                     drop(active_txns);
-                    self.active_txns.write().unwrap()
+                    self.active_txns
+                        .write()
+                        .unwrap()
                         .get_mut(&txn_id)
                         .unwrap()
                         .read_set
@@ -180,7 +184,8 @@ impl TransactionManager {
     /// Write a value within a transaction
     pub fn put(&self, txn_id: TxnId, key: i64, value: Vec<u8>) -> Result<(), String> {
         let mut active_txns = self.active_txns.write().unwrap();
-        let txn = active_txns.get_mut(&txn_id)
+        let txn = active_txns
+            .get_mut(&txn_id)
             .ok_or_else(|| format!("Transaction {} not found", txn_id))?;
 
         if txn.state != TxnState::Active {
@@ -194,7 +199,8 @@ impl TransactionManager {
     /// Delete a value within a transaction
     pub fn delete(&self, txn_id: TxnId, key: i64) -> Result<(), String> {
         let mut active_txns = self.active_txns.write().unwrap();
-        let txn = active_txns.get_mut(&txn_id)
+        let txn = active_txns
+            .get_mut(&txn_id)
             .ok_or_else(|| format!("Transaction {} not found", txn_id))?;
 
         if txn.state != TxnState::Active {
@@ -208,7 +214,8 @@ impl TransactionManager {
     /// Commit a transaction
     pub fn commit(&self, txn_id: TxnId) -> Result<(), String> {
         let mut active_txns = self.active_txns.write().unwrap();
-        let txn = active_txns.get_mut(&txn_id)
+        let txn = active_txns
+            .get_mut(&txn_id)
             .ok_or_else(|| format!("Transaction {} not found", txn_id))?;
 
         if txn.state != TxnState::Active {
@@ -240,7 +247,8 @@ impl TransactionManager {
                         txn_id,
                         deleted: false,
                     };
-                    version_store.entry(*key)
+                    version_store
+                        .entry(*key)
                         .or_insert_with(Vec::new)
                         .push(versioned);
 
@@ -255,7 +263,8 @@ impl TransactionManager {
                         txn_id,
                         deleted: true,
                     };
-                    version_store.entry(*key)
+                    version_store
+                        .entry(*key)
                         .or_insert_with(Vec::new)
                         .push(versioned);
 
@@ -287,7 +296,8 @@ impl TransactionManager {
     /// Rollback a transaction
     pub fn rollback(&self, txn_id: TxnId) -> Result<(), String> {
         let mut active_txns = self.active_txns.write().unwrap();
-        let txn = active_txns.get_mut(&txn_id)
+        let txn = active_txns
+            .get_mut(&txn_id)
             .ok_or_else(|| format!("Transaction {} not found", txn_id))?;
 
         if txn.state != TxnState::Active {

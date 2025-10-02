@@ -1,9 +1,9 @@
 //! Benchmark to verify learned index speedup with redb backend
 
 use omendb::redb_storage::RedbStorage;
+use std::collections::BTreeMap;
 use std::time::Instant;
 use tempfile::tempdir;
-use std::collections::BTreeMap;
 
 fn main() -> anyhow::Result<()> {
     println!("=== Learned Index + redb Benchmark ===\n");
@@ -30,7 +30,10 @@ fn main() -> anyhow::Result<()> {
 
     let insert_duration = insert_start.elapsed();
     println!("  Insert time: {:?}", insert_duration);
-    println!("  Insert rate: {:.0} keys/sec\n", num_keys as f64 / insert_duration.as_secs_f64());
+    println!(
+        "  Insert rate: {:.0} keys/sec\n",
+        num_keys as f64 / insert_duration.as_secs_f64()
+    );
 
     println!("Phase 2: Point query benchmark (learned index path)");
     let num_queries = 10_000;
@@ -77,11 +80,21 @@ fn main() -> anyhow::Result<()> {
     let results = storage.range_query(1000, 2000)?;
     let range_duration = range_start.elapsed();
 
-    println!("  Range [1000, 2000]: {} results in {:?}", results.len(), range_duration);
-    println!("  Range query rate: {:.0} keys/sec", results.len() as f64 / range_duration.as_secs_f64());
+    println!(
+        "  Range [1000, 2000]: {} results in {:?}",
+        results.len(),
+        range_duration
+    );
+    println!(
+        "  Range query rate: {:.0} keys/sec",
+        results.len() as f64 / range_duration.as_secs_f64()
+    );
 
     println!("\n=== Performance Summary ===");
-    println!("  Point query speedup vs BTreeMap: {:.2}x", btree_avg_us / avg_latency_us);
+    println!(
+        "  Point query speedup vs BTreeMap: {:.2}x",
+        btree_avg_us / avg_latency_us
+    );
     println!("  Total rows in database: {}", storage.count());
 
     if avg_latency_us < 100.0 {

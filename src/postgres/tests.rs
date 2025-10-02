@@ -60,7 +60,8 @@ mod encoding_tests {
         let pg_type = arrow_to_pg_type(&DataType::Timestamp(
             arrow::datatypes::TimeUnit::Microsecond,
             None,
-        )).unwrap();
+        ))
+        .unwrap();
         assert_eq!(pg_type, Type::TIMESTAMP);
     }
 
@@ -84,7 +85,8 @@ mod encoding_tests {
 
     #[test]
     fn test_arrow_to_pg_type_unsupported_falls_back_to_text() {
-        let pg_type = arrow_to_pg_type(&DataType::Duration(arrow::datatypes::TimeUnit::Second)).unwrap();
+        let pg_type =
+            arrow_to_pg_type(&DataType::Duration(arrow::datatypes::TimeUnit::Second)).unwrap();
         assert_eq!(pg_type, Type::TEXT);
     }
 

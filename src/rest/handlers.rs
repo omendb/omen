@@ -57,7 +57,7 @@ pub async fn health() -> Json<HealthResponse> {
 /// Metrics endpoint
 pub async fn metrics() -> Json<MetricsResponse> {
     Json(MetricsResponse {
-        uptime_seconds: 0, // TODO: Track actual uptime
+        uptime_seconds: 0,   // TODO: Track actual uptime
         queries_executed: 0, // TODO: Track query count
     })
 }
@@ -112,11 +112,7 @@ pub async fn query(
     }
 
     let schema = batches[0].schema();
-    let columns: Vec<String> = schema
-        .fields()
-        .iter()
-        .map(|f| f.name().clone())
-        .collect();
+    let columns: Vec<String> = schema.fields().iter().map(|f| f.name().clone()).collect();
 
     let mut all_rows = Vec::new();
     let mut total_rows = 0;

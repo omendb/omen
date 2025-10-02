@@ -1,8 +1,8 @@
 //! Benchmark comparing DataFusion SQL execution vs direct redb API
 
+use datafusion::prelude::*;
 use omendb::datafusion::RedbTable;
 use omendb::redb_storage::RedbStorage;
-use datafusion::prelude::*;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use tempfile::tempdir;
@@ -31,7 +31,10 @@ async fn main() -> anyhow::Result<()> {
     }
     let load_duration = load_start.elapsed();
     println!("  Load time: {:?}", load_duration);
-    println!("  Load rate: {:.0} keys/sec\n", num_keys as f64 / load_duration.as_secs_f64());
+    println!(
+        "  Load rate: {:.0} keys/sec\n",
+        num_keys as f64 / load_duration.as_secs_f64()
+    );
 
     // Wrap storage for DataFusion
     let storage_arc = Arc::new(RwLock::new(storage));
@@ -91,29 +94,44 @@ async fn main() -> anyhow::Result<()> {
     // Benchmark 3: Full scan via SQL
     println!("\nPhase 4: Full scan (SQL COUNT(*))");
     let scan_start = Instant::now();
-    let df = ctx.sql("SELECT COUNT(*) as count FROM benchmark_table").await?;
+    let df = ctx
+        .sql("SELECT COUNT(*) as count FROM benchmark_table")
+        .await?;
     let _results = df.collect().await?;
     let scan_duration = scan_start.elapsed();
 
     println!("  Count query duration: {:?}", scan_duration);
     println!("  Rows scanned: {}", num_keys);
-    println!("  Scan rate: {:.0} rows/sec", num_keys as f64 / scan_duration.as_secs_f64());
+    println!(
+        "  Scan rate: {:.0} rows/sec",
+        num_keys as f64 / scan_duration.as_secs_f64()
+    );
 
     // Benchmark 4: Range query via SQL
     println!("\nPhase 5: Range query (SQL WHERE id BETWEEN)");
     let range_start = Instant::now();
-    let df = ctx.sql("SELECT * FROM benchmark_table WHERE id >= 10000 AND id <= 20000").await?;
+    let df = ctx
+        .sql("SELECT * FROM benchmark_table WHERE id >= 10000 AND id <= 20000")
+        .await?;
     let results = df.collect().await?;
     let range_duration = range_start.elapsed();
 
     let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
-    println!("  Range [10000, 20000]: {} results in {:?}", total_rows, range_duration);
-    println!("  Range scan rate: {:.0} rows/sec", total_rows as f64 / range_duration.as_secs_f64());
+    println!(
+        "  Range [10000, 20000]: {} results in {:?}",
+        total_rows, range_duration
+    );
+    println!(
+        "  Range scan rate: {:.0} rows/sec",
+        total_rows as f64 / range_duration.as_secs_f64()
+    );
 
     // Benchmark 5: Projection query
     println!("\nPhase 6: Projection (SELECT id only)");
     let proj_start = Instant::now();
-    let df = ctx.sql("SELECT id FROM benchmark_table WHERE id = 50000").await?;
+    let df = ctx
+        .sql("SELECT id FROM benchmark_table WHERE id = 50000")
+        .await?;
     let results = df.collect().await?;
     let proj_duration = proj_start.elapsed();
 
@@ -123,13 +141,22 @@ async fn main() -> anyhow::Result<()> {
     // Summary
     println!("\n=== Performance Summary ===");
     println!("Point Query Comparison:");
-    println!("  SQL via DataFusion: {:.2} µs ({:.0} qps)", sql_avg_us, sql_qps);
-    println!("  Direct redb API:    {:.2} µs ({:.0} qps)", direct_avg_us, direct_qps);
+    println!(
+        "  SQL via DataFusion: {:.2} µs ({:.0} qps)",
+        sql_avg_us, sql_qps
+    );
+    println!(
+        "  Direct redb API:    {:.2} µs ({:.0} qps)",
+        direct_avg_us, direct_qps
+    );
     println!("  Overhead factor:    {:.2}x", sql_avg_us / direct_avg_us);
 
     println!("\nSQL Query Performance:");
     println!("  Point query:  {:.2} µs", sql_avg_us);
-    println!("  Range query:  {:?} for {} rows", range_duration, total_rows);
+    println!(
+        "  Range query:  {:?} for {} rows",
+        range_duration, total_rows
+    );
     println!("  Full scan:    {:?} for {} rows", scan_duration, num_keys);
     println!("  Projection:   {:?}", proj_duration);
 

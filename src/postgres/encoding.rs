@@ -218,5 +218,7 @@ pub fn record_batches_to_query_response<'a>(
     }
 
     let stream = stream::iter(all_rows);
-    Ok(vec![Response::Query(QueryResponse::new(schema_arc, stream))])
+    Ok(vec![Response::Query(QueryResponse::new(
+        schema_arc, stream,
+    ))])
 }

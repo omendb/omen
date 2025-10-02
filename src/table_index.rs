@@ -3,7 +3,7 @@
 
 use crate::index::RecursiveModelIndex;
 use crate::value::Value;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 
 /// Generic index over any orderable column type
 #[derive(Debug)]
@@ -33,7 +33,10 @@ impl TableIndex {
         let key_i64 = key.to_i64()?;
 
         // Find insertion point using binary search to maintain sorted order
-        let insert_idx = match self.key_to_position.binary_search_by_key(&key_i64, |(k, _)| *k) {
+        let insert_idx = match self
+            .key_to_position
+            .binary_search_by_key(&key_i64, |(k, _)| *k)
+        {
             Ok(idx) => {
                 // Key already exists - update position
                 self.key_to_position[idx] = (key_i64, position);
@@ -65,7 +68,10 @@ impl TableIndex {
         // Retrain if needed before search
         if self.needs_retrain {
             // Can't mutate in search, so fall back to binary search
-            match self.key_to_position.binary_search_by_key(&key_i64, |(k, _)| *k) {
+            match self
+                .key_to_position
+                .binary_search_by_key(&key_i64, |(k, _)| *k)
+            {
                 Ok(idx) => return Ok(Some(self.key_to_position[idx].1)),
                 Err(_) => return Ok(None),
             }
@@ -92,7 +98,10 @@ impl TableIndex {
         }
 
         // Fallback: full binary search on entire array
-        match self.key_to_position.binary_search_by_key(&key_i64, |(k, _)| *k) {
+        match self
+            .key_to_position
+            .binary_search_by_key(&key_i64, |(k, _)| *k)
+        {
             Ok(idx) => Ok(Some(self.key_to_position[idx].1)),
             Err(_) => Ok(None),
         }
@@ -108,11 +117,13 @@ impl TableIndex {
         }
 
         // Since key_to_position is sorted, use binary search to find range bounds
-        let start_idx = self.key_to_position
+        let start_idx = self
+            .key_to_position
             .binary_search_by_key(&start_i64, |(k, _)| *k)
             .unwrap_or_else(|idx| idx);
 
-        let end_idx = self.key_to_position
+        let end_idx = self
+            .key_to_position
             .binary_search_by_key(&end_i64, |(k, _)| *k)
             .map(|idx| idx + 1) // Include the end key if found
             .unwrap_or_else(|idx| idx);
@@ -139,7 +150,8 @@ impl TableIndex {
     /// Internal retraining that's called during insert
     fn retrain_internal(&mut self) {
         // Build training data: (key, index_in_array) pairs
-        let training_data: Vec<(i64, usize)> = self.key_to_position
+        let training_data: Vec<(i64, usize)> = self
+            .key_to_position
             .iter()
             .enumerate()
             .map(|(idx, (key, _row_pos))| (*key, idx))
@@ -199,7 +211,9 @@ mod tests {
         }
 
         // Range query [20, 50]
-        let results = index.range_query(&Value::Int64(20), &Value::Int64(50)).unwrap();
+        let results = index
+            .range_query(&Value::Int64(20), &Value::Int64(50))
+            .unwrap();
         assert_eq!(results.len(), 4); // 20, 30, 40, 50
     }
 

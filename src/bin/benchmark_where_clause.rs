@@ -1,11 +1,11 @@
 //! WHERE Clause Performance Benchmark
 //! Validates that learned index optimization actually provides speedup
 
+use anyhow::Result;
 use omendb::catalog::Catalog;
-use omendb::sql_engine::{SqlEngine, ExecutionResult};
+use omendb::sql_engine::{ExecutionResult, SqlEngine};
 use std::time::Instant;
 use tempfile::TempDir;
-use anyhow::Result;
 
 fn main() -> Result<()> {
     println!("🔬 WHERE Clause Performance Benchmark");
@@ -23,7 +23,7 @@ fn main() -> Result<()> {
             id BIGINT PRIMARY KEY,
             value DOUBLE,
             category VARCHAR(50)
-        )"
+        )",
     )?;
 
     // Insert 100K rows (sequential keys - optimal for learned index)
@@ -80,7 +80,10 @@ fn main() -> Result<()> {
     let large_range_time = start.elapsed();
 
     if let ExecutionResult::Selected { rows, .. } = result {
-        println!("  Range [10000, 15000]: {} rows in {:?}", rows, large_range_time);
+        println!(
+            "  Range [10000, 15000]: {} rows in {:?}",
+            rows, large_range_time
+        );
     }
     println!();
 
@@ -119,7 +122,10 @@ fn main() -> Result<()> {
     let scan_time = start.elapsed();
 
     if let ExecutionResult::Selected { rows, .. } = result {
-        println!("  category = 'category_5': {} rows in {:?}", rows, scan_time);
+        println!(
+            "  category = 'category_5': {} rows in {:?}",
+            rows, scan_time
+        );
     }
     println!();
 

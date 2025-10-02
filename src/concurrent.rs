@@ -1,12 +1,12 @@
 //! Concurrency support for production OmenDB with durability
 //! Thread-safe wrappers with read-write locking and WAL integration
 
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::path::Path;
-use anyhow::{Result, Context};
 use crate::index::RecursiveModelIndex;
 use crate::storage::ArrowStorage;
+use anyhow::{Context, Result};
+use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Thread-safe OmenDB with concurrent access support
 pub struct ConcurrentOmenDB {
@@ -53,25 +53,29 @@ impl ConcurrentOmenDB {
 
     /// Get read access to index
     pub fn read_index(&self) -> Result<RwLockReadGuard<RecursiveModelIndex>> {
-        self.index.read()
+        self.index
+            .read()
             .map_err(|e| anyhow::anyhow!("Failed to acquire read lock: {}", e))
     }
 
     /// Get write access to index
     pub fn write_index(&self) -> Result<RwLockWriteGuard<RecursiveModelIndex>> {
-        self.index.write()
+        self.index
+            .write()
             .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))
     }
 
     /// Get read access to storage
     pub fn read_storage(&self) -> Result<RwLockReadGuard<ArrowStorage>> {
-        self.storage.read()
+        self.storage
+            .read()
             .map_err(|e| anyhow::anyhow!("Failed to acquire storage read lock: {}", e))
     }
 
     /// Get write access to storage
     pub fn write_storage(&self) -> Result<RwLockWriteGuard<ArrowStorage>> {
-        self.storage.write()
+        self.storage
+            .write()
             .map_err(|e| anyhow::anyhow!("Failed to acquire storage write lock: {}", e))
     }
 
@@ -281,9 +285,7 @@ mod tests {
 
         // Train index
         {
-            let data: Vec<(i64, usize)> = (0..1000)
-                .map(|i| (i as i64 * 10, i))
-                .collect();
+            let data: Vec<(i64, usize)> = (0..1000).map(|i| (i as i64 * 10, i)).collect();
             let mut index = db.write_index().unwrap();
             index.train(data);
         }

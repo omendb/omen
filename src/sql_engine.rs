@@ -5,18 +5,18 @@ use crate::catalog::Catalog;
 use crate::metrics::{record_sql_query, record_sql_query_error};
 use crate::row::Row;
 use crate::value::Value;
-use crate::wal::{TransactionManager, Transaction, WalManager};
-use anyhow::{Result, anyhow};
+use crate::wal::{Transaction, TransactionManager, WalManager};
+use anyhow::{anyhow, Result};
 use arrow::datatypes::{DataType, Field, Schema};
 use sqlparser::ast::{
-    ColumnDef, DataType as SqlDataType, Expr, ObjectName, OrderByExpr, Query, Select,
-    SelectItem, SetExpr, Statement, TableFactor, TableWithJoins, Values,
+    ColumnDef, DataType as SqlDataType, Expr, ObjectName, OrderByExpr, Query, Select, SelectItem,
+    SetExpr, Statement, TableFactor, TableWithJoins, Values,
 };
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tracing::{debug, error, info, warn, instrument, span, Level};
+use tracing::{debug, error, info, instrument, span, warn, Level};
 
 /// Configuration for SQL engine execution
 #[derive(Clone, Debug)]
@@ -110,7 +110,10 @@ impl SqlEngine {
         }
 
         if statements.len() > 1 {
-            warn!(count = statements.len(), "Multiple statements not supported");
+            warn!(
+                count = statements.len(),
+                "Multiple statements not supported"
+            );
             record_sql_query_error("multiple_statements");
             return Err(anyhow!("Multiple statements not supported"));
         }
@@ -146,11 +149,15 @@ impl SqlEngine {
             }
             Statement::Update { .. } => {
                 warn!("UPDATE not yet implemented in current engine (will be available in DataFusion migration)");
-                Err(anyhow!("UPDATE statement not yet implemented - coming soon with DataFusion"))
+                Err(anyhow!(
+                    "UPDATE statement not yet implemented - coming soon with DataFusion"
+                ))
             }
             Statement::Delete { .. } => {
                 warn!("DELETE not yet implemented in current engine (will be available in DataFusion migration)");
-                Err(anyhow!("DELETE statement not yet implemented - coming soon with DataFusion"))
+                Err(anyhow!(
+                    "DELETE statement not yet implemented - coming soon with DataFusion"
+                ))
             }
             Statement::Query(query) => {
                 debug!("Executing SELECT query");
@@ -217,13 +224,16 @@ impl SqlEngine {
     /// Begin a new transaction
     fn begin_transaction(&self) -> Result<ExecutionResult> {
         // Check if transactions are enabled
-        let tx_manager = self.transaction_manager.as_ref()
-            .ok_or_else(|| anyhow!("Transactions not enabled. Use SqlEngine::with_transactions()"))?;
+        let tx_manager = self.transaction_manager.as_ref().ok_or_else(|| {
+            anyhow!("Transactions not enabled. Use SqlEngine::with_transactions()")
+        })?;
 
         // Check if there's already an active transaction
         let mut current_tx = self.current_transaction.lock().unwrap();
         if current_tx.is_some() {
-            return Err(anyhow!("Transaction already in progress. Commit or rollback first."));
+            return Err(anyhow!(
+                "Transaction already in progress. Commit or rollback first."
+            ));
         }
 
         // Begin new transaction
@@ -240,7 +250,8 @@ impl SqlEngine {
     fn commit_transaction(&self) -> Result<ExecutionResult> {
         let mut current_tx = self.current_transaction.lock().unwrap();
 
-        let transaction = current_tx.take()
+        let transaction = current_tx
+            .take()
             .ok_or_else(|| anyhow!("No active transaction to commit"))?;
 
         let txn_id = transaction.id();
@@ -255,7 +266,8 @@ impl SqlEngine {
     fn rollback_transaction(&self) -> Result<ExecutionResult> {
         let mut current_tx = self.current_transaction.lock().unwrap();
 
-        let transaction = current_tx.take()
+        let transaction = current_tx
+            .take()
             .ok_or_else(|| anyhow!("No active transaction to rollback"))?;
 
         let txn_id = transaction.id();
@@ -267,7 +279,11 @@ impl SqlEngine {
     }
 
     /// Execute CREATE TABLE statement
-    fn execute_create_table(&mut self, name: &ObjectName, columns: &[ColumnDef]) -> Result<ExecutionResult> {
+    fn execute_create_table(
+        &mut self,
+        name: &ObjectName,
+        columns: &[ColumnDef],
+    ) -> Result<ExecutionResult> {
         let table_name = Self::extract_table_name(name)?;
 
         // Extract columns
@@ -277,14 +293,17 @@ impl SqlEngine {
         for column in columns {
             let field_name = column.name.value.clone();
             let data_type = Self::sql_type_to_arrow(&column.data_type)?;
-            let nullable = !column.options.iter().any(|opt| {
-                matches!(opt.option, sqlparser::ast::ColumnOption::NotNull)
-            });
+            let nullable = !column
+                .options
+                .iter()
+                .any(|opt| matches!(opt.option, sqlparser::ast::ColumnOption::NotNull));
 
             // Check if this is the primary key
-            if column.options.iter().any(|opt| {
-                matches!(&opt.option, sqlparser::ast::ColumnOption::Unique { .. })
-            }) {
+            if column
+                .options
+                .iter()
+                .any(|opt| matches!(&opt.option, sqlparser::ast::ColumnOption::Unique { .. }))
+            {
                 primary_key = Some(field_name.clone());
             }
 
@@ -292,12 +311,11 @@ impl SqlEngine {
         }
 
         // Default to first column as primary key if not specified
-        let primary_key = primary_key.unwrap_or_else(|| {
-            fields[0].name().clone()
-        });
+        let primary_key = primary_key.unwrap_or_else(|| fields[0].name().clone());
 
         let schema = Arc::new(Schema::new(fields));
-        self.catalog.create_table(table_name.clone(), schema, primary_key)?;
+        self.catalog
+            .create_table(table_name.clone(), schema, primary_key)?;
 
         Ok(ExecutionResult::Created {
             message: format!("Table '{}' created", table_name),
@@ -305,13 +323,19 @@ impl SqlEngine {
     }
 
     /// Execute INSERT statement
-    fn execute_insert(&mut self, table_name: &ObjectName, source: &Option<Box<Query>>) -> Result<ExecutionResult> {
+    fn execute_insert(
+        &mut self,
+        table_name: &ObjectName,
+        source: &Option<Box<Query>>,
+    ) -> Result<ExecutionResult> {
         let table_name = Self::extract_table_name(table_name)?;
         let table = self.catalog.get_table_mut(&table_name)?;
         let schema = table.schema().clone();
 
         // Extract values
-        let source = source.as_ref().ok_or_else(|| anyhow!("No source for INSERT"))?;
+        let source = source
+            .as_ref()
+            .ok_or_else(|| anyhow!("No source for INSERT"))?;
 
         let rows_inserted = match source.body.as_ref() {
             SetExpr::Values(Values { rows, .. }) => {
@@ -337,12 +361,18 @@ impl SqlEngine {
             _ => return Err(anyhow!("Only VALUES clause supported for INSERT")),
         };
 
-        Ok(ExecutionResult::Inserted { rows: rows_inserted })
+        Ok(ExecutionResult::Inserted {
+            rows: rows_inserted,
+        })
     }
 
     /// Execute SELECT query
     /// Execute SELECT query with timeout and resource limits
-    fn execute_query_with_limits(&self, query: &Query, start_time: Instant) -> Result<ExecutionResult> {
+    fn execute_query_with_limits(
+        &self,
+        query: &Query,
+        start_time: Instant,
+    ) -> Result<ExecutionResult> {
         // Check timeout before query execution
         self.check_timeout(start_time)?;
 
@@ -364,7 +394,12 @@ impl SqlEngine {
             if let sqlparser::ast::Offset { value, .. } = offset_expr {
                 if let Expr::Value(sqlparser::ast::Value::Number(n, _)) = value {
                     let offset: usize = n.parse()?;
-                    if let ExecutionResult::Selected { columns, rows, mut data } = result {
+                    if let ExecutionResult::Selected {
+                        columns,
+                        rows,
+                        mut data,
+                    } = result
+                    {
                         if offset < data.len() {
                             data = data.into_iter().skip(offset).collect();
                         } else {
@@ -384,7 +419,12 @@ impl SqlEngine {
         if let Some(limit_expr) = &query.limit {
             if let Expr::Value(sqlparser::ast::Value::Number(n, _)) = limit_expr {
                 let limit: usize = n.parse()?;
-                if let ExecutionResult::Selected { columns, rows, mut data } = result {
+                if let ExecutionResult::Selected {
+                    columns,
+                    rows,
+                    mut data,
+                } = result
+                {
                     data.truncate(limit);
                     result = ExecutionResult::Selected {
                         columns,
@@ -396,14 +436,23 @@ impl SqlEngine {
         }
 
         // Enforce maximum row limit
-        if let ExecutionResult::Selected { columns, rows, mut data } = result {
+        if let ExecutionResult::Selected {
+            columns,
+            rows,
+            mut data,
+        } = result
+        {
             if data.len() > self.config.max_rows {
                 return Err(anyhow!(
                     "Query result exceeds maximum row limit ({} rows). Use LIMIT clause to restrict results.",
                     self.config.max_rows
                 ));
             }
-            result = ExecutionResult::Selected { columns, rows, data };
+            result = ExecutionResult::Selected {
+                columns,
+                rows,
+                data,
+            };
         }
 
         Ok(result)
@@ -437,9 +486,10 @@ impl SqlEngine {
         };
 
         // Check if this is an aggregate query
-        let has_aggregates = select.projection.iter().any(|item| {
-            matches!(item, SelectItem::UnnamedExpr(Expr::Function(_)))
-        });
+        let has_aggregates = select
+            .projection
+            .iter()
+            .any(|item| matches!(item, SelectItem::UnnamedExpr(Expr::Function(_))));
 
         if has_aggregates {
             // Handle aggregate query
@@ -453,22 +503,23 @@ impl SqlEngine {
 
         // Extract column names to return
         let column_names: Vec<String> = match &select.projection[0] {
-            SelectItem::Wildcard(_) => {
-                table.schema().fields().iter()
-                    .map(|f| f.name().clone())
-                    .collect()
-            }
-            _ => {
-                select.projection.iter()
-                    .filter_map(|item| {
-                        if let SelectItem::UnnamedExpr(Expr::Identifier(ident)) = item {
-                            Some(ident.value.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            }
+            SelectItem::Wildcard(_) => table
+                .schema()
+                .fields()
+                .iter()
+                .map(|f| f.name().clone())
+                .collect(),
+            _ => select
+                .projection
+                .iter()
+                .filter_map(|item| {
+                    if let SelectItem::UnnamedExpr(Expr::Identifier(ident)) = item {
+                        Some(ident.value.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
         };
 
         Ok(ExecutionResult::Selected {
@@ -491,17 +542,16 @@ impl SqlEngine {
 
         // Parse GROUP BY columns
         let group_by_cols: Vec<String> = match group_by {
-            sqlparser::ast::GroupByExpr::Expressions(exprs, _) => {
-                exprs.iter()
-                    .filter_map(|expr| {
-                        if let Expr::Identifier(ident) = expr {
-                            Some(ident.value.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            }
+            sqlparser::ast::GroupByExpr::Expressions(exprs, _) => exprs
+                .iter()
+                .filter_map(|expr| {
+                    if let Expr::Identifier(ident) = expr {
+                        Some(ident.value.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
             sqlparser::ast::GroupByExpr::All(_) => Vec::new(),
         };
 
@@ -521,7 +571,9 @@ impl SqlEngine {
                     key_values.push(val);
                 }
 
-                let entry = groups.entry(key_str).or_insert_with(|| (key_values.clone(), Vec::new()));
+                let entry = groups
+                    .entry(key_str)
+                    .or_insert_with(|| (key_values.clone(), Vec::new()));
                 entry.1.push(row);
             }
             groups
@@ -562,7 +614,8 @@ impl SqlEngine {
                                 }
                                 _ => "column",
                             };
-                            column_names.push(format!("{}({})",
+                            column_names.push(format!(
+                                "{}({})",
                                 func.name.0[0].value.to_uppercase(),
                                 arg_desc
                             ));
@@ -607,13 +660,19 @@ impl SqlEngine {
                     _ => return Err(anyhow!("Invalid function arguments")),
                 };
 
-                if args.is_empty() || matches!(&args[0], FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Wildcard)) {
+                if args.is_empty()
+                    || matches!(
+                        &args[0],
+                        FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Wildcard)
+                    )
+                {
                     // COUNT(*) or COUNT()
                     Ok(Value::Int64(rows.len() as i64))
                 } else {
                     // COUNT(column) - count non-null values
                     let col_idx = self.extract_column_index(&args[0], table)?;
-                    let count = rows.iter()
+                    let count = rows
+                        .iter()
                         .filter(|row| !matches!(row.get(col_idx), Ok(Value::Null)))
                         .count();
                     Ok(Value::Int64(count as i64))
@@ -727,9 +786,9 @@ impl SqlEngine {
         use sqlparser::ast::FunctionArg;
 
         match arg {
-            FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(Expr::Identifier(ident))) => {
-                Ok(table.schema().index_of(&ident.value)?)
-            }
+            FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(Expr::Identifier(
+                ident,
+            ))) => Ok(table.schema().index_of(&ident.value)?),
             _ => Err(anyhow!("Aggregate function requires column name")),
         }
     }
@@ -761,13 +820,11 @@ impl SqlEngine {
             let val_b = b.get(column_idx).ok();
 
             let cmp = match (val_a, val_b) {
-                (Some(a), Some(b)) => {
-                    match Self::compare_values(a, b) {
-                        Ok(c) if c < 0 => std::cmp::Ordering::Less,
-                        Ok(c) if c > 0 => std::cmp::Ordering::Greater,
-                        _ => std::cmp::Ordering::Equal,
-                    }
-                }
+                (Some(a), Some(b)) => match Self::compare_values(a, b) {
+                    Ok(c) if c < 0 => std::cmp::Ordering::Less,
+                    Ok(c) if c > 0 => std::cmp::Ordering::Greater,
+                    _ => std::cmp::Ordering::Equal,
+                },
                 (Some(_), None) => std::cmp::Ordering::Greater,
                 (None, Some(_)) => std::cmp::Ordering::Less,
                 (None, None) => std::cmp::Ordering::Equal,
@@ -792,7 +849,10 @@ impl SqlEngine {
             Expr::BinaryOp { left, op, right } if matches!(op, BinaryOperator::Eq) => {
                 if let (Expr::Identifier(col), Expr::Value(val)) = (left.as_ref(), right.as_ref()) {
                     if col.value == table.primary_key() {
-                        let value = Self::sql_value_to_value(val, table.schema().field_with_name(&col.value)?.data_type())?;
+                        let value = Self::sql_value_to_value(
+                            val,
+                            table.schema().field_with_name(&col.value)?.data_type(),
+                        )?;
                         if let Some(row) = table.get(&value)? {
                             return Ok(vec![row]);
                         } else {
@@ -805,14 +865,28 @@ impl SqlEngine {
             }
 
             // Range query: WHERE id > 10 AND id < 20 (use learned index range query)
-            Expr::BinaryOp { left, op: BinaryOperator::And, right } => {
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::And,
+                right,
+            } => {
                 // Try to extract range bounds with operator info
-                if let (Some((col, start_val, start_inclusive)), Some((col2, end_val, end_inclusive))) =
-                    (Self::extract_range_with_op(left), Self::extract_range_with_op(right)) {
-
+                if let (
+                    Some((col, start_val, start_inclusive)),
+                    Some((col2, end_val, end_inclusive)),
+                ) = (
+                    Self::extract_range_with_op(left),
+                    Self::extract_range_with_op(right),
+                ) {
                     if col == col2 && col == table.primary_key() {
-                        let start = Self::sql_value_to_value(&start_val, table.schema().field_with_name(&col)?.data_type())?;
-                        let end = Self::sql_value_to_value(&end_val, table.schema().field_with_name(&col)?.data_type())?;
+                        let start = Self::sql_value_to_value(
+                            &start_val,
+                            table.schema().field_with_name(&col)?.data_type(),
+                        )?;
+                        let end = Self::sql_value_to_value(
+                            &end_val,
+                            table.schema().field_with_name(&col)?.data_type(),
+                        )?;
 
                         // Get range (inclusive), then filter for exclusive bounds
                         let mut rows = table.range_query(&start, &end)?;
@@ -838,19 +912,22 @@ impl SqlEngine {
             }
 
             // Greater than: WHERE id > 10 or WHERE id >= 10
-            Expr::BinaryOp { left, op, right } if matches!(op, BinaryOperator::Gt | BinaryOperator::GtEq) => {
+            Expr::BinaryOp { left, op, right }
+                if matches!(op, BinaryOperator::Gt | BinaryOperator::GtEq) =>
+            {
                 if let (Expr::Identifier(col), Expr::Value(val)) = (left.as_ref(), right.as_ref()) {
                     if col.value == table.primary_key() {
-                        let start_val = Self::sql_value_to_value(val, table.schema().field_with_name(&col.value)?.data_type())?;
+                        let start_val = Self::sql_value_to_value(
+                            val,
+                            table.schema().field_with_name(&col.value)?.data_type(),
+                        )?;
                         let max_val = Value::Int64(i64::MAX);
                         let mut rows = table.range_query(&start_val, &max_val)?;
 
                         // For >, exclude the start value
                         if matches!(op, BinaryOperator::Gt) {
                             let pk_idx = table.schema().index_of(&col.value)?;
-                            rows.retain(|row| {
-                                row.get(pk_idx).ok() != Some(&start_val)
-                            });
+                            rows.retain(|row| row.get(pk_idx).ok() != Some(&start_val));
                         }
 
                         return Ok(rows);
@@ -860,19 +937,22 @@ impl SqlEngine {
             }
 
             // Less than: WHERE id < 20 or WHERE id <= 20
-            Expr::BinaryOp { left, op, right } if matches!(op, BinaryOperator::Lt | BinaryOperator::LtEq) => {
+            Expr::BinaryOp { left, op, right }
+                if matches!(op, BinaryOperator::Lt | BinaryOperator::LtEq) =>
+            {
                 if let (Expr::Identifier(col), Expr::Value(val)) = (left.as_ref(), right.as_ref()) {
                     if col.value == table.primary_key() {
-                        let end_val = Self::sql_value_to_value(val, table.schema().field_with_name(&col.value)?.data_type())?;
+                        let end_val = Self::sql_value_to_value(
+                            val,
+                            table.schema().field_with_name(&col.value)?.data_type(),
+                        )?;
                         let min_val = Value::Int64(i64::MIN);
                         let mut rows = table.range_query(&min_val, &end_val)?;
 
                         // For <, exclude the end value
                         if matches!(op, BinaryOperator::Lt) {
                             let pk_idx = table.schema().index_of(&col.value)?;
-                            rows.retain(|row| {
-                                row.get(pk_idx).ok() != Some(&end_val)
-                            });
+                            rows.retain(|row| row.get(pk_idx).ok() != Some(&end_val));
                         }
 
                         return Ok(rows);
@@ -887,7 +967,11 @@ impl SqlEngine {
     }
 
     /// Extract range bound from expression like "id > 10" or "id >= 10"
-    fn extract_range_bound(expr: &Expr, op1: sqlparser::ast::BinaryOperator, op2: sqlparser::ast::BinaryOperator) -> Option<(String, sqlparser::ast::Value)> {
+    fn extract_range_bound(
+        expr: &Expr,
+        op1: sqlparser::ast::BinaryOperator,
+        op2: sqlparser::ast::BinaryOperator,
+    ) -> Option<(String, sqlparser::ast::Value)> {
         use sqlparser::ast::BinaryOperator;
 
         if let Expr::BinaryOp { left, op, right } = expr {
@@ -933,56 +1017,64 @@ impl SqlEngine {
     }
 
     /// Evaluate expression against a row
-    fn evaluate_expr(&self, expr: &Expr, row: &Row, schema: &arrow::datatypes::SchemaRef) -> Result<bool> {
+    fn evaluate_expr(
+        &self,
+        expr: &Expr,
+        row: &Row,
+        schema: &arrow::datatypes::SchemaRef,
+    ) -> Result<bool> {
         use sqlparser::ast::BinaryOperator;
 
         match expr {
-            Expr::BinaryOp { left, op, right } => {
-                match op {
-                    BinaryOperator::Eq => {
-                        let left_val = self.evaluate_value_expr(left, row, schema)?;
-                        let right_val = self.evaluate_value_expr(right, row, schema)?;
-                        Ok(left_val == right_val)
-                    }
-                    BinaryOperator::Gt => {
-                        let left_val = self.evaluate_value_expr(left, row, schema)?;
-                        let right_val = self.evaluate_value_expr(right, row, schema)?;
-                        Ok(Self::compare_values(&left_val, &right_val)? > 0)
-                    }
-                    BinaryOperator::Lt => {
-                        let left_val = self.evaluate_value_expr(left, row, schema)?;
-                        let right_val = self.evaluate_value_expr(right, row, schema)?;
-                        Ok(Self::compare_values(&left_val, &right_val)? < 0)
-                    }
-                    BinaryOperator::GtEq => {
-                        let left_val = self.evaluate_value_expr(left, row, schema)?;
-                        let right_val = self.evaluate_value_expr(right, row, schema)?;
-                        Ok(Self::compare_values(&left_val, &right_val)? >= 0)
-                    }
-                    BinaryOperator::LtEq => {
-                        let left_val = self.evaluate_value_expr(left, row, schema)?;
-                        let right_val = self.evaluate_value_expr(right, row, schema)?;
-                        Ok(Self::compare_values(&left_val, &right_val)? <= 0)
-                    }
-                    BinaryOperator::And => {
-                        let left_result = self.evaluate_expr(left, row, schema)?;
-                        let right_result = self.evaluate_expr(right, row, schema)?;
-                        Ok(left_result && right_result)
-                    }
-                    BinaryOperator::Or => {
-                        let left_result = self.evaluate_expr(left, row, schema)?;
-                        let right_result = self.evaluate_expr(right, row, schema)?;
-                        Ok(left_result || right_result)
-                    }
-                    _ => Err(anyhow!("Unsupported operator: {:?}", op)),
+            Expr::BinaryOp { left, op, right } => match op {
+                BinaryOperator::Eq => {
+                    let left_val = self.evaluate_value_expr(left, row, schema)?;
+                    let right_val = self.evaluate_value_expr(right, row, schema)?;
+                    Ok(left_val == right_val)
                 }
-            }
+                BinaryOperator::Gt => {
+                    let left_val = self.evaluate_value_expr(left, row, schema)?;
+                    let right_val = self.evaluate_value_expr(right, row, schema)?;
+                    Ok(Self::compare_values(&left_val, &right_val)? > 0)
+                }
+                BinaryOperator::Lt => {
+                    let left_val = self.evaluate_value_expr(left, row, schema)?;
+                    let right_val = self.evaluate_value_expr(right, row, schema)?;
+                    Ok(Self::compare_values(&left_val, &right_val)? < 0)
+                }
+                BinaryOperator::GtEq => {
+                    let left_val = self.evaluate_value_expr(left, row, schema)?;
+                    let right_val = self.evaluate_value_expr(right, row, schema)?;
+                    Ok(Self::compare_values(&left_val, &right_val)? >= 0)
+                }
+                BinaryOperator::LtEq => {
+                    let left_val = self.evaluate_value_expr(left, row, schema)?;
+                    let right_val = self.evaluate_value_expr(right, row, schema)?;
+                    Ok(Self::compare_values(&left_val, &right_val)? <= 0)
+                }
+                BinaryOperator::And => {
+                    let left_result = self.evaluate_expr(left, row, schema)?;
+                    let right_result = self.evaluate_expr(right, row, schema)?;
+                    Ok(left_result && right_result)
+                }
+                BinaryOperator::Or => {
+                    let left_result = self.evaluate_expr(left, row, schema)?;
+                    let right_result = self.evaluate_expr(right, row, schema)?;
+                    Ok(left_result || right_result)
+                }
+                _ => Err(anyhow!("Unsupported operator: {:?}", op)),
+            },
             _ => Err(anyhow!("Unsupported expression in WHERE clause")),
         }
     }
 
     /// Evaluate expression to get a Value
-    fn evaluate_value_expr(&self, expr: &Expr, row: &Row, schema: &arrow::datatypes::SchemaRef) -> Result<Value> {
+    fn evaluate_value_expr(
+        &self,
+        expr: &Expr,
+        row: &Row,
+        schema: &arrow::datatypes::SchemaRef,
+    ) -> Result<Value> {
         match expr {
             Expr::Identifier(ident) => {
                 let col_idx = schema.index_of(&ident.value)?;
@@ -1023,10 +1115,11 @@ impl SqlEngine {
                             _ => Err(anyhow!("Cannot negate {:?}", value)),
                         }
                     }
-                    UnaryOperator::Plus => {
-                        self.evaluate_value_expr(expr, row, schema)
-                    }
-                    _ => Err(anyhow!("Unsupported unary operator in WHERE clause: {:?}", op)),
+                    UnaryOperator::Plus => self.evaluate_value_expr(expr, row, schema),
+                    _ => Err(anyhow!(
+                        "Unsupported unary operator in WHERE clause: {:?}",
+                        op
+                    )),
                 }
             }
             _ => Err(anyhow!("Unsupported expression type")),
@@ -1055,20 +1148,16 @@ impl SqlEngine {
     /// Convert SQL value to our Value type
     fn sql_value_to_value(val: &sqlparser::ast::Value, expected_type: &DataType) -> Result<Value> {
         match val {
-            sqlparser::ast::Value::Number(n, _) => {
-                match expected_type {
-                    DataType::Int64 => Ok(Value::Int64(n.parse()?)),
-                    DataType::Float64 => Ok(Value::Float64(n.parse()?)),
-                    DataType::Timestamp(_, _) => Ok(Value::Timestamp(n.parse()?)),
-                    _ => Err(anyhow!("Cannot convert number to {:?}", expected_type)),
-                }
-            }
-            sqlparser::ast::Value::SingleQuotedString(s) => {
-                match expected_type {
-                    DataType::Utf8 => Ok(Value::Text(s.clone())),
-                    _ => Err(anyhow!("Cannot convert string to {:?}", expected_type)),
-                }
-            }
+            sqlparser::ast::Value::Number(n, _) => match expected_type {
+                DataType::Int64 => Ok(Value::Int64(n.parse()?)),
+                DataType::Float64 => Ok(Value::Float64(n.parse()?)),
+                DataType::Timestamp(_, _) => Ok(Value::Timestamp(n.parse()?)),
+                _ => Err(anyhow!("Cannot convert number to {:?}", expected_type)),
+            },
+            sqlparser::ast::Value::SingleQuotedString(s) => match expected_type {
+                DataType::Utf8 => Ok(Value::Text(s.clone())),
+                _ => Err(anyhow!("Cannot convert string to {:?}", expected_type)),
+            },
             sqlparser::ast::Value::Boolean(b) => Ok(Value::Boolean(*b)),
             _ => Err(anyhow!("Unsupported SQL value type")),
         }
@@ -1077,9 +1166,15 @@ impl SqlEngine {
     /// Convert SQL data type to Arrow data type
     fn sql_type_to_arrow(sql_type: &SqlDataType) -> Result<DataType> {
         match sql_type {
-            SqlDataType::BigInt(_) | SqlDataType::Int8(_) | SqlDataType::Int64 => Ok(DataType::Int64),
-            SqlDataType::Double | SqlDataType::Float8 | SqlDataType::Float64 => Ok(DataType::Float64),
-            SqlDataType::Varchar(_) | SqlDataType::Text | SqlDataType::String(_) => Ok(DataType::Utf8),
+            SqlDataType::BigInt(_) | SqlDataType::Int8(_) | SqlDataType::Int64 => {
+                Ok(DataType::Int64)
+            }
+            SqlDataType::Double | SqlDataType::Float8 | SqlDataType::Float64 => {
+                Ok(DataType::Float64)
+            }
+            SqlDataType::Varchar(_) | SqlDataType::Text | SqlDataType::String(_) => {
+                Ok(DataType::Utf8)
+            }
             SqlDataType::Timestamp(_, _) => Ok(DataType::Timestamp(
                 arrow::datatypes::TimeUnit::Microsecond,
                 None,
@@ -1092,26 +1187,20 @@ impl SqlEngine {
     /// Convert SQL expression to Value
     fn expr_to_value(expr: &Expr, expected_type: &DataType) -> Result<Value> {
         match expr {
-            Expr::Value(sqlparser::ast::Value::Number(n, _)) => {
-                match expected_type {
-                    DataType::Int64 => Ok(Value::Int64(n.parse()?)),
-                    DataType::Float64 => Ok(Value::Float64(n.parse()?)),
-                    DataType::Timestamp(_, _) => Ok(Value::Timestamp(n.parse()?)),
-                    _ => Err(anyhow!("Cannot convert number to {:?}", expected_type)),
-                }
-            }
-            Expr::Value(sqlparser::ast::Value::SingleQuotedString(s)) => {
-                match expected_type {
-                    DataType::Utf8 => Ok(Value::Text(s.clone())),
-                    _ => Err(anyhow!("Cannot convert string to {:?}", expected_type)),
-                }
-            }
-            Expr::Value(sqlparser::ast::Value::Boolean(b)) => {
-                match expected_type {
-                    DataType::Boolean => Ok(Value::Boolean(*b)),
-                    _ => Err(anyhow!("Cannot convert boolean to {:?}", expected_type)),
-                }
-            }
+            Expr::Value(sqlparser::ast::Value::Number(n, _)) => match expected_type {
+                DataType::Int64 => Ok(Value::Int64(n.parse()?)),
+                DataType::Float64 => Ok(Value::Float64(n.parse()?)),
+                DataType::Timestamp(_, _) => Ok(Value::Timestamp(n.parse()?)),
+                _ => Err(anyhow!("Cannot convert number to {:?}", expected_type)),
+            },
+            Expr::Value(sqlparser::ast::Value::SingleQuotedString(s)) => match expected_type {
+                DataType::Utf8 => Ok(Value::Text(s.clone())),
+                _ => Err(anyhow!("Cannot convert string to {:?}", expected_type)),
+            },
+            Expr::Value(sqlparser::ast::Value::Boolean(b)) => match expected_type {
+                DataType::Boolean => Ok(Value::Boolean(*b)),
+                _ => Err(anyhow!("Cannot convert boolean to {:?}", expected_type)),
+            },
             Expr::Value(sqlparser::ast::Value::Null) => Ok(Value::Null),
             Expr::UnaryOp { op, expr } => {
                 // Handle negative numbers: -50, -3.14
@@ -1121,7 +1210,9 @@ impl SqlEngine {
                         // Special case: i64::MIN cannot be parsed as positive then negated
                         // because i64::MAX + 1 overflows
                         if let Expr::Value(sqlparser::ast::Value::Number(n, _)) = expr.as_ref() {
-                            if matches!(expected_type, DataType::Int64) && n == "9223372036854775808" {
+                            if matches!(expected_type, DataType::Int64)
+                                && n == "9223372036854775808"
+                            {
                                 return Ok(Value::Int64(i64::MIN));
                             }
                         }
@@ -1227,10 +1318,14 @@ mod tests {
         let mut engine = SqlEngine::new(catalog);
 
         // Create table
-        engine.execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))").unwrap();
+        engine
+            .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))")
+            .unwrap();
 
         // Insert data
-        let result = engine.execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')").unwrap();
+        let result = engine
+            .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')")
+            .unwrap();
         match result {
             ExecutionResult::Inserted { rows } => assert_eq!(rows, 2),
             _ => panic!("Expected Inserted result"),
@@ -1284,8 +1379,12 @@ mod tests {
         let mut engine = SqlEngine::new(catalog);
 
         // Create and populate table
-        engine.execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))").unwrap();
-        engine.execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')").unwrap();
+        engine
+            .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')")
+            .unwrap();
 
         // Point query using learned index: WHERE id = 2
         let result = engine.execute("SELECT * FROM users WHERE id = 2").unwrap();
@@ -1315,14 +1414,18 @@ mod tests {
         let mut engine = SqlEngine::new(catalog);
 
         // Create and populate table
-        engine.execute("CREATE TABLE events (id BIGINT PRIMARY KEY, event_type VARCHAR(100))").unwrap();
+        engine
+            .execute("CREATE TABLE events (id BIGINT PRIMARY KEY, event_type VARCHAR(100))")
+            .unwrap();
         for i in 0..20 {
             let sql = format!("INSERT INTO events VALUES ({}, 'event_{}')", i, i);
             engine.execute(&sql).unwrap();
         }
 
         // Range query: WHERE id > 5 AND id < 10
-        let result = engine.execute("SELECT * FROM events WHERE id > 5 AND id < 10").unwrap();
+        let result = engine
+            .execute("SELECT * FROM events WHERE id > 5 AND id < 10")
+            .unwrap();
         match result {
             ExecutionResult::Selected { rows, data, .. } => {
                 assert_eq!(rows, 4); // 6, 7, 8, 9
@@ -1342,7 +1445,9 @@ mod tests {
         let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
         let mut engine = SqlEngine::new(catalog);
 
-        engine.execute("CREATE TABLE data (id BIGINT PRIMARY KEY, value DOUBLE)").unwrap();
+        engine
+            .execute("CREATE TABLE data (id BIGINT PRIMARY KEY, value DOUBLE)")
+            .unwrap();
         for i in 0..10 {
             let sql = format!("INSERT INTO data VALUES ({}, {})", i, i as f64 * 1.5);
             engine.execute(&sql).unwrap();
@@ -1369,7 +1474,9 @@ mod tests {
         let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
         let mut engine = SqlEngine::new(catalog);
 
-        engine.execute("CREATE TABLE data (id BIGINT PRIMARY KEY, value DOUBLE)").unwrap();
+        engine
+            .execute("CREATE TABLE data (id BIGINT PRIMARY KEY, value DOUBLE)")
+            .unwrap();
         for i in 0..10 {
             let sql = format!("INSERT INTO data VALUES ({}, {})", i, i as f64 * 1.5);
             engine.execute(&sql).unwrap();
@@ -1396,11 +1503,17 @@ mod tests {
         let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
         let mut engine = SqlEngine::new(catalog);
 
-        engine.execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))").unwrap();
-        engine.execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Alice')").unwrap();
+        engine
+            .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Alice')")
+            .unwrap();
 
         // WHERE name = 'Alice' (scan + filter, not learned index)
-        let result = engine.execute("SELECT * FROM users WHERE name = 'Alice'").unwrap();
+        let result = engine
+            .execute("SELECT * FROM users WHERE name = 'Alice'")
+            .unwrap();
         match result {
             ExecutionResult::Selected { rows, data, .. } => {
                 assert_eq!(rows, 2); // id=1 and id=3
@@ -1418,7 +1531,9 @@ mod tests {
         let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
         let mut engine = SqlEngine::new(catalog);
 
-        engine.execute("CREATE TABLE data (id BIGINT PRIMARY KEY, value DOUBLE)").unwrap();
+        engine
+            .execute("CREATE TABLE data (id BIGINT PRIMARY KEY, value DOUBLE)")
+            .unwrap();
         for i in 0..5 {
             let sql = format!("INSERT INTO data VALUES ({}, {})", i, i as f64);
             engine.execute(&sql).unwrap();
@@ -1445,7 +1560,9 @@ mod tests {
         let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
         let mut engine = SqlEngine::new(catalog);
 
-        engine.execute("CREATE TABLE data (id BIGINT PRIMARY KEY, value DOUBLE)").unwrap();
+        engine
+            .execute("CREATE TABLE data (id BIGINT PRIMARY KEY, value DOUBLE)")
+            .unwrap();
         for i in 0..5 {
             let sql = format!("INSERT INTO data VALUES ({}, {})", i, i as f64);
             engine.execute(&sql).unwrap();
@@ -1476,7 +1593,9 @@ mod tests {
         engine.execute("INSERT INTO metrics VALUES (1000, 1.5, 'ok'), (2000, 2.5, 'warning'), (3000, 3.5, 'ok')").unwrap();
 
         // Point query on primary key
-        let result = engine.execute("SELECT * FROM metrics WHERE timestamp = 2000").unwrap();
+        let result = engine
+            .execute("SELECT * FROM metrics WHERE timestamp = 2000")
+            .unwrap();
         match result {
             ExecutionResult::Selected { rows, data, .. } => {
                 assert_eq!(rows, 1);
@@ -1487,7 +1606,9 @@ mod tests {
         }
 
         // Scan + filter on non-primary key
-        let result = engine.execute("SELECT * FROM metrics WHERE status = 'ok'").unwrap();
+        let result = engine
+            .execute("SELECT * FROM metrics WHERE status = 'ok'")
+            .unwrap();
         match result {
             ExecutionResult::Selected { rows, data, .. } => {
                 assert_eq!(rows, 2);
@@ -1511,7 +1632,9 @@ mod tests {
         println!("\n📊 Large-scale WHERE clause test (10,000 rows)");
 
         // Create table
-        engine.execute("CREATE TABLE large_data (id BIGINT PRIMARY KEY, value DOUBLE)").unwrap();
+        engine
+            .execute("CREATE TABLE large_data (id BIGINT PRIMARY KEY, value DOUBLE)")
+            .unwrap();
 
         // Insert 10K rows
         println!("  Inserting 10,000 rows...");
@@ -1526,7 +1649,9 @@ mod tests {
         // Point query
         println!("  Testing point query...");
         let start = Instant::now();
-        let result = engine.execute("SELECT * FROM large_data WHERE id = 5000").unwrap();
+        let result = engine
+            .execute("SELECT * FROM large_data WHERE id = 5000")
+            .unwrap();
         let point_time = start.elapsed();
         match result {
             ExecutionResult::Selected { rows, .. } => {
@@ -1539,7 +1664,9 @@ mod tests {
         // Range query
         println!("  Testing range query...");
         let start = Instant::now();
-        let result = engine.execute("SELECT * FROM large_data WHERE id > 8000 AND id < 9000").unwrap();
+        let result = engine
+            .execute("SELECT * FROM large_data WHERE id > 8000 AND id < 9000")
+            .unwrap();
         let range_time = start.elapsed();
         match result {
             ExecutionResult::Selected { rows, .. } => {
@@ -1567,12 +1694,24 @@ mod tests {
         let range_speedup = scan_time.as_micros() as f64 / range_time.as_micros() as f64;
         println!();
         println!("  📈 Analysis:");
-        println!("     Point query speedup: {:.2}x vs full scan", point_speedup);
-        println!("     Range query speedup: {:.2}x vs full scan", range_speedup);
+        println!(
+            "     Point query speedup: {:.2}x vs full scan",
+            point_speedup
+        );
+        println!(
+            "     Range query speedup: {:.2}x vs full scan",
+            range_speedup
+        );
 
         // Assert meaningful speedup
-        assert!(point_speedup > 2.0, "Point query should be at least 2x faster than full scan");
-        assert!(range_speedup > 2.0, "Range query should be at least 2x faster than full scan");
+        assert!(
+            point_speedup > 2.0,
+            "Point query should be at least 2x faster than full scan"
+        );
+        assert!(
+            range_speedup > 2.0,
+            "Range query should be at least 2x faster than full scan"
+        );
 
         println!("  ✅ Learned index providing significant speedup!");
     }

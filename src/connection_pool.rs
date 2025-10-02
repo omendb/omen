@@ -1,11 +1,11 @@
 //! Connection pooling for OmenDB
 //! Manages database connections with limits, timeouts, and resource tracking
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tracing::{debug, info, warn, instrument};
+use tracing::{debug, info, instrument, warn};
 
 /// Connection pool configuration
 #[derive(Clone, Debug)]

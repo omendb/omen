@@ -23,9 +23,7 @@ fn test_single_element() {
 #[test]
 fn test_sequential_data() {
     let mut index = RecursiveModelIndex::new(1000);
-    let data: Vec<(i64, usize)> = (0..1000)
-        .map(|i| (i as i64 * 10, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..1000).map(|i| (i as i64 * 10, i)).collect();
 
     index.train(data.clone());
 
@@ -42,9 +40,7 @@ fn test_sequential_data() {
 #[test]
 fn test_range_queries() {
     let mut index = RecursiveModelIndex::new(1000);
-    let data: Vec<(i64, usize)> = (0..100)
-        .map(|i| (i as i64 * 100, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..100).map(|i| (i as i64 * 100, i)).collect();
 
     index.train(data);
 
@@ -62,13 +58,7 @@ fn test_range_queries() {
 #[test]
 fn test_duplicate_keys() {
     let mut index = RecursiveModelIndex::new(100);
-    let data = vec![
-        (100, 0),
-        (100, 1),
-        (200, 2),
-        (200, 3),
-        (300, 4),
-    ];
+    let data = vec![(100, 0), (100, 1), (200, 2), (200, 3), (300, 4)];
 
     index.train(data);
 
@@ -111,11 +101,7 @@ fn test_non_uniform_distribution() {
 #[test]
 fn test_boundary_conditions() {
     let mut index = RecursiveModelIndex::new(100);
-    let data = vec![
-        (i64::MIN, 0),
-        (0, 1),
-        (i64::MAX, 2),
-    ];
+    let data = vec![(i64::MIN, 0), (0, 1), (i64::MAX, 2)];
 
     index.train(data);
 
@@ -129,9 +115,7 @@ fn test_retrain_preserves_correctness() {
     let mut index = RecursiveModelIndex::new(100);
 
     // Initial training
-    let data1: Vec<(i64, usize)> = (0..50)
-        .map(|i| (i as i64 * 10, i))
-        .collect();
+    let data1: Vec<(i64, usize)> = (0..50).map(|i| (i as i64 * 10, i)).collect();
     index.train(data1.clone());
 
     // Verify initial state
@@ -140,9 +124,7 @@ fn test_retrain_preserves_correctness() {
     }
 
     // Retrain with different data
-    let data2: Vec<(i64, usize)> = (0..50)
-        .map(|i| (i as i64 * 20, i))
-        .collect();
+    let data2: Vec<(i64, usize)> = (0..50).map(|i| (i as i64 * 20, i)).collect();
     index.train(data2.clone());
 
     // Verify new state
@@ -157,9 +139,7 @@ fn test_retrain_preserves_correctness() {
 #[test]
 fn test_large_scale_accuracy() {
     let mut index = RecursiveModelIndex::new(100_000);
-    let data: Vec<(i64, usize)> = (0..10_000)
-        .map(|i| (i as i64 * 100, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..10_000).map(|i| (i as i64 * 100, i)).collect();
 
     index.train(data.clone());
 
@@ -180,9 +160,7 @@ fn test_large_scale_accuracy() {
 #[test]
 fn test_range_search_accuracy() {
     let mut index = RecursiveModelIndex::new(1000);
-    let data: Vec<(i64, usize)> = (0..1000)
-        .map(|i| (i as i64, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..1000).map(|i| (i as i64, i)).collect();
 
     index.train(data);
 
@@ -195,15 +173,17 @@ fn test_range_search_accuracy() {
         assert!(result_set.contains(&i), "Missing position {}", i);
     }
 
-    assert_eq!(result_set.len(), 101, "Range should contain exactly 101 elements");
+    assert_eq!(
+        result_set.len(),
+        101,
+        "Range should contain exactly 101 elements"
+    );
 }
 
 #[test]
 fn test_overlapping_ranges() {
     let mut index = RecursiveModelIndex::new(100);
-    let data: Vec<(i64, usize)> = (0..100)
-        .map(|i| (i as i64 * 10, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..100).map(|i| (i as i64 * 10, i)).collect();
 
     index.train(data);
 
@@ -219,13 +199,11 @@ fn test_overlapping_ranges() {
 #[test]
 fn test_count_range() {
     let mut index = RecursiveModelIndex::new(1000);
-    let data: Vec<(i64, usize)> = (0..100)
-        .map(|i| (i as i64 * 10, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..100).map(|i| (i as i64 * 10, i)).collect();
 
     index.train(data);
 
-    assert_eq!(index.count_range(0, 100), 11);  // 0, 10, 20, ..., 100
+    assert_eq!(index.count_range(0, 100), 11); // 0, 10, 20, ..., 100
     assert_eq!(index.count_range(50, 150), 11); // 50, 60, ..., 150 (inclusive)
     assert_eq!(index.count_range(1000, 2000), 0); // No elements
 }
@@ -241,12 +219,12 @@ fn test_time_series_pattern() {
     let mut current_ts = base_ts;
     for i in 0..1000 {
         let gap = if i % 100 == 0 {
-            5000  // Occasional gap
+            5000 // Occasional gap
         } else {
-            1000  // Regular interval
+            1000 // Regular interval
         };
         data.push((current_ts, i));
-        current_ts += gap;  // Increment for next iteration
+        current_ts += gap; // Increment for next iteration
     }
 
     index.train(data.clone());
@@ -255,16 +233,19 @@ fn test_time_series_pattern() {
     for i in [0, 100, 500, 900] {
         let (key, _) = data[i];
         // Just verify the key exists, don't check position since train() sorts
-        assert!(index.search(key).is_some(), "Failed to find key {} at index {}", key, i);
+        assert!(
+            index.search(key).is_some(),
+            "Failed to find key {} at index {}",
+            key,
+            i
+        );
     }
 }
 
 #[test]
 fn test_model_prediction_bounds() {
     let mut index = RecursiveModelIndex::new(100);
-    let data: Vec<(i64, usize)> = (0..10)
-        .map(|i| (i as i64 * 1000, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..10).map(|i| (i as i64 * 1000, i)).collect();
 
     index.train(data);
 
@@ -280,9 +261,7 @@ fn test_model_prediction_bounds() {
 #[test]
 fn test_empty_range() {
     let mut index = RecursiveModelIndex::new(100);
-    let data: Vec<(i64, usize)> = (0..10)
-        .map(|i| (i as i64, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..10).map(|i| (i as i64, i)).collect();
 
     index.train(data);
 
@@ -295,17 +274,14 @@ fn test_empty_range() {
 #[test]
 fn test_invariant_sorted_data_preserved() {
     let mut index = RecursiveModelIndex::new(1000);
-    let data: Vec<(i64, usize)> = (0..100)
-        .map(|i| (i as i64 * 10, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..100).map(|i| (i as i64 * 10, i)).collect();
 
     index.train(data.clone());
 
     // Invariant: If we find keys, they should be at correct positions
     for (key, expected_pos) in &data {
         if let Some(pos) = index.search(*key) {
-            assert_eq!(pos, *expected_pos,
-                "Key {} found at wrong position", key);
+            assert_eq!(pos, *expected_pos, "Key {} found at wrong position", key);
         }
     }
 }
@@ -313,9 +289,7 @@ fn test_invariant_sorted_data_preserved() {
 #[test]
 fn test_invariant_range_subset() {
     let mut index = RecursiveModelIndex::new(100);
-    let data: Vec<(i64, usize)> = (0..100)
-        .map(|i| (i as i64, i))
-        .collect();
+    let data: Vec<(i64, usize)> = (0..100).map(|i| (i as i64, i)).collect();
 
     index.train(data);
 
@@ -324,7 +298,10 @@ fn test_invariant_range_subset() {
     let large_range = index.range_search(0, 30);
 
     for pos in small_range {
-        assert!(large_range.contains(&pos),
-            "Small range element {} not in large range", pos);
+        assert!(
+            large_range.contains(&pos),
+            "Small range element {} not in large range",
+            pos
+        );
     }
 }

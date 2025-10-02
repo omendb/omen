@@ -6,7 +6,7 @@ use pgwire::tokio::process_socket;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
-use tracing::{info, error};
+use tracing::{error, info};
 
 /// PostgreSQL wire protocol server
 pub struct PostgresServer {

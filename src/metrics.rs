@@ -1,37 +1,30 @@
 //! Prometheus metrics for production monitoring
 //! Essential for observability and alerting
 
-use prometheus::{
-    Counter, CounterVec, Histogram, HistogramVec, Gauge, GaugeVec,
-    IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
-    register_counter, register_counter_vec, register_histogram, register_histogram_vec,
-    register_gauge, register_gauge_vec, register_int_counter, register_int_counter_vec,
-    register_int_gauge, register_int_gauge_vec,
-    Encoder, TextEncoder,
-};
 use once_cell::sync::Lazy;
+use prometheus::{
+    register_counter, register_counter_vec, register_gauge, register_gauge_vec, register_histogram,
+    register_histogram_vec, register_int_counter, register_int_counter_vec, register_int_gauge,
+    register_int_gauge_vec, Counter, CounterVec, Encoder, Gauge, GaugeVec, Histogram, HistogramVec,
+    IntCounter, IntCounterVec, IntGauge, IntGaugeVec, TextEncoder,
+};
 use std::time::Instant;
 
 // Operation counters
 pub static TOTAL_SEARCHES: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!(
-        "omendb_searches_total",
-        "Total number of search operations"
-    ).unwrap()
+    register_int_counter!("omendb_searches_total", "Total number of search operations").unwrap()
 });
 
 pub static TOTAL_INSERTS: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!(
-        "omendb_inserts_total",
-        "Total number of insert operations"
-    ).unwrap()
+    register_int_counter!("omendb_inserts_total", "Total number of insert operations").unwrap()
 });
 
 pub static TOTAL_RANGE_QUERIES: Lazy<IntCounter> = Lazy::new(|| {
     register_int_counter!(
         "omendb_range_queries_total",
         "Total number of range query operations"
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 // Error counters
@@ -39,14 +32,16 @@ pub static FAILED_SEARCHES: Lazy<IntCounter> = Lazy::new(|| {
     register_int_counter!(
         "omendb_searches_failed_total",
         "Total number of failed search operations"
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 pub static FAILED_INSERTS: Lazy<IntCounter> = Lazy::new(|| {
     register_int_counter!(
         "omendb_inserts_failed_total",
         "Total number of failed insert operations"
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 // Latency histograms
@@ -55,7 +50,8 @@ pub static SEARCH_DURATION: Lazy<Histogram> = Lazy::new(|| {
         "omendb_search_duration_seconds",
         "Search operation latency in seconds",
         vec![0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 pub static INSERT_DURATION: Lazy<Histogram> = Lazy::new(|| {
@@ -63,7 +59,8 @@ pub static INSERT_DURATION: Lazy<Histogram> = Lazy::new(|| {
         "omendb_insert_duration_seconds",
         "Insert operation latency in seconds",
         vec![0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 pub static RANGE_QUERY_DURATION: Lazy<Histogram> = Lazy::new(|| {
@@ -71,7 +68,8 @@ pub static RANGE_QUERY_DURATION: Lazy<Histogram> = Lazy::new(|| {
         "omendb_range_query_duration_seconds",
         "Range query operation latency in seconds",
         vec![0.0001, 0.001, 0.01, 0.1, 0.5, 1.0, 5.0]
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 // System gauges
@@ -79,58 +77,53 @@ pub static ACTIVE_CONNECTIONS: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
         "omendb_connections_active",
         "Number of active database connections"
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 pub static DATABASE_SIZE: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
         "omendb_database_size_bytes",
         "Current database size in bytes"
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 pub static INDEX_SIZE: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
         "omendb_index_size_keys",
         "Number of keys in the learned index"
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 pub static MEMORY_USAGE: Lazy<IntGauge> = Lazy::new(|| {
-    register_int_gauge!(
-        "omendb_memory_usage_bytes",
-        "Current memory usage in bytes"
-    ).unwrap()
+    register_int_gauge!("omendb_memory_usage_bytes", "Current memory usage in bytes").unwrap()
 });
 
 // WAL metrics
 pub static WAL_WRITES: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!(
-        "omendb_wal_writes_total",
-        "Total WAL write operations"
-    ).unwrap()
+    register_int_counter!("omendb_wal_writes_total", "Total WAL write operations").unwrap()
 });
 
 pub static WAL_SYNC_DURATION: Lazy<Histogram> = Lazy::new(|| {
     register_histogram!(
         "omendb_wal_sync_duration_seconds",
         "WAL sync operation latency"
-    ).unwrap()
+    )
+    .unwrap()
 });
 
-pub static WAL_SIZE: Lazy<IntGauge> = Lazy::new(|| {
-    register_int_gauge!(
-        "omendb_wal_size_bytes",
-        "Current WAL file size"
-    ).unwrap()
-});
+pub static WAL_SIZE: Lazy<IntGauge> =
+    Lazy::new(|| register_int_gauge!("omendb_wal_size_bytes", "Current WAL file size").unwrap());
 
 // Performance metrics
 pub static THROUGHPUT: Lazy<Gauge> = Lazy::new(|| {
     register_gauge!(
         "omendb_throughput_ops_per_sec",
         "Current operations per second"
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 // SQL query metrics
@@ -140,7 +133,8 @@ pub static SQL_QUERY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
         "SQL query execution latency in seconds (includes p50/p95/p99 via histogram)",
         &["query_type"],
         vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 pub static SQL_QUERIES_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -148,7 +142,8 @@ pub static SQL_QUERIES_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
         "omendb_sql_queries_total",
         "Total SQL queries executed by type",
         &["query_type"]
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 pub static SQL_QUERY_ERRORS: Lazy<IntCounterVec> = Lazy::new(|| {
@@ -156,7 +151,8 @@ pub static SQL_QUERY_ERRORS: Lazy<IntCounterVec> = Lazy::new(|| {
         "omendb_sql_query_errors_total",
         "Total SQL query errors by type",
         &["error_type"]
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 pub static SQL_QUERY_ROWS_RETURNED: Lazy<Histogram> = Lazy::new(|| {
@@ -164,7 +160,8 @@ pub static SQL_QUERY_ROWS_RETURNED: Lazy<Histogram> = Lazy::new(|| {
         "omendb_sql_query_rows_returned",
         "Number of rows returned per query",
         vec![1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0]
-    ).unwrap()
+    )
+    .unwrap()
 });
 
 /// Timer for measuring operation duration
@@ -230,9 +227,7 @@ pub fn set_index_size(keys: i64) {
 
 /// Record SQL query execution
 pub fn record_sql_query(query_type: &str, duration_secs: f64, rows_returned: usize) {
-    SQL_QUERIES_TOTAL
-        .with_label_values(&[query_type])
-        .inc();
+    SQL_QUERIES_TOTAL.with_label_values(&[query_type]).inc();
 
     SQL_QUERY_DURATION
         .with_label_values(&[query_type])
@@ -243,9 +238,7 @@ pub fn record_sql_query(query_type: &str, duration_secs: f64, rows_returned: usi
 
 /// Record SQL query error
 pub fn record_sql_query_error(error_type: &str) {
-    SQL_QUERY_ERRORS
-        .with_label_values(&[error_type])
-        .inc();
+    SQL_QUERY_ERRORS.with_label_values(&[error_type]).inc();
 }
 
 /// Get metrics in Prometheus text format
@@ -270,11 +263,7 @@ impl HealthStatus {
     pub fn to_json(&self) -> String {
         format!(
             r#"{{"healthy":{},"version":"{}","uptime_seconds":{},"total_operations":{},"error_rate":{:.4}}}"#,
-            self.healthy,
-            self.version,
-            self.uptime_seconds,
-            self.total_operations,
-            self.error_rate
+            self.healthy, self.version, self.uptime_seconds, self.total_operations, self.error_rate
         )
     }
 }
@@ -445,9 +434,9 @@ mod tests {
     fn test_histogram_buckets() {
         // Test different latency ranges to ensure histograms work
         SEARCH_DURATION.observe(0.00001); // Very fast
-        SEARCH_DURATION.observe(0.001);   // Fast
-        SEARCH_DURATION.observe(0.01);    // Medium
-        SEARCH_DURATION.observe(0.05);    // Slow
+        SEARCH_DURATION.observe(0.001); // Fast
+        SEARCH_DURATION.observe(0.01); // Medium
+        SEARCH_DURATION.observe(0.05); // Slow
 
         INSERT_DURATION.observe(0.0001);
         INSERT_DURATION.observe(0.005);
@@ -519,11 +508,11 @@ mod tests {
     #[test]
     fn test_sql_query_latency_buckets() {
         // Test different latencies to ensure histogram buckets work
-        record_sql_query("SELECT", 0.001, 10);     // Very fast
-        record_sql_query("SELECT", 0.01, 100);     // Fast
-        record_sql_query("SELECT", 0.1, 1000);     // Medium
-        record_sql_query("SELECT", 1.0, 10000);    // Slow
-        record_sql_query("SELECT", 5.0, 100000);   // Very slow
+        record_sql_query("SELECT", 0.001, 10); // Very fast
+        record_sql_query("SELECT", 0.01, 100); // Fast
+        record_sql_query("SELECT", 0.1, 1000); // Medium
+        record_sql_query("SELECT", 1.0, 10000); // Slow
+        record_sql_query("SELECT", 5.0, 100000); // Very slow
 
         let metrics = get_metrics();
         assert!(metrics.contains("omendb_sql_query_duration_seconds"));
@@ -550,10 +539,10 @@ mod tests {
     #[test]
     fn test_rows_returned_histogram() {
         // Test different row counts
-        record_sql_query("SELECT", 0.01, 5);        // Small result
-        record_sql_query("SELECT", 0.05, 500);      // Medium result
-        record_sql_query("SELECT", 0.5, 50000);     // Large result
-        record_sql_query("SELECT", 2.0, 500000);    // Very large result
+        record_sql_query("SELECT", 0.01, 5); // Small result
+        record_sql_query("SELECT", 0.05, 500); // Medium result
+        record_sql_query("SELECT", 0.5, 50000); // Large result
+        record_sql_query("SELECT", 2.0, 500000); // Very large result
 
         let metrics = get_metrics();
         assert!(metrics.contains("omendb_sql_query_rows_returned"));

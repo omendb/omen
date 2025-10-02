@@ -38,9 +38,11 @@ fn test_50k_rows_direct_redbstorage() {
     }
 
     let insert_time = start.elapsed();
-    println!("✓ Inserted 50,000 rows in {:.2}s ({:.0} rows/sec)",
-             insert_time.as_secs_f64(),
-             50_000.0 / insert_time.as_secs_f64());
+    println!(
+        "✓ Inserted 50,000 rows in {:.2}s ({:.0} rows/sec)",
+        insert_time.as_secs_f64(),
+        50_000.0 / insert_time.as_secs_f64()
+    );
 
     // Warm up
     let _ = storage.point_query(25000).unwrap();
@@ -79,8 +81,11 @@ fn test_50k_rows_direct_redbstorage() {
     println!("RESULTS:");
     println!("  Dataset size: 50,000 rows");
     println!("  Point query (avg): {:.3}ms", avg_point_time_ms);
-    println!("  Full scan: {:.3}ms ({:.1}ms per 1K rows)",
-             full_scan_time_ms, full_scan_time_ms / 50.0);
+    println!(
+        "  Full scan: {:.3}ms ({:.1}ms per 1K rows)",
+        full_scan_time_ms,
+        full_scan_time_ms / 50.0
+    );
     println!("  Speedup: {:.1}x", speedup);
     println!("=====================================");
 
@@ -94,7 +99,10 @@ fn test_50k_rows_direct_redbstorage() {
     } else if speedup >= 5.0 {
         println!("✓ ACCEPTABLE: {:.1}x speedup", speedup);
     } else {
-        println!("⚠ MARGINAL: {:.1}x speedup (expected >5x on 50K rows)", speedup);
+        println!(
+            "⚠ MARGINAL: {:.1}x speedup (expected >5x on 50K rows)",
+            speedup
+        );
     }
 
     // Minimum acceptable speedup for 50K rows
@@ -136,9 +144,11 @@ fn test_100k_rows_direct_redbstorage() {
     }
 
     let insert_time = start.elapsed();
-    println!("✓ Inserted 100,000 rows in {:.2}s ({:.0} rows/sec)",
-             insert_time.as_secs_f64(),
-             100_000.0 / insert_time.as_secs_f64());
+    println!(
+        "✓ Inserted 100,000 rows in {:.2}s ({:.0} rows/sec)",
+        insert_time.as_secs_f64(),
+        100_000.0 / insert_time.as_secs_f64()
+    );
 
     // Warm up
     let _ = storage.point_query(50000).unwrap();
@@ -171,8 +181,11 @@ fn test_100k_rows_direct_redbstorage() {
     println!("RESULTS:");
     println!("  Dataset size: 100,000 rows");
     println!("  Point query (avg): {:.3}ms", avg_point_time_ms);
-    println!("  Full scan: {:.3}ms ({:.1}ms per 1K rows)",
-             full_scan_time_ms, full_scan_time_ms / 100.0);
+    println!(
+        "  Full scan: {:.3}ms ({:.1}ms per 1K rows)",
+        full_scan_time_ms,
+        full_scan_time_ms / 100.0
+    );
     println!("  Speedup: {:.1}x", speedup);
     println!("=====================================");
 
@@ -185,7 +198,10 @@ fn test_100k_rows_direct_redbstorage() {
     } else if speedup >= 10.0 {
         println!("✓ ACCEPTABLE: {:.1}x speedup", speedup);
     } else {
-        println!("⚠ MARGINAL: {:.1}x speedup (expected >10x on 100K rows)", speedup);
+        println!(
+            "⚠ MARGINAL: {:.1}x speedup (expected >10x on 100K rows)",
+            speedup
+        );
     }
 
     assert!(

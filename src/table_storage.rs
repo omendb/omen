@@ -2,7 +2,7 @@
 //! Stores rows in columnar format for efficient queries
 
 use crate::row::Row;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -120,9 +120,7 @@ impl TableStorage {
 
     /// Get multiple rows by positions
     pub fn get_many(&self, positions: &[usize]) -> Result<Vec<Row>> {
-        positions.iter()
-            .map(|&pos| self.get(pos))
-            .collect()
+        positions.iter().map(|&pos| self.get(pos)).collect()
     }
 
     /// Get all rows
@@ -154,9 +152,7 @@ impl TableStorage {
 
     /// Total number of rows
     pub fn row_count(&self) -> usize {
-        let batch_rows: usize = self.batches.iter()
-            .map(|b| b.num_rows())
-            .sum();
+        let batch_rows: usize = self.batches.iter().map(|b| b.num_rows()).sum();
         batch_rows + self.pending_rows.len()
     }
 
@@ -234,9 +230,7 @@ mod tests {
     #[test]
     fn test_storage_batch_flush() {
         let temp_dir = TempDir::new().unwrap();
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int64, false),
-        ]));
+        let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
 
         let mut storage = TableStorage::new(schema, temp_dir.path().to_path_buf(), 5).unwrap();
 
@@ -253,9 +247,7 @@ mod tests {
     #[test]
     fn test_storage_scan_all() {
         let temp_dir = TempDir::new().unwrap();
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int64, false),
-        ]));
+        let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
 
         let mut storage = TableStorage::new(schema, temp_dir.path().to_path_buf(), 10).unwrap();
 
@@ -280,17 +272,11 @@ mod tests {
 
         // Create storage and insert data
         {
-            let mut storage = TableStorage::new(
-                schema.clone(),
-                temp_dir.path().to_path_buf(),
-                10,
-            ).unwrap();
+            let mut storage =
+                TableStorage::new(schema.clone(), temp_dir.path().to_path_buf(), 10).unwrap();
 
             for i in 0..3 {
-                let row = Row::new(vec![
-                    Value::Int64(i),
-                    Value::Text(format!("name_{}", i)),
-                ]);
+                let row = Row::new(vec![Value::Int64(i), Value::Text(format!("name_{}", i))]);
                 storage.insert(row).unwrap();
             }
 

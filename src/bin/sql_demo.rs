@@ -1,9 +1,9 @@
 //! End-to-end SQL demo for OmenDB
 //! Demonstrates multi-table database with learned indexes and standard SQL interface
 
-use omendb::catalog::Catalog;
-use omendb::sql_engine::{SqlEngine, ExecutionResult};
 use anyhow::Result;
+use omendb::catalog::Catalog;
+use omendb::sql_engine::{ExecutionResult, SqlEngine};
 use tempfile::TempDir;
 
 fn main() -> Result<()> {
@@ -60,12 +60,17 @@ fn main() -> Result<()> {
     println!("SQL: {}", sql);
 
     match engine.execute(sql)? {
-        ExecutionResult::Selected { columns, rows, data } => {
+        ExecutionResult::Selected {
+            columns,
+            rows,
+            data,
+        } => {
             println!("✅ Retrieved {} rows", rows);
             println!();
             println!("Columns: {:?}", columns);
             for (i, row) in data.iter().enumerate() {
-                println!("Row {}: id={:?}, name={:?}, age={:?}, active={:?}",
+                println!(
+                    "Row {}: id={:?}, name={:?}, age={:?}, active={:?}",
                     i + 1,
                     row.get(0)?,
                     row.get(1)?,
@@ -111,7 +116,9 @@ fn main() -> Result<()> {
     println!("SQL: INSERT 7 metrics...");
 
     match engine.execute(sql)? {
-        ExecutionResult::Inserted { rows } => println!("✅ Inserted {} rows (indexed by timestamp)", rows),
+        ExecutionResult::Inserted { rows } => {
+            println!("✅ Inserted {} rows (indexed by timestamp)", rows)
+        }
         _ => unreachable!(),
     }
     println!();
@@ -124,12 +131,17 @@ fn main() -> Result<()> {
     println!("SQL: {}", sql);
 
     match engine.execute(sql)? {
-        ExecutionResult::Selected { columns, rows, data } => {
+        ExecutionResult::Selected {
+            columns,
+            rows,
+            data,
+        } => {
             println!("✅ Retrieved {} rows using learned index", rows);
             println!();
             println!("Columns: {:?}", columns);
             for (i, row) in data.iter().enumerate() {
-                println!("Metric {}: ts={:?}, sensor={:?}, value={:?}, status={:?}",
+                println!(
+                    "Metric {}: ts={:?}, sensor={:?}, value={:?}, status={:?}",
                     i + 1,
                     row.get(0)?,
                     row.get(1)?,
@@ -155,7 +167,8 @@ fn main() -> Result<()> {
         ExecutionResult::Selected { rows, data, .. } => {
             println!("✅ Found {} row(s)", rows);
             for row in data {
-                println!("   ts={:?}, sensor={:?}, value={:?}, status={:?}",
+                println!(
+                    "   ts={:?}, sensor={:?}, value={:?}, status={:?}",
                     row.get(0)?,
                     row.get(1)?,
                     row.get(2)?,
@@ -176,7 +189,8 @@ fn main() -> Result<()> {
         ExecutionResult::Selected { rows, data, .. } => {
             println!("✅ Found {} rows in range", rows);
             for row in data {
-                println!("   ts={:?}, sensor={:?}, value={:?}, status={:?}",
+                println!(
+                    "   ts={:?}, sensor={:?}, value={:?}, status={:?}",
                     row.get(0)?,
                     row.get(1)?,
                     row.get(2)?,
@@ -197,7 +211,8 @@ fn main() -> Result<()> {
         ExecutionResult::Selected { rows, data, .. } => {
             println!("✅ Found {} rows", rows);
             for row in data {
-                println!("   ts={:?}, sensor={:?}, value={:?}, status={:?}",
+                println!(
+                    "   ts={:?}, sensor={:?}, value={:?}, status={:?}",
                     row.get(0)?,
                     row.get(1)?,
                     row.get(2)?,

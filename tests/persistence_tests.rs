@@ -18,7 +18,8 @@ async fn connect_postgres(port: u16) -> anyhow::Result<tokio_postgres::Client> {
     let (client, connection) = tokio_postgres::connect(
         &format!("host=127.0.0.1 port={} user=test dbname=test", port),
         NoTls,
-    ).await?;
+    )
+    .await?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -53,15 +54,28 @@ async fn test_persistence_in_memory_tables() {
         .unwrap();
 
     // Verify data exists
-    let result = ctx1.sql("SELECT * FROM temp_data").await.unwrap().collect().await.unwrap();
-    assert_eq!(result[0].num_rows(), 1, "Data should exist in first context");
+    let result = ctx1
+        .sql("SELECT * FROM temp_data")
+        .await
+        .unwrap()
+        .collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        result[0].num_rows(),
+        1,
+        "Data should exist in first context"
+    );
 
     // Create new context (simulating restart)
     let ctx2 = SessionContext::new();
 
     // Attempt to query same table - should fail because table doesn't exist
     let result = ctx2.sql("SELECT * FROM temp_data").await;
-    assert!(result.is_err(), "Table should not exist in new context (in-memory only)");
+    assert!(
+        result.is_err(),
+        "Table should not exist in new context (in-memory only)"
+    );
 }
 
 #[tokio::test]
@@ -78,7 +92,7 @@ async fn test_persistence_shared_context() {
     let pg_ctx = ctx.clone();
     let pg_server = PostgresServer::with_addr(
         &format!("127.0.0.1:{}", pg_port),
-        (*pg_ctx.read().await).clone()
+        (*pg_ctx.read().await).clone(),
     );
     tokio::spawn(async move {
         let _ = pg_server.serve().await;
@@ -88,7 +102,7 @@ async fn test_persistence_shared_context() {
     let rest_ctx = ctx.clone();
     let rest_server = RestServer::with_addr(
         &format!("127.0.0.1:{}", rest_port),
-        (*rest_ctx.read().await).clone()
+        (*rest_ctx.read().await).clone(),
     );
     tokio::spawn(async move {
         let _ = rest_server.serve().await;
@@ -168,8 +182,14 @@ async fn test_persistence_session_isolation() {
         .await
         .unwrap();
 
-    let count1 = results1.iter().filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_))).count();
-    let count2 = results2.iter().filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_))).count();
+    let count1 = results1
+        .iter()
+        .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
+        .count();
+    let count2 = results2
+        .iter()
+        .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
+        .count();
 
     assert_eq!(count1, 1, "Client 1 should see data");
     assert_eq!(count2, 1, "Client 2 should see data");
@@ -227,7 +247,8 @@ async fn test_persistence_concurrent_writes() {
         .await
         .unwrap();
 
-    let count = results.iter()
+    let count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 
@@ -243,18 +264,20 @@ async fn test_persistence_table_metadata() {
     let ctx = SessionContext::new();
 
     // Create table with specific schema
-    ctx.sql("CREATE TABLE metadata_test (
+    ctx.sql(
+        "CREATE TABLE metadata_test (
         id INT,
         name VARCHAR,
         age INT,
         salary DOUBLE,
         active BOOLEAN
-    )")
-        .await
-        .unwrap()
-        .collect()
-        .await
-        .unwrap();
+    )",
+    )
+    .await
+    .unwrap()
+    .collect()
+    .await
+    .unwrap();
 
     let server = PostgresServer::with_addr(&format!("127.0.0.1:{}", port), ctx);
     tokio::spawn(async move {
@@ -278,7 +301,8 @@ async fn test_persistence_table_metadata() {
         .await
         .unwrap();
 
-    let row_count = results.iter()
+    let row_count = results
+        .iter()
         .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
         .count();
 

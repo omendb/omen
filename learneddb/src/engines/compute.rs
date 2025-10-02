@@ -23,10 +23,7 @@ impl ComputeEngine for RustSIMDEngine {
 
     fn batch_distance(&self, query: &[f32], vectors: &[&[f32]]) -> Vec<f32> {
         // TODO: Implement SIMD batch processing
-        vectors
-            .iter()
-            .map(|v| self.distance(query, v))
-            .collect()
+        vectors.iter().map(|v| self.distance(query, v)).collect()
     }
 
     fn knn(&self, query: &[f32], vectors: &[&[f32]], k: usize) -> Vec<(usize, f32)> {
@@ -85,10 +82,7 @@ impl ComputeEngine for ScalarEngine {
     }
 
     fn batch_distance(&self, query: &[f32], vectors: &[&[f32]]) -> Vec<f32> {
-        vectors
-            .iter()
-            .map(|v| self.distance(query, v))
-            .collect()
+        vectors.iter().map(|v| self.distance(query, v)).collect()
     }
 
     fn knn(&self, query: &[f32], vectors: &[&[f32]], k: usize) -> Vec<(usize, f32)> {
@@ -126,12 +120,7 @@ mod tests {
     fn test_scalar_knn() {
         let engine = ScalarEngine::new();
         let query = vec![0.0, 0.0];
-        let vectors: Vec<&[f32]> = vec![
-            &[1.0, 1.0],
-            &[2.0, 2.0],
-            &[3.0, 3.0],
-            &[0.5, 0.5],
-        ];
+        let vectors: Vec<&[f32]> = vec![&[1.0, 1.0], &[2.0, 2.0], &[3.0, 3.0], &[0.5, 0.5]];
 
         let results = engine.knn(&query, &vectors, 2);
         assert_eq!(results.len(), 2);

@@ -8,8 +8,8 @@ use datafusion::catalog::Session;
 use datafusion::datasource::TableProvider;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::logical_expr::{Expr, TableType};
-use datafusion::physical_plan::ExecutionPlan;
 use datafusion::physical_plan::memory::MemoryExec;
+use datafusion::physical_plan::ExecutionPlan;
 use std::any::Any;
 use std::sync::{Arc, RwLock};
 
@@ -60,7 +60,9 @@ impl RedbTable {
         for expr in filters {
             if let Expr::BinaryExpr(binary) = expr {
                 // Check for: id = <value>
-                if let (Expr::Column(col), Expr::Literal(scalar_value)) = (&*binary.left, &*binary.right) {
+                if let (Expr::Column(col), Expr::Literal(scalar_value)) =
+                    (&*binary.left, &*binary.right)
+                {
                     if col.name == "id" && binary.op == datafusion::logical_expr::Operator::Eq {
                         if let datafusion::scalar::ScalarValue::Int64(Some(value)) = scalar_value {
                             return Some(*value);
@@ -68,7 +70,9 @@ impl RedbTable {
                     }
                 }
                 // Also check reversed: <value> = id
-                if let (Expr::Literal(scalar_value), Expr::Column(col)) = (&*binary.left, &*binary.right) {
+                if let (Expr::Literal(scalar_value), Expr::Column(col)) =
+                    (&*binary.left, &*binary.right)
+                {
                     if col.name == "id" && binary.op == datafusion::logical_expr::Operator::Eq {
                         if let datafusion::scalar::ScalarValue::Int64(Some(value)) = scalar_value {
                             return Some(*value);
@@ -82,7 +86,9 @@ impl RedbTable {
 
     /// Execute a point query using learned index
     fn execute_point_query(&self, key: i64) -> Result<RecordBatch> {
-        let storage = self.storage.read()
+        let storage = self
+            .storage
+            .read()
             .map_err(|e| DataFusionError::Execution(format!("Lock error: {}", e)))?;
 
         match storage.point_query(key) {
@@ -117,13 +123,18 @@ impl RedbTable {
 
                 Ok(batch)
             }
-            Err(e) => Err(DataFusionError::Execution(format!("Point query failed: {}", e))),
+            Err(e) => Err(DataFusionError::Execution(format!(
+                "Point query failed: {}",
+                e
+            ))),
         }
     }
 
     /// Execute a full table scan
     fn execute_full_scan(&self) -> Result<RecordBatch> {
-        let storage = self.storage.read()
+        let storage = self
+            .storage
+            .read()
             .map_err(|e| DataFusionError::Execution(format!("Lock error: {}", e)))?;
 
         match storage.scan_all() {
@@ -149,7 +160,10 @@ impl RedbTable {
 
                 Ok(batch)
             }
-            Err(e) => Err(DataFusionError::Execution(format!("Full scan failed: {}", e))),
+            Err(e) => Err(DataFusionError::Execution(format!(
+                "Full scan failed: {}",
+                e
+            ))),
         }
     }
 }
@@ -187,7 +201,8 @@ impl TableProvider for RedbTable {
                 batch
             };
 
-            let exec = MemoryExec::try_new(&[vec![batch]], self.schema.clone(), projection.cloned())?;
+            let exec =
+                MemoryExec::try_new(&[vec![batch]], self.schema.clone(), projection.cloned())?;
             return Ok(Arc::new(exec));
         }
 
@@ -233,7 +248,10 @@ mod tests {
         ctx.register_table("test_table", Arc::new(table)).unwrap();
 
         // Execute point query
-        let df = ctx.sql("SELECT * FROM test_table WHERE id = 2").await.unwrap();
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id = 2")
+            .await
+            .unwrap();
         let results = df.collect().await.unwrap();
 
         assert_eq!(results.len(), 1);
@@ -248,7 +266,9 @@ mod tests {
         let mut storage = RedbStorage::new(&db_path).unwrap();
 
         for i in 0..10 {
-            storage.insert(i, format!("value_{}", i).as_bytes()).unwrap();
+            storage
+                .insert(i, format!("value_{}", i).as_bytes())
+                .unwrap();
         }
 
         let storage = Arc::new(RwLock::new(storage));
@@ -278,7 +298,10 @@ mod tests {
         let ctx = SessionContext::new();
         ctx.register_table("test_table", Arc::new(table)).unwrap();
 
-        let df = ctx.sql("SELECT id FROM test_table WHERE id = 42").await.unwrap();
+        let df = ctx
+            .sql("SELECT id FROM test_table WHERE id = 42")
+            .await
+            .unwrap();
         let results = df.collect().await.unwrap();
 
         assert_eq!(results.len(), 1);
@@ -303,7 +326,10 @@ mod tests {
         let ctx = SessionContext::new();
         ctx.register_table("test_table", Arc::new(table)).unwrap();
 
-        let df = ctx.sql("SELECT COUNT(*) as count FROM test_table").await.unwrap();
+        let df = ctx
+            .sql("SELECT COUNT(*) as count FROM test_table")
+            .await
+            .unwrap();
         let results = df.collect().await.unwrap();
 
         assert_eq!(results.len(), 1);

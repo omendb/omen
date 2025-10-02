@@ -2,14 +2,14 @@
 
 use std::fmt::Debug;
 
+pub mod compute;
 pub mod index_fixed;
 pub mod storage;
-pub mod compute;
 
-pub use index_fixed as index;
-pub use index::{LearnedLinearEngine, LearnedRMIEngine, BTreeEngine};
-pub use storage::{RocksDBEngine, InMemoryEngine};
 pub use compute::{RustSIMDEngine, ScalarEngine};
+pub use index::{BTreeEngine, LearnedLinearEngine, LearnedRMIEngine};
+pub use index_fixed as index;
+pub use storage::{InMemoryEngine, RocksDBEngine};
 
 /// Result type for engine operations
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
