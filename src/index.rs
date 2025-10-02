@@ -359,6 +359,11 @@ impl RecursiveModelIndex {
     pub fn count_range(&self, start_key: i64, end_key: i64) -> usize {
         self.range_search(start_key, end_key).len()
     }
+
+    /// Get total number of models (root + second layer)
+    pub fn model_count(&self) -> usize {
+        1 + self.second_layer.len()
+    }
 }
 
 // Implement trait for storage integration

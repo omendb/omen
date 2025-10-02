@@ -1,6 +1,7 @@
 //! redb-based transactional storage with learned index integration
 
 use crate::index::RecursiveModelIndex;
+use crate::metrics;
 use crate::row::Row;
 use crate::value::Value;
 use anyhow::{anyhow, Result};
@@ -8,6 +9,7 @@ use redb::{Database, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 
 const DATA_TABLE: TableDefinition<i64, &[u8]> = TableDefinition::new("data");
 const METADATA_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("metadata");
@@ -107,12 +109,21 @@ impl RedbStorage {
                 .map(|(pos, &key)| (key, pos))
                 .collect();
             self.learned_index.train(data);
+
+            // Update learned index size metrics
+            metrics::set_learned_index_size(self.sorted_keys.len());
+            metrics::set_learned_index_models(self.learned_index.model_count());
+        } else {
+            metrics::set_learned_index_size(0);
+            metrics::set_learned_index_models(0);
         }
 
         Ok(())
     }
 
     pub fn insert(&mut self, key: i64, value: &[u8]) -> Result<()> {
+        let start_time = Instant::now();
+
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(DATA_TABLE)?;
@@ -137,6 +148,7 @@ impl RedbStorage {
             self.save_metadata()?;
         }
 
+        metrics::record_insert(start_time.elapsed().as_secs_f64());
         Ok(())
     }
 
@@ -144,6 +156,9 @@ impl RedbStorage {
         if entries.is_empty() {
             return Ok(());
         }
+
+        let start_time = Instant::now();
+        let batch_size = entries.len();
 
         // Single transaction for all inserts (MUCH faster)
         let write_txn = self.db.begin_write()?;
@@ -160,12 +175,21 @@ impl RedbStorage {
         self.row_count = self.sorted_keys.len() as u64;
         self.save_metadata()?;
 
+        let duration = start_time.elapsed().as_secs_f64();
+        let throughput = batch_size as f64 / duration;
+
+        for _ in 0..batch_size {
+            metrics::record_insert(duration / batch_size as f64);
+        }
+
         Ok(())
     }
 
     pub fn point_query(&self, key: i64) -> Result<Option<Vec<u8>>> {
+        let start_time = Instant::now();
+
         // Use learned index to predict position in sorted_keys array
-        if !self.sorted_keys.is_empty() {
+        let result = if !self.sorted_keys.is_empty() {
             if let Some(predicted_pos) = self.learned_index.search(key) {
                 // Define search window around predicted position (learned index error bound)
                 let window_size = 100; // Papers show typical error bound of 10-100
@@ -175,33 +199,74 @@ impl RedbStorage {
                 let end = (predicted_pos + window_size).min(self.sorted_keys.len());
 
                 // Binary search in the predicted window
-                if let Ok(_pos) = self.sorted_keys[start..end].binary_search(&key) {
+                if let Ok(pos) = self.sorted_keys[start..end].binary_search(&key) {
+                    let actual_pos = start + pos;
+
+                    // Record learned index hit with prediction accuracy
+                    metrics::record_learned_index_hit(predicted_pos, actual_pos);
+                    metrics::record_query_path("learned_index");
+
                     // Found the key, now look up value in redb
                     let read_txn = self.db.begin_read()?;
                     let table = read_txn.open_table(DATA_TABLE)?;
 
                     if let Some(value_guard) = table.get(key)? {
-                        return Ok(Some(value_guard.value().to_vec()));
+                        let result = Ok(Some(value_guard.value().to_vec()));
+
+                        // Record successful search
+                        metrics::record_search(start_time.elapsed().as_secs_f64());
+
+                        return result;
                     }
                 }
 
-                // Key not found in predicted window, return None
-                return Ok(None);
+                // Key not found in predicted window
+                metrics::record_learned_index_miss();
+                metrics::record_query_path("fallback_btree");
+
+                metrics::record_search(start_time.elapsed().as_secs_f64());
+                Ok(None)
+            } else {
+                // Learned index returned None (shouldn't happen)
+                metrics::record_learned_index_miss();
+                metrics::record_query_path("fallback_btree");
+
+                // Fallback to direct lookup
+                let read_txn = self.db.begin_read()?;
+                let table = read_txn.open_table(DATA_TABLE)?;
+
+                let result = if let Some(value_guard) = table.get(key)? {
+                    Ok(Some(value_guard.value().to_vec()))
+                } else {
+                    Ok(None)
+                };
+
+                metrics::record_search(start_time.elapsed().as_secs_f64());
+                result
             }
-        }
-
-        // Fallback: if no index, use direct lookup
-        let read_txn = self.db.begin_read()?;
-        let table = read_txn.open_table(DATA_TABLE)?;
-
-        if let Some(value_guard) = table.get(key)? {
-            Ok(Some(value_guard.value().to_vec()))
         } else {
-            Ok(None)
-        }
+            // No index available, direct lookup
+            metrics::record_query_path("fallback_btree");
+
+            let read_txn = self.db.begin_read()?;
+            let table = read_txn.open_table(DATA_TABLE)?;
+
+            let result = if let Some(value_guard) = table.get(key)? {
+                Ok(Some(value_guard.value().to_vec()))
+            } else {
+                Ok(None)
+            };
+
+            metrics::record_search(start_time.elapsed().as_secs_f64());
+            result
+        };
+
+        result
     }
 
     pub fn range_query(&self, start_key: i64, end_key: i64) -> Result<Vec<(i64, Vec<u8>)>> {
+        let start_time = Instant::now();
+
         // Use learned index to find range positions
         if !self.sorted_keys.is_empty() {
             let positions = self.learned_index.range_search(start_key, end_key);
@@ -242,11 +307,17 @@ impl RedbStorage {
                     }
                 }
 
+                // Record learned index range query success
+                metrics::record_query_path("learned_index");
+                metrics::record_range_query(start_time.elapsed().as_secs_f64(), results.len());
+
                 return Ok(results);
             }
         }
 
         // Fallback: full scan if no index
+        metrics::record_query_path("full_scan");
+
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
@@ -265,6 +336,7 @@ impl RedbStorage {
             }
         }
 
+        metrics::record_range_query(start_time.elapsed().as_secs_f64(), results.len());
         Ok(results)
     }
 
@@ -284,6 +356,8 @@ impl RedbStorage {
     }
 
     pub fn delete(&mut self, key: i64) -> Result<bool> {
+        let start_time = Instant::now();
+
         let write_txn = self.db.begin_write()?;
         let deleted;
         {
@@ -298,6 +372,7 @@ impl RedbStorage {
             self.save_metadata()?;
         }
 
+        metrics::record_delete(start_time.elapsed().as_secs_f64());
         Ok(deleted)
     }
 

@@ -269,6 +269,18 @@ pub fn record_insert_failure() {
     FAILED_INSERTS.inc();
 }
 
+/// Record a range query
+pub fn record_range_query(duration_secs: f64, rows_returned: usize) {
+    TOTAL_SEARCHES.inc();
+    SEARCH_DURATION.observe(duration_secs);
+}
+
+/// Record a delete operation
+pub fn record_delete(duration_secs: f64) {
+    // Could add delete-specific metrics later if needed
+    // For now, track as a write operation
+}
+
 /// Update active connections
 pub fn set_active_connections(count: i64) {
     ACTIVE_CONNECTIONS.set(count);
@@ -330,13 +342,13 @@ pub fn record_query_path(path: &str) {
 }
 
 /// Update learned index size
-pub fn set_learned_index_size(keys: i64) {
-    LEARNED_INDEX_SIZE_KEYS.set(keys);
+pub fn set_learned_index_size(keys: usize) {
+    LEARNED_INDEX_SIZE_KEYS.set(keys as i64);
 }
 
 /// Update learned index model count
-pub fn set_learned_index_models(count: i64) {
-    LEARNED_INDEX_MODELS_COUNT.set(count);
+pub fn set_learned_index_models(count: usize) {
+    LEARNED_INDEX_MODELS_COUNT.set(count as i64);
 }
 
 /// Calculate learned index hit rate (0.0 to 1.0)
