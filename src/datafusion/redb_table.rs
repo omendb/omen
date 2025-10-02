@@ -84,6 +84,84 @@ impl RedbTable {
         None
     }
 
+    /// Detect if this is a range query (WHERE id BETWEEN x AND y, or id >= x AND id <= y)
+    /// Returns (start_key, end_key) if detected
+    fn is_range_query(filters: &[Expr]) -> Option<(i64, i64)> {
+        use datafusion::logical_expr::Operator;
+        use datafusion::scalar::ScalarValue;
+
+        // Check for BETWEEN expression: id BETWEEN low AND high
+        for expr in filters {
+            if let Expr::Between(between) = expr {
+                if let Expr::Column(col) = &*between.expr {
+                    if col.name == "id" && !between.negated {
+                        // Extract low and high bounds
+                        if let (Expr::Literal(ScalarValue::Int64(Some(low))), Expr::Literal(ScalarValue::Int64(Some(high)))) =
+                            (&*between.low, &*between.high)
+                        {
+                            return Some((*low, *high));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check for range expressed as AND of two binary expressions
+        // Pattern: id >= x AND id <= y
+        let mut lower_bound: Option<i64> = None;
+        let mut upper_bound: Option<i64> = None;
+
+        for expr in filters {
+            if let Expr::BinaryExpr(binary) = expr {
+                // Check if this is a comparison on id column
+                if let Expr::Column(col) = &*binary.left {
+                    if col.name == "id" {
+                        if let Expr::Literal(ScalarValue::Int64(Some(value))) = &*binary.right {
+                            match binary.op {
+                                Operator::GtEq | Operator::Gt => {
+                                    let adjusted = if binary.op == Operator::Gt { value + 1 } else { *value };
+                                    lower_bound = Some(lower_bound.map_or(adjusted, |lb| lb.max(adjusted)));
+                                }
+                                Operator::LtEq | Operator::Lt => {
+                                    let adjusted = if binary.op == Operator::Lt { value - 1 } else { *value };
+                                    upper_bound = Some(upper_bound.map_or(adjusted, |ub| ub.min(adjusted)));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                // Also check reversed comparisons: value <= id, value >= id
+                if let Expr::Column(col) = &*binary.right {
+                    if col.name == "id" {
+                        if let Expr::Literal(ScalarValue::Int64(Some(value))) = &*binary.left {
+                            match binary.op {
+                                Operator::LtEq | Operator::Lt => {
+                                    let adjusted = if binary.op == Operator::Lt { value + 1 } else { *value };
+                                    lower_bound = Some(lower_bound.map_or(adjusted, |lb| lb.max(adjusted)));
+                                }
+                                Operator::GtEq | Operator::Gt => {
+                                    let adjusted = if binary.op == Operator::Gt { value - 1 } else { *value };
+                                    upper_bound = Some(upper_bound.map_or(adjusted, |ub| ub.min(adjusted)));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we found both bounds, return the range
+        if let (Some(lower), Some(upper)) = (lower_bound, upper_bound) {
+            if lower <= upper {
+                return Some((lower, upper));
+            }
+        }
+
+        None
+    }
+
     /// Execute a point query using learned index
     fn execute_point_query(&self, key: i64) -> Result<RecordBatch> {
         let storage = self
@@ -125,6 +203,43 @@ impl RedbTable {
             }
             Err(e) => Err(DataFusionError::Execution(format!(
                 "Point query failed: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Execute a range query using learned index
+    fn execute_range_query(&self, start_key: i64, end_key: i64) -> Result<RecordBatch> {
+        let storage = self
+            .storage
+            .read()
+            .map_err(|e| DataFusionError::Execution(format!("Lock error: {}", e)))?;
+
+        match storage.range_query(start_key, end_key) {
+            Ok(rows) => {
+                let mut ids = Vec::with_capacity(rows.len());
+                let mut values = Vec::with_capacity(rows.len());
+
+                for (id, value_bytes) in rows {
+                    ids.push(id);
+                    values.push(String::from_utf8_lossy(&value_bytes).to_string());
+                }
+
+                let id_array = Int64Array::from(ids);
+                let value_array = StringArray::from(values);
+
+                let batch = RecordBatch::try_new(
+                    self.schema.clone(),
+                    vec![
+                        Arc::new(id_array) as ArrayRef,
+                        Arc::new(value_array) as ArrayRef,
+                    ],
+                )?;
+
+                Ok(batch)
+            }
+            Err(e) => Err(DataFusionError::Execution(format!(
+                "Range query failed: {}",
                 e
             ))),
         }
@@ -189,10 +304,27 @@ impl TableProvider for RedbTable {
         filters: &[Expr],
         _limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
-        // Check if this is a point query
+        // Check if this is a point query (most specific)
         if let Some(key) = Self::is_point_query(filters) {
             // Use learned index for point query
             let batch = self.execute_point_query(key)?;
+
+            // Apply projection if needed
+            let batch = if let Some(proj) = projection {
+                batch.project(proj)?
+            } else {
+                batch
+            };
+
+            let exec =
+                MemoryExec::try_new(&[vec![batch]], self.schema.clone(), projection.cloned())?;
+            return Ok(Arc::new(exec));
+        }
+
+        // Check if this is a range query
+        if let Some((start_key, end_key)) = Self::is_range_query(filters) {
+            // Use learned index for range query
+            let batch = self.execute_range_query(start_key, end_key)?;
 
             // Apply projection if needed
             let batch = if let Some(proj) = projection {
@@ -334,5 +466,175 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].num_rows(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_datafusion_range_query_between() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_range_between.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Insert 1000 rows
+        for i in 0..1000 {
+            storage
+                .insert(i, format!("value_{}", i).as_bytes())
+                .unwrap();
+        }
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Test BETWEEN clause (should use learned index range_query)
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id BETWEEN 400 AND 600")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 201, "Should return 201 rows (400-600 inclusive)");
+
+        // Verify all returned rows are in range
+        for batch in &results {
+            let id_array = batch
+                .column(0)
+                .as_any()
+                .downcast_ref::<Int64Array>()
+                .unwrap();
+            for i in 0..id_array.len() {
+                let id = id_array.value(i);
+                assert!(
+                    id >= 400 && id <= 600,
+                    "Row id {} should be in range 400-600",
+                    id
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_datafusion_range_query_gte_lte() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_range_gte_lte.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        for i in 0..1000 {
+            storage
+                .insert(i, format!("value_{}", i).as_bytes())
+                .unwrap();
+        }
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Test >= AND <= (should use learned index range_query)
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id >= 250 AND id <= 350")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 101, "Should return 101 rows (250-350 inclusive)");
+    }
+
+    #[tokio::test]
+    async fn test_datafusion_range_query_gt_lt() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_range_gt_lt.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        for i in 0..1000 {
+            storage
+                .insert(i, format!("value_{}", i).as_bytes())
+                .unwrap();
+        }
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Test > AND < (exclusive bounds, should use learned index)
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id > 100 AND id < 200")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(
+            total_rows, 99,
+            "Should return 99 rows (101-199, exclusive bounds)"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_datafusion_range_query_large() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_range_large.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        // Insert 10K rows for more realistic test
+        let batch: Vec<(i64, Vec<u8>)> = (0..10000)
+            .map(|i| (i, format!("value_{}", i).into_bytes()))
+            .collect();
+        storage.insert_batch(batch).unwrap();
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Large range query (should be much faster with learned index than full scan)
+        let df = ctx
+            .sql("SELECT * FROM test_table WHERE id BETWEEN 4000 AND 6000")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+
+        let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(total_rows, 2001, "Should return 2001 rows");
+    }
+
+    #[tokio::test]
+    async fn test_datafusion_range_query_projection() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test_df_range_proj.redb");
+
+        let mut storage = RedbStorage::new(&db_path).unwrap();
+
+        for i in 0..100 {
+            storage.insert(i, b"value").unwrap();
+        }
+
+        let storage = Arc::new(RwLock::new(storage));
+        let table = RedbTable::new(storage, "test_table");
+
+        let ctx = SessionContext::new();
+        ctx.register_table("test_table", Arc::new(table)).unwrap();
+
+        // Range query with projection
+        let df = ctx
+            .sql("SELECT id FROM test_table WHERE id BETWEEN 30 AND 40")
+            .await
+            .unwrap();
+        let results = df.collect().await.unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].num_columns(), 1, "Should project only id column");
+        assert_eq!(results[0].num_rows(), 11, "Should return 11 rows");
     }
 }
