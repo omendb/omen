@@ -5,7 +5,7 @@ use crate::metrics;
 use crate::row::Row;
 use crate::value::Value;
 use anyhow::{anyhow, Result};
-use redb::{Database, ReadableTable, TableDefinition};
+use redb::{Database, ReadableTable, ReadTransaction, TableDefinition};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -33,6 +33,8 @@ pub struct RedbStorage {
     index_dirty: bool,
     /// Cached error bound (updated after index rebuild)
     cached_error_bound: usize,
+    /// Cached read transaction (invalidated on writes for consistency)
+    cached_read_txn: Option<ReadTransaction>,
 }
 
 impl RedbStorage {
@@ -55,6 +57,7 @@ impl RedbStorage {
             sorted_keys: Vec::new(),
             index_dirty: false,
             cached_error_bound: 100, // Default
+            cached_read_txn: None,   // Will be created on first query
         };
 
         storage.load_metadata()?;
@@ -149,10 +152,22 @@ impl RedbStorage {
     fn ensure_index_fresh(&mut self) -> Result<()> {
         if self.index_dirty {
             debug!("Index dirty, triggering lazy rebuild");
+            // Invalidate cached read transaction before rebuild
+            self.cached_read_txn = None;
             self.rebuild_index()?;
             self.index_dirty = false;
+            // Create fresh read transaction after rebuild
+            self.cached_read_txn = Some(self.db.begin_read()?);
         }
         Ok(())
+    }
+
+    /// Get cached read transaction, creating it if needed
+    fn get_read_txn(&mut self) -> Result<&ReadTransaction> {
+        if self.cached_read_txn.is_none() {
+            self.cached_read_txn = Some(self.db.begin_read()?);
+        }
+        Ok(self.cached_read_txn.as_ref().unwrap())
     }
 
     #[instrument(skip(self, value), fields(key = key, value_size = value.len()))]
@@ -215,6 +230,8 @@ impl RedbStorage {
         // Mark index as dirty - DON'T rebuild immediately (lazy rebuild optimization)
         // Index will rebuild on next query for 10-100x insert speedup
         self.index_dirty = true;
+        // Invalidate cached read transaction (will see stale data after write)
+        self.cached_read_txn = None;
         self.row_count += batch_size as u64;
         self.save_metadata()?;
 
@@ -261,8 +278,8 @@ impl RedbStorage {
                     metrics::record_learned_index_hit(predicted_pos, actual_pos);
                     metrics::record_query_path("learned_index");
 
-                    // Found the key, now look up value in redb
-                    let read_txn = self.db.begin_read()?;
+                    // Found the key, now look up value in redb using cached transaction
+                    let read_txn = self.get_read_txn()?;
                     let table = read_txn.open_table(DATA_TABLE)?;
 
                     if let Some(value_guard) = table.get(key)? {
@@ -286,8 +303,8 @@ impl RedbStorage {
                 metrics::record_learned_index_miss();
                 metrics::record_query_path("fallback_btree");
 
-                // Fallback to direct lookup
-                let read_txn = self.db.begin_read()?;
+                // Fallback to direct lookup using cached transaction
+                let read_txn = self.get_read_txn()?;
                 let table = read_txn.open_table(DATA_TABLE)?;
 
                 let result = if let Some(value_guard) = table.get(key)? {
@@ -300,10 +317,10 @@ impl RedbStorage {
                 result
             }
         } else {
-            // No index available, direct lookup
+            // No index available, direct lookup using cached transaction
             metrics::record_query_path("fallback_btree");
 
-            let read_txn = self.db.begin_read()?;
+            let read_txn = self.get_read_txn()?;
             let table = read_txn.open_table(DATA_TABLE)?;
 
             let result = if let Some(value_guard) = table.get(key)? {
@@ -359,16 +376,17 @@ impl RedbStorage {
                     .unwrap_or_else(|pos| pos)
                     + start_pos;
 
-                // Collect keys in range
-                let keys_in_range =
-                    &self.sorted_keys[actual_start..actual_end.min(self.sorted_keys.len())];
+                // Collect keys in range (copy to Vec to avoid borrow conflicts)
+                let keys_in_range: Vec<i64> = self.sorted_keys
+                    [actual_start..actual_end.min(self.sorted_keys.len())]
+                    .to_vec();
 
-                // Batch lookup values from redb
-                let read_txn = self.db.begin_read()?;
+                // Batch lookup values from redb using cached transaction
+                let read_txn = self.get_read_txn()?;
                 let table = read_txn.open_table(DATA_TABLE)?;
 
                 let mut results = Vec::with_capacity(keys_in_range.len());
-                for &key in keys_in_range {
+                for &key in &keys_in_range {
                     if let Some(value_guard) = table.get(key)? {
                         results.push((key, value_guard.value().to_vec()));
                     }
@@ -385,7 +403,7 @@ impl RedbStorage {
         // Fallback: full scan if no index
         metrics::record_query_path("full_scan");
 
-        let read_txn = self.db.begin_read()?;
+        let read_txn = self.get_read_txn()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
         let mut results = Vec::new();
@@ -426,7 +444,7 @@ impl RedbStorage {
         // Lazy rebuild: ensure index is fresh
         self.ensure_index_fresh()?;
 
-        let read_txn = self.db.begin_read()?;
+        let read_txn = self.get_read_txn()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
         let results: Result<Vec<_>> = table
