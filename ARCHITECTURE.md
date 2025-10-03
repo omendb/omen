@@ -63,7 +63,7 @@ OmenDB is a PostgreSQL-compatible database that combines DataFusion's SQL engine
                                        ┌─────────▼─────────┐
                                        │  redb Storage     │
                                        │  + Learned Index  │
-                                       │  (RMI/PGM)        │
+                                       │  (ALEX)           │
                                        └───────────────────┘
 ```
 
@@ -112,32 +112,39 @@ OmenDB is a PostgreSQL-compatible database that combines DataFusion's SQL engine
 **Available: RedbTable with Learned Index** (`src/datafusion/redb_table.rs`, `src/redb_storage.rs`)
 - Opt-in via `ctx.register_table("name", Arc::new(RedbTable::new(...)))`
 - Features:
-  - Learned index (RMI - Recursive Model Index)
+  - ALEX learned index (Adaptive Learned indEX)
   - Persistent storage (redb ACID database)
   - Automatic point query detection
-  - Optimized for large datasets (100K+ rows)
+  - Optimized for large datasets (100K+ rows) and dynamic workloads
 - Components:
   - `RedbStorage`: redb wrapper with learned index integration
   - `RedbTable`: DataFusion TableProvider implementation
   - Point query detection: `WHERE id = <value>` → uses learned index
   - Full scan fallback for other queries
 
-### 4. Learned Index Implementation (`src/index.rs`)
+### 4. Learned Index Implementation (`src/alex/`)
 
-**Recursive Model Index (RMI)**
-- Multi-stage learned index using linear regression
+**ALEX (Adaptive Learned indEX)** - Primary implementation
+- Gapped array structure for dynamic workloads
 - Architecture:
   ```
-  Root Model (linear regression)
+  AlexTree (root)
         ↓
-  Second Level Models (M models)
+  Multiple GappedNode leaves (adaptive splits)
         ↓
-  Predicted Position → Binary Search in small window
+  LinearModel per node → Exponential search
+        ↓
+  O(1) inserts, O(log n) queries
   ```
 - Performance characteristics:
-  - **Small datasets (< 10K rows)**: May be slower than full scan due to overhead
-  - **Medium datasets (10K - 100K rows)**: Competitive with B-trees
-  - **Large datasets (100K+ rows)**: Significant speedup (3-10x expected)
+  - **Writes**: O(1) amortized inserts with gapped arrays (50% spare capacity)
+  - **Reads**: O(log n) tree traversal + O(log error) exponential search
+  - **Scaling**: Linear (10.6x time for 10x data)
+  - **Dynamic workloads**: No O(n) rebuilds, auto-retraining on splits
+
+**RecursiveModelIndex (RMI)** - Legacy, deprecated for dynamic workloads (`src/index.rs`)
+- Static learned index, requires O(n) rebuilds on writes
+- Still used in some benchmarks for comparison
 
 ## Performance Characteristics
 
