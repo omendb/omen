@@ -5,8 +5,10 @@ use crate::metrics;
 use crate::row::Row;
 use crate::value::Value;
 use anyhow::{anyhow, Result};
+use lru::LruCache;
 use redb::{Database, ReadableTable, ReadTransaction, TableDefinition};
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -35,6 +37,8 @@ pub struct RedbStorage {
     cached_error_bound: usize,
     /// Cached read transaction (invalidated on writes for consistency)
     cached_read_txn: Option<ReadTransaction>,
+    /// LRU cache for hot values (capacity: 1000 entries)
+    value_cache: LruCache<i64, Vec<u8>>,
 }
 
 impl RedbStorage {
@@ -58,6 +62,7 @@ impl RedbStorage {
             index_dirty: false,
             cached_error_bound: 100, // Default
             cached_read_txn: None,   // Will be created on first query
+            value_cache: LruCache::new(NonZeroUsize::new(1000).unwrap()),
         };
 
         storage.load_metadata()?;
@@ -276,10 +281,11 @@ impl RedbStorage {
         }
 
         // Mark index as dirty - DON'T rebuild immediately (lazy rebuild optimization)
-        // Rebuild will only retrain learned index (2ms), not read from disk (25ms)
+        // Rebuild will only retrain learned index (2ms at 1M, 30ms at 10M), not read from disk
         self.index_dirty = true;
-        // Invalidate cached read transaction (will see stale data after write)
+        // Invalidate caches (will see stale data after write)
         self.cached_read_txn = None;
+        self.value_cache.clear();  // Clear value cache on writes
         self.row_count += batch_size as u64;
         self.save_metadata()?;
 
@@ -308,6 +314,14 @@ impl RedbStorage {
         // Lazy rebuild: ensure index is fresh before querying
         self.ensure_index_fresh()?;
 
+        // Check LRU cache first (hot value optimization)
+        if let Some(cached_value) = self.value_cache.get(&key) {
+            metrics::record_query_path("cache_hit");
+            metrics::record_search(start_time.elapsed().as_secs_f64());
+            return Ok(Some(cached_value.clone()));
+        }
+
+        // Cache miss - proceed with learned index search
         // Use learned index to predict position in sorted_keys array
         let result = if !self.sorted_keys.is_empty() {
             if let Some(predicted_pos) = self.learned_index.search(key) {
@@ -331,7 +345,12 @@ impl RedbStorage {
                     let table = read_txn.open_table(DATA_TABLE)?;
 
                     if let Some(value_guard) = table.get(key)? {
-                        let result = Ok(Some(value_guard.value().to_vec()));
+                        let value = value_guard.value().to_vec();
+
+                        // Populate LRU cache for future queries
+                        self.value_cache.put(key, value.clone());
+
+                        let result = Ok(Some(value));
 
                         // Record successful search
                         metrics::record_search(start_time.elapsed().as_secs_f64());
