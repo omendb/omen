@@ -424,6 +424,59 @@ impl GappedNode {
         self.density() >= MAX_DENSITY
     }
 
+    /// Split node when density exceeds threshold
+    ///
+    /// From ALEX paper: "When a node reaches max density, split at median key.
+    /// Create two child nodes, distribute data, and retrain models locally."
+    ///
+    /// Returns (split_key, right_node) where:
+    /// - split_key: Median key that divides left/right
+    /// - right_node: New node containing keys >= split_key
+    /// - self becomes left_node containing keys < split_key
+    ///
+    /// **Time complexity**: O(n log n) due to sorting
+    pub fn split(&mut self) -> Result<(i64, GappedNode)> {
+        if !self.should_split() {
+            return Err(anyhow::anyhow!("Node doesn't need splitting (density < MAX_DENSITY)"));
+        }
+
+        // Extract and sort all keys
+        let mut pairs = self.pairs();
+        if pairs.is_empty() {
+            return Err(anyhow::anyhow!("Cannot split empty node"));
+        }
+
+        // Find median key as split point
+        let split_idx = pairs.len() / 2;
+        let split_key = pairs[split_idx].0;
+
+        // Create two new nodes with appropriate capacity
+        // Use at least 1.0 expansion factor to ensure gaps after split
+        let left_size = split_idx;
+        let right_size = pairs.len() - split_idx;
+        let expansion = self.expansion_factor.max(1.0);
+
+        let mut left = GappedNode::new(left_size, expansion);
+        let mut right = GappedNode::new(right_size, expansion);
+
+        // Distribute pairs
+        for (key, value) in pairs.drain(..split_idx) {
+            left.insert(key, value)?;
+        }
+        for (key, value) in pairs {
+            right.insert(key, value)?;
+        }
+
+        // Retrain models for both nodes
+        left.retrain()?;
+        right.retrain()?;
+
+        // Replace self with left node
+        *self = left;
+
+        Ok((split_key, right))
+    }
+
     /// Get all key-value pairs (for splitting/iteration)
     ///
     /// Returns sorted list of (key, value) pairs
@@ -618,6 +671,45 @@ mod tests {
 
         // Should have 2 entries (ALEX allows duplicates)
         assert_eq!(node.num_keys(), 2);
+    }
+
+    #[test]
+    fn test_node_split() {
+        let mut node = GappedNode::new(10, 0.0); // No expansion - fills quickly
+
+        // Fill to max density
+        for i in 0..8 {
+            node.insert(i * 10, vec![i as u8]).unwrap();
+        }
+
+        assert!(node.should_split());
+        assert_eq!(node.num_keys(), 8);
+
+        // Split the node
+        let (split_key, right) = node.split().unwrap();
+
+        // Check split key is median
+        assert_eq!(split_key, 40);
+
+        // Check left node (keys < 40)
+        assert_eq!(node.num_keys(), 4);
+        assert!(node.get(0).unwrap().is_some());
+        assert!(node.get(10).unwrap().is_some());
+        assert!(node.get(20).unwrap().is_some());
+        assert!(node.get(30).unwrap().is_some());
+        assert!(node.get(40).unwrap().is_none());
+
+        // Check right node (keys >= 40)
+        assert_eq!(right.num_keys(), 4);
+        assert!(right.get(40).unwrap().is_some());
+        assert!(right.get(50).unwrap().is_some());
+        assert!(right.get(60).unwrap().is_some());
+        assert!(right.get(70).unwrap().is_some());
+        assert!(right.get(30).unwrap().is_none());
+
+        // Both nodes should have lower density now
+        assert!(node.density() < 0.6);
+        assert!(right.density() < 0.6);
     }
 
     #[test]
