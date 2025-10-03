@@ -691,7 +691,7 @@ mod tests {
         }
 
         {
-            let storage = RedbStorage::new(&db_path).unwrap();
+            let mut storage = RedbStorage::new(&db_path).unwrap();
             assert_eq!(storage.count(), 50);
 
             let result = storage.point_query(200).unwrap();

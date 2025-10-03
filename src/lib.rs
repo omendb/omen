@@ -20,6 +20,7 @@ pub use logging::{init_from_env, init_logging, LogConfig};
 pub use sql_engine::QueryConfig;
 
 // Existing modules (will be refactored)
+pub mod alex; // ALEX adaptive learned index (replacement for RMI)
 pub mod backup;
 pub mod concurrent;
 pub mod datafusion;
