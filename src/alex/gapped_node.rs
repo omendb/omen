@@ -201,16 +201,20 @@ impl GappedNode {
             let end_key = self.get_key_at(end.saturating_sub(1));
 
             // Can we bound the search with actual keys? (not gaps)
+            // CRITICAL: Need BOTH bounds to confidently locate key
             let can_bound = match (start_key, end_key) {
                 (Some(sk), Some(ek)) => sk <= key && key <= ek,
-                (Some(sk), None) => sk <= key,
-                (None, Some(ek)) => key <= ek,
-                (None, None) => false, // No keys to bound - keep expanding
+                _ => false, // Need both bounds to be confident
             };
 
-            if can_bound || radius >= max_radius {
-                // Binary search for exact position
+            if can_bound {
+                // Found bounding keys - search within range
                 return Ok(self.binary_search_gap(start, end, key));
+            }
+
+            if radius >= max_radius {
+                // Hit max radius without finding bounds - search entire array
+                return Ok(self.binary_search_gap(0, self.keys.len(), key));
             }
 
             // Expand radius exponentially
@@ -239,19 +243,29 @@ impl GappedNode {
             let end_key = self.get_key_at(end.saturating_sub(1));
 
             // Can we bound the search with actual keys?
+            // CRITICAL: Need BOTH bounds to confidently locate key
             let can_bound = match (start_key, end_key) {
                 (Some(sk), Some(ek)) => sk <= key && key <= ek,
-                (Some(sk), None) => sk <= key,
-                (None, Some(ek)) => key <= ek,
-                (None, None) => false, // No keys to bound - keep expanding
+                _ => false, // Need both bounds to be confident
             };
 
-            if can_bound || radius >= max_radius {
-                // Binary search in range
+            if can_bound {
+                // Found bounding keys - search within range
                 return self.binary_search_exact(start, end, key);
             }
 
+            if radius >= max_radius {
+                // Hit max radius without finding bounds - search entire array
+                return self.binary_search_exact(0, self.keys.len(), key);
+            }
+
             radius *= 2;
+
+            // CRITICAL FIX: Check if we've covered entire array range
+            if start == 0 && end == self.keys.len() {
+                // Searched entire array - do full scan
+                return self.binary_search_exact(0, self.keys.len(), key);
+            }
 
             if radius > self.keys.len() {
                 // Searched entire array - do full scan
@@ -573,7 +587,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "TODO: Debug exponential search at 1000+ key scale"]
     fn test_large_scale() {
         let mut node = GappedNode::new(1000, 1.0);
 
@@ -592,10 +605,7 @@ mod tests {
         // Sample lookups
         for i in (0..1000).step_by(10) {
             let key = i * 7 % 10000;
-            if node.get(key).unwrap().is_none() {
-                eprintln!("Failed to find key={} (i={})", key, i);
-            }
-            assert!(node.get(key).unwrap().is_some());
+            assert!(node.get(key).unwrap().is_some(), "Failed to find key={}", key);
         }
     }
 
