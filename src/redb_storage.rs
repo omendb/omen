@@ -39,7 +39,18 @@ pub struct RedbStorage {
     cached_read_txn: Option<ReadTransaction>,
     /// LRU cache for hot values (capacity: 1000 entries)
     value_cache: LruCache<i64, Vec<u8>>,
+    /// Error bound growth tracking (keys inserted since last rebuild)
+    error_bound_growth: usize,
 }
+
+/// Base error threshold as percentage of dataset size
+/// 0.1% = rebuild when 0.1% of keys have been inserted since last rebuild
+/// At 1M keys: 0.001 * 1M = 1,000 key threshold
+/// At 10M keys: 0.001 * 10M = 10,000 key threshold
+const ERROR_THRESHOLD_PERCENTAGE: f64 = 0.001;
+
+/// Minimum threshold to avoid too-frequent rebuilds on small datasets
+const MIN_ERROR_THRESHOLD: usize = 1000;
 
 impl RedbStorage {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -63,6 +74,7 @@ impl RedbStorage {
             cached_error_bound: 100, // Default
             cached_read_txn: None,   // Will be created on first query
             value_cache: LruCache::new(NonZeroUsize::new(1000).unwrap()),
+            error_bound_growth: 0,   // No growth at startup
         };
 
         storage.load_metadata()?;
@@ -246,12 +258,28 @@ impl RedbStorage {
         new_keys.sort_unstable();
 
         // Optimize for sequential append pattern (time-series, auto-increment)
+        let is_sequential_append = !self.sorted_keys.is_empty()
+            && new_keys.first().map_or(false, |&k| k > *self.sorted_keys.last().unwrap());
+
         if self.sorted_keys.is_empty() {
+            // First batch - initialize sorted_keys and mark index dirty
             self.sorted_keys = new_keys;
-        } else if new_keys.first().map_or(false, |&k| k > *self.sorted_keys.last().unwrap()) {
+            self.index_dirty = true;  // Need to train index on first query
+            debug!(
+                new_keys = batch_size,
+                total_keys = self.sorted_keys.len(),
+                "First batch - initializing sorted_keys, will rebuild on first query"
+            );
+        } else if is_sequential_append {
             // Fast path: All new keys > existing keys (sequential append)
             // Just extend the array - O(n) instead of O(n+m) merge
+            // NO REBUILD NEEDED! Models trained on keys 0..N are still valid for keys 0..N+M
             self.sorted_keys.extend(new_keys);
+            debug!(
+                new_keys = batch_size,
+                total_keys = self.sorted_keys.len(),
+                "Sequential append detected - skipping rebuild (models still valid)"
+            );
         } else {
             // Slow path: Overlapping ranges, need full merge - O(n+m)
             let mut merged = Vec::with_capacity(self.sorted_keys.len() + new_keys.len());
@@ -280,9 +308,33 @@ impl RedbStorage {
             self.sorted_keys = merged;
         }
 
-        // Mark index as dirty - DON'T rebuild immediately (lazy rebuild optimization)
-        // Rebuild will only retrain learned index (2ms at 1M, 30ms at 10M), not read from disk
-        self.index_dirty = true;
+        // Adaptive rebuild threshold for NON-sequential inserts
+        // Sequential appends don't need rebuilds because learned index models remain valid
+        if !is_sequential_append {
+            self.error_bound_growth += batch_size;
+
+            let adaptive_threshold = ((self.sorted_keys.len() as f64 * ERROR_THRESHOLD_PERCENTAGE) as usize)
+                .max(MIN_ERROR_THRESHOLD);
+
+            if self.error_bound_growth > adaptive_threshold {
+                debug!(
+                    error_bound_growth = self.error_bound_growth,
+                    threshold = adaptive_threshold,
+                    dataset_size = self.sorted_keys.len(),
+                    "Error bound threshold exceeded, marking index dirty"
+                );
+                self.index_dirty = true;
+                self.error_bound_growth = 0;  // Reset counter after marking dirty
+            } else {
+                debug!(
+                    error_bound_growth = self.error_bound_growth,
+                    threshold = adaptive_threshold,
+                    dataset_size = self.sorted_keys.len(),
+                    "Skipping rebuild, error bound within threshold"
+                );
+            }
+        }
+
         // Invalidate caches (will see stale data after write)
         self.cached_read_txn = None;
         self.value_cache.clear();  // Clear value cache on writes
