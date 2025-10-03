@@ -61,7 +61,8 @@ impl RedbStorage {
         };
 
         storage.load_metadata()?;
-        storage.rebuild_index()?;
+        storage.load_keys_from_disk()?;  // Initial load from disk
+        storage.rebuild_index()?;         // Train learned index
 
         Ok(storage)
     }
@@ -96,11 +97,8 @@ impl RedbStorage {
         Ok(())
     }
 
-    #[instrument(skip(self))]
-    fn rebuild_index(&mut self) -> Result<()> {
-        info!("Index rebuild started");
-        let start_time = Instant::now();
-
+    /// Load keys from disk (used only during initialization)
+    fn load_keys_from_disk(&mut self) -> Result<()> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(DATA_TABLE)?;
 
@@ -110,9 +108,19 @@ impl RedbStorage {
             .map(|(key, _)| key.value())
             .collect();
 
-        // Sort keys for position-based lookup
         keys.sort_unstable();
         self.sorted_keys = keys;
+
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    fn rebuild_index(&mut self) -> Result<()> {
+        info!("Index rebuild started");
+        let start_time = Instant::now();
+
+        // sorted_keys is already maintained incrementally during inserts
+        // No need to re-read from disk - just retrain the learned index
 
         if !self.sorted_keys.is_empty() {
             // Train learned index with (key, position) pairs
@@ -227,8 +235,43 @@ impl RedbStorage {
         }
         write_txn.commit()?;
 
+        // Update sorted_keys incrementally (avoids 25ms disk read on rebuild)
+        // Extract and sort new keys, then merge into existing sorted array
+        let mut new_keys: Vec<i64> = entries.iter().map(|(k, _)| *k).collect();
+        new_keys.sort_unstable();
+
+        // Merge sorted arrays (O(n+m) instead of O((n+m)log(n+m)))
+        if self.sorted_keys.is_empty() {
+            self.sorted_keys = new_keys;
+        } else {
+            let mut merged = Vec::with_capacity(self.sorted_keys.len() + new_keys.len());
+            let mut i = 0;
+            let mut j = 0;
+
+            while i < self.sorted_keys.len() && j < new_keys.len() {
+                if self.sorted_keys[i] < new_keys[j] {
+                    merged.push(self.sorted_keys[i]);
+                    i += 1;
+                } else if self.sorted_keys[i] > new_keys[j] {
+                    merged.push(new_keys[j]);
+                    j += 1;
+                } else {
+                    // Duplicate key - only add once
+                    merged.push(self.sorted_keys[i]);
+                    i += 1;
+                    j += 1;
+                }
+            }
+
+            // Add remaining elements
+            merged.extend_from_slice(&self.sorted_keys[i..]);
+            merged.extend_from_slice(&new_keys[j..]);
+
+            self.sorted_keys = merged;
+        }
+
         // Mark index as dirty - DON'T rebuild immediately (lazy rebuild optimization)
-        // Index will rebuild on next query for 10-100x insert speedup
+        // Rebuild will only retrain learned index (2ms), not read from disk (25ms)
         self.index_dirty = true;
         // Invalidate cached read transaction (will see stale data after write)
         self.cached_read_txn = None;
