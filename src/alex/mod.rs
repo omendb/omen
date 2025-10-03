@@ -47,7 +47,9 @@
 //! }
 //! ```
 
+pub mod gapped_node;
 pub mod linear_model;
 
 // Re-exports
+pub use gapped_node::GappedNode;
 pub use linear_model::LinearModel;
