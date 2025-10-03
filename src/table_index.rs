@@ -1,172 +1,96 @@
-//! Generic table index - wraps learned index for any orderable type
+//! Generic table index - wraps ALEX learned index for any orderable type
 //! Converts orderable values (Int64, Timestamp, Float64, Boolean) to i64 for indexing
 
-use crate::index::RecursiveModelIndex;
+use crate::alex::AlexTree;
 use crate::value::Value;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 /// Generic index over any orderable column type
+///
+/// Uses ALEX (Adaptive Learned indEX) internally for dynamic workloads.
+/// ALEX handles inserts/deletes efficiently with gapped arrays and local node splits,
+/// avoiding O(n) rebuilds that plague RMI.
 #[derive(Debug)]
 pub struct TableIndex {
-    /// Underlying learned index (works with i64)
-    learned_index: RecursiveModelIndex,
-
-    /// Mapping from i64 key to row position (KEPT SORTED by key)
-    key_to_position: Vec<(i64, usize)>,
-
-    /// Whether the index needs retraining
-    needs_retrain: bool,
+    /// ALEX tree stores (key → row_position) mappings
+    alex: AlexTree,
 }
 
 impl TableIndex {
-    /// Create new table index with initial capacity
-    pub fn new(capacity: usize) -> Self {
+    /// Create new table index
+    ///
+    /// Note: capacity parameter ignored - ALEX auto-sizes
+    pub fn new(_capacity: usize) -> Self {
         Self {
-            learned_index: RecursiveModelIndex::new(capacity),
-            key_to_position: Vec::new(),
-            needs_retrain: false,
+            alex: AlexTree::new(),
         }
     }
 
     /// Add key-value pair to index
+    ///
+    /// **Time complexity**: O(log n) amortized (ALEX handles splits automatically)
     pub fn insert(&mut self, key: &Value, position: usize) -> Result<()> {
         let key_i64 = key.to_i64()?;
-
-        // Find insertion point using binary search to maintain sorted order
-        let insert_idx = match self
-            .key_to_position
-            .binary_search_by_key(&key_i64, |(k, _)| *k)
-        {
-            Ok(idx) => {
-                // Key already exists - update position
-                self.key_to_position[idx] = (key_i64, position);
-                return Ok(());
-            }
-            Err(idx) => idx,
-        };
-
-        // Insert at correct position to keep sorted
-        self.key_to_position.insert(insert_idx, (key_i64, position));
-        self.needs_retrain = true;
-
-        // Retrain periodically (every 1000 inserts)
-        if self.key_to_position.len() % 1000 == 0 && self.needs_retrain {
-            self.retrain_internal();
-        }
-
-        Ok(())
+        let value = position.to_le_bytes().to_vec();
+        self.alex.insert(key_i64, value)
     }
 
-    /// Search for exact key using learned index prediction
+    /// Search for exact key using ALEX prediction + exponential search
+    ///
+    /// **Time complexity**: O(log n) to find leaf + O(log error) to search
     pub fn search(&self, key: &Value) -> Result<Option<usize>> {
         let key_i64 = key.to_i64()?;
 
-        if self.key_to_position.is_empty() {
-            return Ok(None);
-        }
-
-        // Retrain if needed before search
-        if self.needs_retrain {
-            // Can't mutate in search, so fall back to binary search
-            match self
-                .key_to_position
-                .binary_search_by_key(&key_i64, |(k, _)| *k)
-            {
-                Ok(idx) => return Ok(Some(self.key_to_position[idx].1)),
-                Err(_) => return Ok(None),
+        match self.alex.get(key_i64)? {
+            Some(bytes) => {
+                let pos_bytes: [u8; 8] = bytes
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("Invalid position encoding"))?;
+                let position = usize::from_le_bytes(pos_bytes);
+                Ok(Some(position))
             }
-        }
-
-        // Use learned index to predict position in key_to_position array
-        if let Some(predicted_idx) = self.learned_index.search(key_i64) {
-            // predicted_idx is an index into the sorted key_to_position array
-            let predicted_idx = predicted_idx.min(self.key_to_position.len() - 1);
-
-            // Search around the predicted position (within error bound)
-            let search_radius = 100; // Conservative error bound
-            let start = predicted_idx.saturating_sub(search_radius);
-            let end = (predicted_idx + search_radius).min(self.key_to_position.len());
-
-            // Binary search in the local window
-            let window = &self.key_to_position[start..end];
-            match window.binary_search_by_key(&key_i64, |(k, _)| *k) {
-                Ok(local_idx) => return Ok(Some(window[local_idx].1)),
-                Err(_) => {
-                    // Not in predicted window - fall back to full binary search
-                }
-            }
-        }
-
-        // Fallback: full binary search on entire array
-        match self
-            .key_to_position
-            .binary_search_by_key(&key_i64, |(k, _)| *k)
-        {
-            Ok(idx) => Ok(Some(self.key_to_position[idx].1)),
-            Err(_) => Ok(None),
+            None => Ok(None),
         }
     }
 
     /// Range query - find all positions for keys in [start, end]
+    ///
+    /// **Time complexity**: O(log n) to find start + O(result_size)
     pub fn range_query(&self, start: &Value, end: &Value) -> Result<Vec<usize>> {
         let start_i64 = start.to_i64()?;
         let end_i64 = end.to_i64()?;
 
-        if self.key_to_position.is_empty() {
-            return Ok(Vec::new());
-        }
+        let results = self.alex.range(start_i64, end_i64)?;
 
-        // Since key_to_position is sorted, use binary search to find range bounds
-        let start_idx = self
-            .key_to_position
-            .binary_search_by_key(&start_i64, |(k, _)| *k)
-            .unwrap_or_else(|idx| idx);
-
-        let end_idx = self
-            .key_to_position
-            .binary_search_by_key(&end_i64, |(k, _)| *k)
-            .map(|idx| idx + 1) // Include the end key if found
-            .unwrap_or_else(|idx| idx);
-
-        // Extract positions for all keys in range
-        let results: Vec<usize> = self.key_to_position[start_idx..end_idx]
-            .iter()
-            .map(|(_, pos)| *pos)
-            .collect();
-
-        Ok(results)
+        results
+            .into_iter()
+            .map(|(_, bytes)| {
+                let pos_bytes: [u8; 8] = bytes
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("Invalid position encoding"))?;
+                Ok(usize::from_le_bytes(pos_bytes))
+            })
+            .collect()
     }
 
     /// Get number of keys in index
     pub fn len(&self) -> usize {
-        self.key_to_position.len()
+        self.alex.len()
     }
 
     /// Check if index is empty
     pub fn is_empty(&self) -> bool {
-        self.key_to_position.is_empty()
+        self.alex.is_empty()
     }
 
-    /// Internal retraining that's called during insert
-    fn retrain_internal(&mut self) {
-        // Build training data: (key, index_in_array) pairs
-        let training_data: Vec<(i64, usize)> = self
-            .key_to_position
-            .iter()
-            .enumerate()
-            .map(|(idx, (key, _row_pos))| (*key, idx))
-            .collect();
-
-        // Rebuild learned index with the mapping from key -> array index
-        self.learned_index = RecursiveModelIndex::new(training_data.len());
-        self.learned_index.train(training_data);
-
-        self.needs_retrain = false;
-    }
-
-    /// Retrain the learned index (should be called periodically)
+    /// Retrain the index (no-op for ALEX - it auto-retrains)
+    ///
+    /// Kept for API compatibility. ALEX handles retraining automatically
+    /// during node splits, so this is now a no-op.
     pub fn retrain(&mut self) {
-        self.retrain_internal();
+        // ALEX handles retraining automatically - no manual intervention needed
     }
 }
 
@@ -238,7 +162,7 @@ mod tests {
             index.insert(&Value::Int64(i), i as usize).unwrap();
         }
 
-        // Retrain
+        // Retrain (no-op with ALEX)
         index.retrain();
 
         // Verify searches still work

@@ -109,6 +109,37 @@ impl AlexTree {
     pub fn num_leaves(&self) -> usize {
         self.leaves.len()
     }
+
+    /// Range query - return all (key, value) pairs where start_key <= key <= end_key
+    ///
+    /// **Time complexity**: O(log n) to find start + O(result_size) to collect
+    pub fn range(&self, start_key: i64, end_key: i64) -> Result<Vec<(i64, Vec<u8>)>> {
+        if start_key > end_key {
+            return Ok(Vec::new());
+        }
+
+        let mut results = Vec::new();
+
+        // Find starting leaf
+        let start_leaf_idx = self.find_leaf_index(start_key);
+
+        // Traverse leaves from start_leaf_idx onwards
+        for leaf in &self.leaves[start_leaf_idx..] {
+            // Get all pairs from this leaf
+            for (key, value) in leaf.pairs() {
+                if key > end_key {
+                    // Past the end of range, stop
+                    return Ok(results);
+                }
+                if key >= start_key {
+                    // In range, include it
+                    results.push((key, value));
+                }
+            }
+        }
+
+        Ok(results)
+    }
 }
 
 impl Default for AlexTree {
@@ -187,6 +218,80 @@ mod tests {
         // Sample lookups
         for i in (0..10000).step_by(100) {
             assert!(tree.get(i).unwrap().is_some());
+        }
+    }
+
+    #[test]
+    fn test_range_query_basic() {
+        let mut tree = AlexTree::new();
+
+        // Insert keys: 10, 20, 30, 40, 50
+        for i in 1..=5 {
+            tree.insert(i * 10, vec![i as u8]).unwrap();
+        }
+
+        // Range [20, 40] should return keys 20, 30, 40
+        let results = tree.range(20, 40).unwrap();
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0].0, 20);
+        assert_eq!(results[1].0, 30);
+        assert_eq!(results[2].0, 40);
+    }
+
+    #[test]
+    fn test_range_query_empty() {
+        let mut tree = AlexTree::new();
+
+        tree.insert(10, vec![1]).unwrap();
+        tree.insert(20, vec![2]).unwrap();
+
+        // Range with no matching keys
+        let results = tree.range(15, 18).unwrap();
+        assert_eq!(results.len(), 0);
+
+        // Invalid range (start > end)
+        let results = tree.range(30, 20).unwrap();
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_range_query_large() {
+        let mut tree = AlexTree::new();
+
+        // Insert 1000 keys
+        for i in 0..1000 {
+            tree.insert(i, vec![(i % 256) as u8]).unwrap();
+        }
+
+        // Range [100, 200] should return 101 keys (inclusive)
+        let results = tree.range(100, 200).unwrap();
+        assert_eq!(results.len(), 101);
+
+        // Verify keys are in order
+        for i in 0..results.len() - 1 {
+            assert!(results[i].0 < results[i + 1].0);
+        }
+    }
+
+    #[test]
+    fn test_range_query_across_splits() {
+        let mut tree = AlexTree::with_expansion(0.0); // Forces splits
+
+        // Insert enough to cause multiple splits
+        for i in 0..500 {
+            tree.insert(i, vec![(i % 256) as u8]).unwrap();
+        }
+
+        // Should have multiple leaves
+        assert!(tree.num_leaves() > 1);
+
+        // Range query that spans multiple leaves
+        let results = tree.range(100, 400).unwrap();
+        assert_eq!(results.len(), 301);
+
+        // Verify all keys present
+        for i in 100..=400 {
+            assert!(results.iter().any(|(k, _)| *k == i));
         }
     }
 }
