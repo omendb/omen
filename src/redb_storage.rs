@@ -240,10 +240,15 @@ impl RedbStorage {
         let mut new_keys: Vec<i64> = entries.iter().map(|(k, _)| *k).collect();
         new_keys.sort_unstable();
 
-        // Merge sorted arrays (O(n+m) instead of O((n+m)log(n+m)))
+        // Optimize for sequential append pattern (time-series, auto-increment)
         if self.sorted_keys.is_empty() {
             self.sorted_keys = new_keys;
+        } else if new_keys.first().map_or(false, |&k| k > *self.sorted_keys.last().unwrap()) {
+            // Fast path: All new keys > existing keys (sequential append)
+            // Just extend the array - O(n) instead of O(n+m) merge
+            self.sorted_keys.extend(new_keys);
         } else {
+            // Slow path: Overlapping ranges, need full merge - O(n+m)
             let mut merged = Vec::with_capacity(self.sorted_keys.len() + new_keys.len());
             let mut i = 0;
             let mut j = 0;
