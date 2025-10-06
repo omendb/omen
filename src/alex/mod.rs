@@ -50,6 +50,7 @@
 pub mod alex_tree;
 pub mod gapped_node;
 pub mod linear_model;
+pub mod simd_search;
 
 // Re-exports
 pub use alex_tree::AlexTree;

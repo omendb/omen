@@ -74,6 +74,22 @@ path = "src/bin/benchmark_vs_sqlite.rs"
 name = "benchmark_honest_comparison"
 path = "src/bin/benchmark_honest_comparison.rs"
 
+[[bin]]
+name = "profile_benchmark"
+path = "src/bin/profile_benchmark.rs"
+
+[[bin]]
+name = "profile_alex_detailed"
+path = "src/bin/profile_alex_detailed.rs"
+
+[[bin]]
+name = "test_1m_alex"
+path = "src/bin/test_1m_alex.rs"
+
+[[bin]]
+name = "benchmark_simd_search"
+path = "src/bin/benchmark_simd_search.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"

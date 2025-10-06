@@ -25,6 +25,7 @@
 //! rebuilding the entire index."
 
 use super::linear_model::LinearModel;
+use super::simd_search;
 use anyhow::Result;
 use std::fmt;
 
@@ -321,20 +322,24 @@ impl GappedNode {
         }
     }
 
-    /// Binary search for exact key match
+    /// Search for exact key match (SIMD-accelerated when available)
+    ///
+    /// Uses SIMD to search 4 keys at once on x86_64 (AVX2).
+    /// Falls back to scalar search on other platforms.
     ///
     /// Note: Does not assume sorted order - scans entire range
     /// Keys only become sorted after retrain()
     fn binary_search_exact(&self, start: usize, end: usize, key: i64) -> Option<usize> {
-        for i in start..end {
-            if let Some(k) = self.keys[i] {
-                if k == key {
-                    return Some(i);
-                }
-                // Don't exit early - keys may not be sorted until retrain()
-            }
+        // Use SIMD for search if range is large enough to benefit
+        if end - start >= 8 {
+            // SIMD search on the range
+            simd_search::simd_search_exact(&self.keys[start..end], key)
+                .map(|pos| start + pos)
+        } else {
+            // Scalar search for small ranges
+            simd_search::scalar_search_exact(&self.keys[start..end], key)
+                .map(|pos| start + pos)
         }
-        None
     }
 
     /// Binary search for gap to insert key
