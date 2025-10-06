@@ -90,6 +90,10 @@ path = "src/bin/test_1m_alex.rs"
 name = "benchmark_simd_search"
 path = "src/bin/benchmark_simd_search.rs"
 
+[[bin]]
+name = "benchmark_comprehensive"
+path = "src/bin/benchmark_comprehensive.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
