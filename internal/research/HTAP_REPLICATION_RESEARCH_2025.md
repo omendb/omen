@@ -464,13 +464,47 @@ impl TemperatureModel {
 
 ---
 
-## 7. Next Steps
+## 7. Architecture Update (January 2025)
+
+**⚠️ IMPORTANT**: After analyzing the actual codebase, the architecture assumptions in this research document were **incorrect**.
+
+### What We Actually Have
+
+OmenDB **already has a unified HTAP architecture** via the Table system:
+- ✅ Arrow/Parquet columnar storage (OLAP-ready)
+- ✅ ALEX learned index (OLTP-optimized)
+- ✅ Both in the same table (no replication needed)
+
+### Corrected Phase 9 Implementation
+
+See: `internal/PHASE_9_HTAP_ARCHITECTURE.md` for the actual implementation plan.
+
+**What We DON'T Need** (from this research):
+- ❌ WAL replication between separate systems (already unified)
+- ❌ Schema conversion (already columnar)
+- ❌ CDC pipeline (no separate OLTP/OLAP)
+
+**What We DO Need** (revised):
+- ✅ DataFusion integration for SQL on Arrow tables
+- ✅ Query router (point queries → ALEX, analytics → DataFusion)
+- ✅ Temperature tracking for hot/cold data
+
+### Research Value
+
+This document remains valuable for:
+1. Understanding industry HTAP approaches (TiDB, CockroachDB)
+2. Temperature model concepts (frequency + recency)
+3. Learned optimization strategies (WISK, LSched)
+
+But the implementation plan has been **revised** based on actual architecture.
+
+## 8. Next Steps (Revised)
 
 ### Immediate (This Week)
 
-1. ✅ **Research Complete** - Synthesized HTAP strategies
-2. 🔨 **Phase 9 Planning** - Detail WAL replication design
-3. 📐 **Architecture Doc** - Update tiered storage design
+1. ✅ **Architecture Discovery** - Identified unified HTAP in Table system
+2. 🔨 **DataFusion Integration** - TableProvider for Table
+3. 📐 **Query Router Design** - Route by workload type
 
 ### Short-Term (Weeks 1-2)
 
