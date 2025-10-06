@@ -217,6 +217,40 @@ impl Table {
         Ok(())
     }
 
+    /// Batch insert multiple rows (optimized for learned index)
+    ///
+    /// Sorts rows by primary key before inserting to maximize ALEX performance.
+    /// For random data, this can be 10-100x faster than individual inserts.
+    ///
+    /// **Use this for bulk loads with random/unordered data.**
+    pub fn batch_insert(&mut self, mut rows: Vec<Row>) -> Result<usize> {
+        if rows.is_empty() {
+            return Ok(0);
+        }
+
+        // Validate all rows first
+        for row in &rows {
+            row.validate(&self.user_schema)?;
+        }
+
+        // Sort rows by primary key for optimal ALEX insertion
+        // This converts random inserts into sequential inserts
+        rows.sort_by(|a, b| {
+            let a_pk = a.get(self.primary_key_index).unwrap();
+            let b_pk = b.get(self.primary_key_index).unwrap();
+            a_pk.partial_cmp(b_pk).unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        let count = rows.len();
+
+        // Insert sorted rows (ALEX will handle this efficiently)
+        for row in rows {
+            self.insert(row)?;
+        }
+
+        Ok(count)
+    }
+
     /// Update row by primary key
     /// Creates new version with updated values, marks old version as deleted
     pub fn update(&mut self, key_value: &Value, updated_row: Row) -> Result<usize> {

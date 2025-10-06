@@ -313,16 +313,18 @@ fn benchmark_omendb_insert(_size: usize, keys: &[i64], temp_dir: &TempDir) -> Re
     // Get table reference once (not in loop)
     let table = catalog.get_table_mut("data")?;
 
-    // Insert all rows
+    // Build rows vector for batch insert
+    let mut rows = Vec::with_capacity(keys.len());
     for &key in keys {
         let value = format!("value_{}", key);
-        let row = Row::new(vec![
+        rows.push(Row::new(vec![
             Value::Int64(key),
             Value::Text(value),
-        ]);
-
-        table.insert(row)?;
+        ]));
     }
+
+    // Use batch_insert (sorts by PK for optimal ALEX performance)
+    table.batch_insert(rows)?;
 
     let elapsed = start.elapsed();
 
