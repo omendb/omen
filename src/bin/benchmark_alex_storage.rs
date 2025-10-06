@@ -16,8 +16,13 @@ fn main() {
     println!("=== AlexStorage vs RocksStorage Benchmark ===");
     println!("Validating 10x query improvement\n");
 
-    // Test at 100K scale (faster iteration)
-    let scale = 100_000;
+    // Get scale from command line or use default
+    let args: Vec<String> = std::env::args().collect();
+    let scale = if args.len() > 1 {
+        args[1].parse::<usize>().unwrap_or(100_000)
+    } else {
+        100_000
+    };
     println!("Scale: {} keys\n", scale);
 
     println!("1. Bulk Insert Performance");
