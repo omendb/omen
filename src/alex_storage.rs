@@ -23,16 +23,20 @@ use std::path::{Path, PathBuf};
 /// [value_len:4 bytes][value:N bytes]
 const ENTRY_HEADER_SIZE: usize = 4;
 
+/// Mmap growth chunk size (16MB) - grow in chunks to avoid frequent remaps
+const MMAP_GROW_SIZE: u64 = 16 * 1024 * 1024;
+
 /// AlexStorage: Memory-mapped storage with ALEX learned index
 ///
 /// Design:
 /// - ALEX stores (key → file offset)
 /// - Mmap provides zero-copy access to values
 /// - Append-only writes (no in-place updates)
+/// - Deferred remapping: Grow mmap in 16MB chunks to minimize remap overhead
 ///
 /// Trade-offs:
 /// - Fast reads: 389ns (mmap + ALEX)
-/// - Fast writes: Append-only, no compaction overhead
+/// - Fast writes: Append-only, deferred remapping
 /// - Space overhead: Deleted entries not reclaimed (until compaction)
 #[derive(Debug)]
 pub struct AlexStorage {
@@ -47,6 +51,9 @@ pub struct AlexStorage {
 
     /// Current end of file (for appending new entries)
     file_size: u64,
+
+    /// Size of currently mapped region (may be larger than file_size)
+    mapped_size: u64,
 
     /// Write handle (for appending)
     write_file: File,
@@ -83,6 +90,7 @@ impl AlexStorage {
             alex: AlexTree::new(),
             mmap,
             file_size,
+            mapped_size: file_size,
             write_file,
         };
 
@@ -173,8 +181,10 @@ impl AlexStorage {
         // Update file size
         self.file_size += total_len as u64;
 
-        // Remap file to include new data
-        self.remap_file()?;
+        // Remap file only if we've exceeded the mapped region
+        if self.file_size > self.mapped_size {
+            self.remap_file()?;
+        }
 
         // Store (key → offset) in ALEX
         // Offset points to start of key+value (after length header)
@@ -211,8 +221,10 @@ impl AlexStorage {
         // Flush all writes
         self.write_file.flush()?;
 
-        // Remap file
-        self.remap_file()?;
+        // Remap file only if we've exceeded the mapped region
+        if self.file_size > self.mapped_size {
+            self.remap_file()?;
+        }
 
         // Bulk insert into ALEX
         self.alex.insert_batch(alex_entries)?;
@@ -264,20 +276,28 @@ impl AlexStorage {
         Ok(Some(data[8..].to_vec()))
     }
 
-    /// Remap file after writes
+    /// Remap file after writes (grows in chunks to minimize remap frequency)
     fn remap_file(&mut self) -> Result<()> {
         if self.file_size == 0 {
             self.mmap = None;
+            self.mapped_size = 0;
             return Ok(());
         }
+
+        // Calculate new mapped size: round up to next MMAP_GROW_SIZE chunk
+        let new_mapped_size = ((self.file_size + MMAP_GROW_SIZE - 1) / MMAP_GROW_SIZE) * MMAP_GROW_SIZE;
+
+        // Grow file to new mapped size
+        self.write_file.set_len(new_mapped_size)?;
 
         // Open read handle
         let read_file = File::open(&self.data_path)?;
 
-        // Create new mmap
+        // Create new mmap for entire grown region
         let new_mmap = unsafe { Mmap::map(&read_file)? };
 
         self.mmap = Some(new_mmap);
+        self.mapped_size = new_mapped_size;
 
         Ok(())
     }
