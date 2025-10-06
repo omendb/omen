@@ -346,18 +346,24 @@ impl GappedNode {
     ///
     /// Returns position where key should be inserted to maintain sorted order.
     /// insert() will handle finding gap and shifting if needed.
-    ///
-    /// Uses SIMD-accelerated search when range is large enough.
     fn binary_search_gap(&self, start: usize, end: usize, key: i64) -> usize {
-        // Use SIMD for larger ranges
-        if end - start >= 8 {
-            let pos = simd_search::simd_search_insert_pos(&self.keys[start..end], key);
-            return start + pos;
+        // Find first position where key should go to maintain sorted order
+        for i in start..end {
+            if let Some(k) = self.keys[i] {
+                if k >= key {
+                    // Found sorted position - return it (insert() will handle gap/shift)
+                    return i;
+                }
+            } else {
+                // Found gap at correct position
+                if i == 0 || self.keys[i - 1].map_or(true, |k| k < key) {
+                    return i;
+                }
+            }
         }
 
-        // Scalar fallback for small ranges
-        let pos = simd_search::scalar_search_insert_pos(&self.keys[start..end], key);
-        start + pos
+        // Key goes at end - return last valid position
+        end.saturating_sub(1).min(self.keys.len().saturating_sub(1))
     }
 
     /// Find nearest gap to position

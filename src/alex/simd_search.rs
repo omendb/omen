@@ -235,11 +235,12 @@ where
 /// Scalar search for insertion position
 ///
 /// Returns index where target should be inserted to maintain sorted order.
+/// For gapped arrays, returns position of first key >= target (gaps are ignored).
 pub fn scalar_search_insert_pos(keys: &[Option<i64>], target: i64) -> usize {
     for (i, key_opt) in keys.iter().enumerate() {
         if let Some(key) = key_opt {
             if *key >= target {
-                return i; // Found first key >= target
+                return i; // Found sorted position
             }
         }
         // Skip gaps - only actual keys determine insertion position
@@ -343,9 +344,9 @@ mod tests {
     fn test_search_insert_pos() {
         let keys = vec![Some(10), None, Some(30), None, Some(50)];
 
-        // Should insert before first larger key
+        // Should insert before first larger key (gaps are ignored for position finding)
         assert_eq!(scalar_search_insert_pos(&keys, 5), 0); // Before 10
-        assert_eq!(scalar_search_insert_pos(&keys, 25), 2); // Before 30
+        assert_eq!(scalar_search_insert_pos(&keys, 25), 2); // Before 30 (gap at 1 is ignored)
         assert_eq!(scalar_search_insert_pos(&keys, 60), 4); // After 50
     }
 
