@@ -19,6 +19,9 @@ pub mod cost_estimator;
 pub mod query_classifier;
 pub mod query_router;
 
+// Temperature tracking (Phase 9.3)
+pub mod temperature;
+
 // Re-exports for common types
 pub use connection_pool::{Connection, ConnectionPool, PoolConfig};
 pub use logging::{init_from_env, init_logging, LogConfig};

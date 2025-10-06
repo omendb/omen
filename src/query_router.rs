@@ -10,6 +10,8 @@
 
 use crate::cost_estimator::{CostEstimator, ExecutionPath};
 use crate::query_classifier::{QueryClassifier, QueryType};
+use crate::temperature::{DataTier, KeyRange, TemperatureModel};
+use crate::value::Value;
 use datafusion::logical_expr::Expr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -207,6 +209,101 @@ impl QueryRouter {
             .store(0, Ordering::Relaxed);
         self.metrics.full_scans.store(0, Ordering::Relaxed);
     }
+
+    /// Route query with temperature awareness
+    ///
+    /// Adjusts routing based on data temperature:
+    /// - Hot data (>0.8): Prefer ALEX even for larger ranges
+    /// - Cold data (<0.3): Force DataFusion (may not be in ALEX cache)
+    /// - Warm data (0.3-0.8): Use standard routing
+    pub fn route_with_temperature(
+        &self,
+        filters: &[Expr],
+        temp_model: &TemperatureModel,
+    ) -> RoutingDecision {
+        let start = Instant::now();
+
+        // Classify query
+        let query_type = self.classifier.classify_filters(filters);
+
+        // Get base routing decision
+        let mut execution_path = self.estimator.estimate(&query_type);
+
+        // Adjust based on temperature
+        match &query_type {
+            QueryType::PointQuery { pk_value } => {
+                let tier = temp_model.classify(pk_value);
+                match tier {
+                    DataTier::Hot => {
+                        // Hot data: Always use ALEX (data is in cache)
+                        execution_path = ExecutionPath::AlexIndex;
+                    }
+                    DataTier::Cold => {
+                        // Cold data: Might not be in ALEX, use DataFusion
+                        execution_path = ExecutionPath::DataFusion;
+                    }
+                    DataTier::Warm => {
+                        // Use base decision
+                    }
+                }
+            }
+            QueryType::RangeQuery { start, end } => {
+                // Check temperature of range
+                let range = self.value_to_range(start, end);
+                let tier = temp_model.classify_range(&range);
+
+                match tier {
+                    DataTier::Hot => {
+                        // Hot range: Prefer ALEX even if large
+                        // (data is in cache, ALEX will be fast)
+                        execution_path = ExecutionPath::AlexIndex;
+                    }
+                    DataTier::Cold => {
+                        // Cold range: Force DataFusion
+                        // (data likely in Parquet only)
+                        execution_path = ExecutionPath::DataFusion;
+                    }
+                    DataTier::Warm => {
+                        // Use base decision (size-based routing)
+                    }
+                }
+            }
+            _ => {
+                // Aggregates and full scans: temperature doesn't affect routing
+            }
+        }
+
+        // Estimate cost
+        let estimated_cost_ns = self.estimator.estimate_cost_ns(execution_path, &query_type);
+
+        // Record decision time
+        let decision_time_ns = start.elapsed().as_nanos() as u64;
+
+        // Update metrics
+        self.update_metrics(&query_type, execution_path, decision_time_ns);
+
+        RoutingDecision {
+            query_type,
+            execution_path,
+            estimated_cost_ns,
+            decision_time_ns,
+        }
+    }
+
+    /// Convert Value pair to KeyRange for temperature lookup
+    fn value_to_range(&self, start: &Value, end: &Value) -> KeyRange {
+        let start_i64 = match start {
+            Value::Int64(v) => *v,
+            Value::UInt64(v) => *v as i64,
+            _ => 0,
+        };
+        let end_i64 = match end {
+            Value::Int64(v) => *v,
+            Value::UInt64(v) => *v as i64,
+            _ => i64::MAX,
+        };
+        KeyRange::new(start_i64, end_i64)
+    }
 }
 
 #[cfg(test)]
@@ -376,5 +473,86 @@ mod tests {
 
         router.reset_metrics();
         assert_eq!(router.metrics().total_queries.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_temperature_aware_routing_hot_data() {
+        use crate::temperature::TemperatureModel;
+
+        let router = QueryRouter::new("id".to_string(), 1_000_000);
+        let temp_model = TemperatureModel::with_params(60, 100, 0.6, 0.4, 0.8, 0.3);
+
+        // Make key 42 hot by accessing it frequently
+        for _ in 0..150 {
+            temp_model.record_access(&Value::Int64(42));
+        }
+
+        let filter = Expr::BinaryExpr(BinaryExpr {
+            left: Box::new(col("id")),
+            op: Operator::Eq,
+            right: Box::new(lit(42i64)),
+        });
+
+        let decision = router.route_with_temperature(&[filter], &temp_model);
+
+        // Hot data should route to ALEX
+        assert_eq!(decision.execution_path, ExecutionPath::AlexIndex);
+    }
+
+    #[test]
+    fn test_temperature_aware_routing_cold_data() {
+        use crate::temperature::TemperatureModel;
+
+        let router = QueryRouter::new("id".to_string(), 1_000_000);
+        let temp_model = TemperatureModel::with_params(
+            60,   // 60 second window
+            100,  // frequency threshold
+            0.6,  // alpha
+            0.4,  // beta
+            0.8,  // hot threshold
+            0.3,  // cold threshold
+        );
+
+        // Key 42 has never been accessed (temp = 0.0, definitely cold)
+        // Do NOT record any access to keep it cold
+
+        let filter = Expr::BinaryExpr(BinaryExpr {
+            left: Box::new(col("id")),
+            op: Operator::Eq,
+            right: Box::new(lit(42i64)),
+        });
+
+        let decision = router.route_with_temperature(&[filter], &temp_model);
+
+        // Cold data (never accessed) should route to DataFusion
+        assert_eq!(decision.execution_path, ExecutionPath::DataFusion);
+    }
+
+    #[test]
+    fn test_temperature_aware_routing_hot_range() {
+        use crate::temperature::TemperatureModel;
+
+        let router = QueryRouter::new("id".to_string(), 1_000_000);
+        let temp_model = TemperatureModel::with_params(60, 100, 0.6, 0.4, 0.8, 0.3);
+
+        // Make range 100-1100 hot (large range, normally would go to DataFusion)
+        for i in 100..1100 {
+            for _ in 0..150 {
+                temp_model.record_access(&Value::Int64(i));
+            }
+        }
+
+        // Large range query (1000 rows)
+        let filter = Expr::Between(Between {
+            expr: Box::new(col("id")),
+            negated: false,
+            low: Box::new(lit(100i64)),
+            high: Box::new(lit(1100i64)),
+        });
+
+        let decision = router.route_with_temperature(&[filter], &temp_model);
+
+        // Hot range should override size-based routing and use ALEX
+        assert_eq!(decision.execution_path, ExecutionPath::AlexIndex);
     }
 }
