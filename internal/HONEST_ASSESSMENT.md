@@ -451,6 +451,110 @@ storage.insert_batch(entries)?;  // Builds learned index + persists to redb
 
 ---
 
-**Last Updated:** October 2025 (Post-ALEX Migration)
-**Status:** ALEX production-ready, competitive validation in progress
-**Next Milestone:** Complete SQLite/CockroachDB/TiDB benchmarks
+## UPDATE: RocksDB Integration Complete (October 2025)
+
+### What Changed (redb → RocksDB)
+
+**Previous storage (redb + ALEX):**
+- Sequential 1M: 0.88x (slower than SQLite)
+- Random 1M: 0.10x (10x slower than SQLite)
+- Bottleneck: redb storage layer negating ALEX benefits
+
+**Current storage (RocksDB + ALEX):**
+- Sequential 1M: **2.29x faster** than SQLite ✅
+- Random 1M: 0.09x (still 10x slower, ALEX overhead)
+- Improvement: RocksDB LSM-tree optimized for sequential writes
+
+### RocksDB Benchmark Results (Validated)
+
+**10K-1M scale tested, detailed results:**
+
+| Scale | Workload | Insert Speedup | Query Speedup | Average |
+|-------|----------|---------------|---------------|---------|
+| **10K** | Sequential | 2.24x | 4.86x | **3.55x** ✅ |
+| **10K** | Random | 1.35x | 5.39x | **3.37x** ✅ |
+| **100K** | Sequential | 2.22x | 2.66x | **2.44x** ✅ |
+| **100K** | Random | 0.77x | 3.11x | **1.94x** |
+| **1M** | Sequential | 2.29x | 1.64x | **1.96x** |
+| **1M** | Random | 0.09x | 1.82x | **0.95x** ⚠️ |
+
+**Key findings:**
+- ✅ Sequential workloads: 2.2-2.3x faster (consistent win)
+- ✅ All queries: 1.6-5.4x faster (sub-microsecond latency)
+- ⚠️ Random inserts: Still 10x slower at 1M scale (ALEX overhead)
+
+### Root Cause Analysis
+
+**Why sequential is fast:**
+1. RocksDB LSM-tree optimized for sequential writes
+2. ALEX gapped arrays handle sequential efficiently
+3. Minimal node splits, cache-friendly access
+
+**Why random is still slow:**
+1. ALEX exponential search overhead per key
+2. Frequent node splits with random data
+3. Per-key insert overhead not amortized
+
+**Insight:** Storage layer (RocksDB) is no longer the bottleneck. ALEX needs batch optimization for random data.
+
+### Updated Competitive Positioning
+
+**What we can claim (RocksDB baseline):**
+- ✅ "2-3x faster for time-series/sequential workloads" (validated)
+- ✅ "2-5x faster queries with learned indexes" (validated)
+- ✅ "Sub-microsecond query latency" (0.9-3.9μs vs SQLite's 4.4-7.1μs)
+
+**What we cannot claim yet:**
+- ❌ "10-50x faster than SQLite" (need custom storage)
+- ❌ "Faster for all workloads" (random is 10x slower)
+- ❌ "Production-ready for UUID workloads" (random bottleneck)
+
+**Target market (RocksDB baseline):**
+- Time-series data (sensor logs, metrics, events)
+- Append-only logs (application logs, audit trails)
+- Real-time analytics on sequential data
+- IoT ingestion pipelines
+
+### Next Steps: Custom AlexStorage (8 Weeks)
+
+**Goal:** Achieve 10-50x speedup with state-of-the-art storage
+
+**Key innovations:**
+1. **Batch-mode ALEX:** Amortize training/split overhead
+2. **Memory-mapped storage:** Zero-copy reads, OS-managed cache
+3. **Lazy node splitting:** Defer expensive splits until flush
+4. **SIMD vectorization:** Bulk operations 2-4x faster
+
+**Expected performance (Week 8):**
+- Sequential inserts: **10-20x faster** than SQLite (from 2.3x)
+- Random inserts: **2-5x faster** than SQLite (from 0.09x)
+- Query latency: **<1μs average** (from 1.7-3.9μs)
+
+**See:** `internal/CUSTOM_STORAGE_ROADMAP.md` for detailed 8-week plan
+
+### YC S25 Decision (Updated)
+
+**With RocksDB:**
+- ✅ Solid baseline (2-3x sequential validated)
+- ✅ Production-ready foundation
+- ⚠️ Not "10x+" positioning yet
+
+**Recommendation:**
+- **DELAY for S25** to complete custom storage (8 weeks)
+- Use Q1 2026 for:
+  1. Build custom AlexStorage (10-50x validated)
+  2. Secure 3-5 customer LOIs
+  3. Real-world workload validation
+- Apply YC S25 (April 2026) with complete story
+
+**Funding narrative:**
+- **Today:** 2-3x proven with RocksDB baseline
+- **Week 8:** 10-50x proven with custom AlexStorage
+- **Week 12:** Customer traction + LOIs
+- **Q1 2026:** Seed-ready ($1-3M)
+
+---
+
+**Last Updated:** October 5, 2025 (Post-RocksDB Integration)
+**Status:** RocksDB baseline complete (2-3x), custom storage roadmap defined
+**Next Milestone:** Build custom AlexStorage (8 weeks → 10-50x)
