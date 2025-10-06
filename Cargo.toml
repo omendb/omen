@@ -118,6 +118,10 @@ path = "src/bin/benchmark_temperature.rs"
 name = "benchmark_htap"
 path = "src/bin/benchmark_htap.rs"
 
+[[bin]]
+name = "benchmark_table_vs_sqlite"
+path = "src/bin/benchmark_table_vs_sqlite.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
