@@ -94,6 +94,10 @@ path = "src/bin/benchmark_simd_search.rs"
 name = "benchmark_comprehensive"
 path = "src/bin/benchmark_comprehensive.rs"
 
+[[bin]]
+name = "benchmark_fair_comparison"
+path = "src/bin/benchmark_fair_comparison.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
