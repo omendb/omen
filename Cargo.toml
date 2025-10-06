@@ -98,6 +98,10 @@ path = "src/bin/benchmark_comprehensive.rs"
 name = "benchmark_fair_comparison"
 path = "src/bin/benchmark_fair_comparison.rs"
 
+[[bin]]
+name = "benchmark_mmap_validation"
+path = "src/bin/benchmark_mmap_validation.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
@@ -214,6 +218,9 @@ async-trait = "0.1"
 clap = { version = "4.0", features = ["derive"] }
 env_logger = "0.10"
 lru = "0.16.1"
+
+# Memory-mapped I/O (for custom storage validation)
+memmap2 = "0.9"
 
 [profile.release]
 lto = true
