@@ -14,6 +14,11 @@ pub mod table_storage;
 pub mod table_wal;
 pub mod value;
 
+// Query routing (Phase 9.2)
+pub mod cost_estimator;
+pub mod query_classifier;
+pub mod query_router;
+
 // Re-exports for common types
 pub use connection_pool::{Connection, ConnectionPool, PoolConfig};
 pub use logging::{init_from_env, init_logging, LogConfig};
