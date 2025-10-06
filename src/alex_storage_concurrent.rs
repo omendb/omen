@@ -78,6 +78,17 @@ impl ConcurrentAlexStorage {
         storage.insert_batch(entries)
     }
 
+    /// Delete key-value pair (exclusive lock)
+    ///
+    /// Marks the key as deleted. Space is not reclaimed until compaction.
+    pub fn delete(&self, key: i64) -> Result<()> {
+        let mut storage = self
+            .storage
+            .write()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))?;
+        storage.delete(key)
+    }
+
     /// Query value by key (shared lock - allows concurrent reads)
     ///
     /// Returns a slice reference for zero-copy access.
@@ -285,5 +296,57 @@ mod tests {
         // Verify all writes
         let stats = storage.stats().unwrap();
         assert_eq!(stats.num_keys, 400);
+    }
+
+    #[test]
+    fn test_concurrent_delete() {
+        let dir = tempdir().unwrap();
+        let storage = Arc::new(ConcurrentAlexStorage::new(dir.path()).unwrap());
+
+        // Pre-populate
+        for i in 0..100 {
+            storage.insert(i, b"value").unwrap();
+        }
+
+        // Spawn multiple threads doing deletes and reads
+        let mut handles = vec![];
+
+        // 2 delete threads
+        for thread_id in 0..2 {
+            let storage_clone = storage.clone();
+            let handle = thread::spawn(move || {
+                for i in (thread_id * 25)..((thread_id + 1) * 25) {
+                    storage_clone.delete(i).unwrap();
+                }
+            });
+            handles.push(handle);
+        }
+
+        // 2 reader threads
+        for _ in 0..2 {
+            let storage_clone = storage.clone();
+            let handle = thread::spawn(move || {
+                for i in 0..1000 {
+                    let key = (i % 100) as i64;
+                    let _ = storage_clone.get(key).unwrap();
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all threads
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Verify deletes (keys 0-49 should be deleted)
+        for i in 0..50 {
+            assert_eq!(storage.get(i).unwrap(), None);
+        }
+
+        // Verify non-deletes (keys 50-99 should still exist)
+        for i in 50..100 {
+            assert_eq!(storage.get(i).unwrap(), Some(b"value".to_vec()));
+        }
     }
 }
