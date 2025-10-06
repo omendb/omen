@@ -2,7 +2,7 @@
 
 **Date**: January 2025
 **Status**: Complete, benchmarked, validated
-**Commit**: TBD
+**Commit**: 8de542f
 
 ## Summary
 
@@ -519,7 +519,7 @@ Mixed 20/80: 12,542 q/s (+321%)
 
 ## Commits
 
-- TBD: `feat: Phase 9.4 - HTAP performance benchmarks`
+- `8de542f`: feat: Phase 9.4 - HTAP performance benchmarks
 
 ---
 
