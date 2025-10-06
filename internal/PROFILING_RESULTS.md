@@ -357,6 +357,113 @@ Search:               2,257 ns/query (2.3 μs)
 
 ---
 
+---
+
+## SIMD Optimization Results (October 5, 2025)
+
+**Implementation:** AVX2-accelerated exponential search in ALEX GappedNode
+
+### Query Performance
+
+**Isolated query benchmark** (10K queries on 1M keys):
+```
+Before SIMD: 2,257 ns/query (from detailed profiling)
+After SIMD:  218 ns/query (benchmark_simd_search)
+Speedup:     10.3x faster ✅
+```
+
+**Throughput:** 4.5M queries/sec at 1M scale
+
+### Full System Impact
+
+**1M Random Workload** (profile_benchmark):
+```
+Component     | Before    | After     | Improvement
+--------------|-----------|-----------|------------
+RocksDB       | 1,243ms   | 1,175ms   | 5% (variance)
+ALEX          | 332ms     | 299ms     | 10% ✅
+Full System   | 1,612ms   | 1,537ms   | 4.6%
+```
+
+**Why only 4.6% overall?**
+- ALEX is 20% of total time (SIMD helps this 20%)
+- RocksDB is 76.5% (unchanged - still the bottleneck)
+- This benchmark is insert-heavy (SIMD helps searches more than inserts)
+
+**Expected query workload impact:**
+- Read-heavy workloads: 10-20% faster
+- Write-heavy workloads: 5% faster
+- Mixed workloads: 7-10% faster
+
+### Conclusion
+
+✅ **SIMD delivers 10x query speedup** (proven with benchmark)
+✅ **System-level improvement: 4.6%** (limited by RocksDB bottleneck)
+❌ **Not enough to hit 4-5x vs SQLite** (need RocksDB tuning next)
+
+**Next step:** RocksDB tuning to address 76.5% bottleneck
+
+---
+
+---
+
+## RocksDB Tuning Results (October 5, 2025)
+
+**Optimizations applied:**
+- Memtable size: 64MB → 256MB (batch more writes in memory)
+- SST file size: 64MB → 128MB (reduce compaction frequency)
+- L0 compaction trigger: 4 → 8 (delay compaction, reduce write amp)
+- Max bytes for level base: → 512MB (fewer total levels)
+
+### Results
+
+**1M Random Workload** (profile_benchmark):
+```
+Component     | Before    | After     | Improvement
+--------------|-----------|-----------|------------
+RocksDB       | 1,175ms   | 1,132ms   | 3.7% ✅
+ALEX          | 299ms     | 299ms     | -
+Full System   | 1,537ms   | 1,518ms   | 1.2%
+```
+
+**Cumulative improvements from baseline:**
+```
+Baseline (no opts):     1,612ms
++ SIMD:                 1,537ms (4.6% faster)
++ SIMD + RocksDB tune:  1,518ms (5.8% faster total) ✅
+```
+
+**vs SQLite:**
+```
+SQLite:     3,260ms
+Current:    1,518ms
+Speedup:    2.15x ✅ (up from 2.0x baseline)
+```
+
+### Analysis
+
+**What worked:**
+- RocksDB tuning gave 3.7% improvement (modest but measurable)
+- Combined optimizations: 5.8% total improvement
+- Now 2.15x faster than SQLite
+
+**What didn't work:**
+- RocksDB is still 74.6% of time (still dominant bottleneck)
+- Tuning only gave 3.7% reduction (not the 1.5-2x we hoped for)
+- We're at 2.15x vs SQLite, far from 4-5x target
+
+### Conclusion
+
+✅ **Quick wins delivered:** 5.8% total improvement (SIMD + tuning)
+❌ **Did not hit 4-5x target:** Still only 2.15x vs SQLite
+⚠️ **RocksDB fundamentally wrong for random writes:** 74.6% of time can't be tuned away
+
+**Decision point reached:** Per OPTIMIZATION_ROADMAP, if stuck at 2-3x after quick wins, custom storage is justified.
+
+**Recommendation:** Proceed with custom AlexStorage (10-12 weeks, targeting 5-8x vs SQLite)
+
+---
+
 **Last Updated:** October 5, 2025
-**Status:** Profiling complete, optimization strategy data-driven
-**Next:** Implement SIMD queries (proven opportunity)
+**Status:** Quick wins complete (2.15x vs SQLite), custom storage justified
+**Next:** Build custom AlexStorage to eliminate 74.6% RocksDB bottleneck

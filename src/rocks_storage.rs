@@ -57,9 +57,23 @@ impl RocksStorage {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
         let mut opts = Options::default();
         opts.create_if_missing(true);
-        opts.set_write_buffer_size(64 * 1024 * 1024); // 64MB write buffer
+
+        // TUNING: Larger memtable to batch more writes in memory before flush
+        // Reduces compaction overhead for random writes
+        opts.set_write_buffer_size(256 * 1024 * 1024); // 64MB → 256MB
         opts.set_max_write_buffer_number(3);
-        opts.set_target_file_size_base(64 * 1024 * 1024);
+
+        // TUNING: Larger SST files reduce compaction frequency
+        opts.set_target_file_size_base(128 * 1024 * 1024); // 64MB → 128MB
+
+        // TUNING: Delay compaction to batch more writes
+        // Higher trigger = fewer compactions = less write amplification
+        opts.set_level_zero_file_num_compaction_trigger(8); // Default: 4 → 8
+
+        // TUNING: Larger level base reduces total levels
+        opts.set_max_bytes_for_level_base(512 * 1024 * 1024); // 512MB
+
+        // TUNING: Fast compression for upper levels, strong compression for cold data
         opts.set_compression_type(rocksdb::DBCompressionType::Lz4);
         opts.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
 
