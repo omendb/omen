@@ -22,6 +22,7 @@ pub use sql_engine::QueryConfig;
 // Existing modules (will be refactored)
 pub mod alex; // ALEX adaptive learned index (replacement for RMI)
 pub mod alex_storage; // Custom mmap-based storage with ALEX (10x faster queries)
+pub mod alex_storage_wal; // Write-Ahead Log for AlexStorage durability
 pub mod backup;
 pub mod concurrent;
 pub mod datafusion;

@@ -4,15 +4,17 @@
 //! - ALEX: Tracks (key → offset in file)
 //! - Mmap: Memory-mapped file for zero-copy value access
 //! - Append-only: New writes append to end of file
+//! - WAL: Write-ahead log for crash recovery and durability
 //!
 //! Performance targets (validated via benchmark_mmap_validation):
 //! - Queries: ~389 ns (ALEX 218ns + mmap 151ns + overhead 20ns)
 //! - 10x faster than RocksDB (3,902 ns)
 //! - 5.6x faster than SQLite (2,173 ns)
 //!
-//! Current status: Foundation only (no WAL, no compaction, no concurrency)
+//! Current status: Phase 4 - WAL durability added
 
 use crate::alex::AlexTree;
+use crate::alex_storage_wal::AlexStorageWal;
 use anyhow::{Context, Result};
 use memmap2::{Mmap, MmapMut, MmapOptions};
 use std::fs::{File, OpenOptions};
@@ -38,10 +40,12 @@ const MMAP_GROW_SIZE: u64 = 16 * 1024 * 1024;
 /// - Fast reads: 389ns (mmap + ALEX)
 /// - Fast writes: Append-only, deferred remapping
 /// - Space overhead: Deleted entries not reclaimed (until compaction)
-#[derive(Debug)]
 pub struct AlexStorage {
     /// Path to data file
     data_path: PathBuf,
+
+    /// Base path for all storage files
+    base_path: PathBuf,
 
     /// ALEX index: key → offset in data file
     alex: AlexTree,
@@ -57,12 +61,30 @@ pub struct AlexStorage {
 
     /// Write handle (for appending)
     write_file: File,
+
+    /// Write-Ahead Log for durability
+    wal: AlexStorageWal,
+}
+
+// Manual Debug implementation (WAL doesn't implement Debug)
+impl std::fmt::Debug for AlexStorage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AlexStorage")
+            .field("data_path", &self.data_path)
+            .field("base_path", &self.base_path)
+            .field("file_size", &self.file_size)
+            .field("mapped_size", &self.mapped_size)
+            .finish()
+    }
 }
 
 impl AlexStorage {
     /// Create new AlexStorage at given path
+    ///
+    /// Automatically replays WAL if present for crash recovery.
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let data_path = path.as_ref().join("data.bin");
+        let base_path = path.as_ref().to_path_buf();
+        let data_path = base_path.join("data.bin");
 
         // Create or open data file
         let write_file = OpenOptions::new()
@@ -85,13 +107,18 @@ impl AlexStorage {
             None
         };
 
+        // Create WAL (checkpoint threshold: 1000 entries)
+        let wal = AlexStorageWal::new(&base_path, 1000)?;
+
         let mut storage = Self {
-            data_path,
+            data_path: data_path.clone(),
+            base_path: base_path.clone(),
             alex: AlexTree::new(),
             mmap,
             file_size,
             mapped_size: file_size,
             write_file,
+            wal,
         };
 
         // Load existing keys from file if present
@@ -99,7 +126,45 @@ impl AlexStorage {
             storage.load_keys_from_file()?;
         }
 
+        // Replay WAL for crash recovery
+        storage.replay_wal()?;
+
         Ok(storage)
+    }
+
+    /// Replay WAL entries (crash recovery)
+    fn replay_wal(&mut self) -> Result<()> {
+        let entries = AlexStorageWal::replay(&self.base_path)?;
+
+        if entries.is_empty() {
+            return Ok(());
+        }
+
+        // Replay all entries that aren't already in the storage
+        for entry in &entries {
+            match entry.entry_type {
+                crate::alex_storage_wal::WalEntryType::Insert => {
+                    // Check if key already exists in ALEX (already flushed to file)
+                    if self.alex.get(entry.key)?.is_some() {
+                        // Key already in file, skip replay (already persisted)
+                        continue;
+                    }
+                    // Apply insert without logging to WAL (already logged)
+                    self.insert_no_wal(entry.key, &entry.value)?;
+                }
+                crate::alex_storage_wal::WalEntryType::Delete => {
+                    // Delete not implemented yet
+                }
+                crate::alex_storage_wal::WalEntryType::Checkpoint => {
+                    // Checkpoint marker - should not appear in replayed entries
+                }
+            }
+        }
+
+        // After successful replay, checkpoint WAL
+        self.wal.checkpoint()?;
+
+        Ok(())
     }
 
     /// Load keys from existing data file into ALEX
@@ -152,13 +217,29 @@ impl AlexStorage {
         Ok(())
     }
 
-    /// Insert key-value pair
+    /// Insert key-value pair (with WAL logging for durability)
     ///
     /// Format written to file:
     /// [value_len:4 bytes][key:8 bytes][value:N bytes]
     ///
     /// ALEX stores: (key → offset of key+value)
     pub fn insert(&mut self, key: i64, value: &[u8]) -> Result<()> {
+        // Log to WAL first for durability
+        self.wal.log_insert(key, value)?;
+
+        // Apply insert
+        self.insert_no_wal(key, value)?;
+
+        // Checkpoint if needed
+        if self.wal.needs_checkpoint() {
+            self.wal.checkpoint()?;
+        }
+
+        Ok(())
+    }
+
+    /// Insert key-value pair without WAL logging (internal use for replay)
+    fn insert_no_wal(&mut self, key: i64, value: &[u8]) -> Result<()> {
         // Calculate total size: key (8) + value (N)
         let data_len = 8 + value.len();
         let total_len = ENTRY_HEADER_SIZE + data_len;
@@ -194,10 +275,15 @@ impl AlexStorage {
         Ok(())
     }
 
-    /// Batch insert key-value pairs (optimized)
+    /// Batch insert key-value pairs (optimized, with WAL logging)
     pub fn insert_batch(&mut self, entries: Vec<(i64, Vec<u8>)>) -> Result<()> {
         if entries.is_empty() {
             return Ok(());
+        }
+
+        // Log all entries to WAL first for durability
+        for (key, value) in &entries {
+            self.wal.log_insert(*key, value)?;
         }
 
         let mut alex_entries = Vec::with_capacity(entries.len());
@@ -228,6 +314,11 @@ impl AlexStorage {
 
         // Bulk insert into ALEX
         self.alex.insert_batch(alex_entries)?;
+
+        // Checkpoint if needed
+        if self.wal.needs_checkpoint() {
+            self.wal.checkpoint()?;
+        }
 
         Ok(())
     }
