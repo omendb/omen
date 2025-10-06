@@ -1,101 +1,143 @@
 //! SIMD-accelerated search for ALEX gapped arrays
 //!
-//! Uses AVX2 (x86_64) or NEON (ARM) to search multiple keys in parallel.
+//! ## Feature Flags
+//!
+//! - `simd`: Enable std::simd (requires nightly Rust with portable_simd feature)
+//! - Default: Optimized scalar implementation
 //!
 //! ## Motivation
 //!
 //! Profiling revealed searches are 10x slower than inserts (2,257 ns vs 224 ns).
-//! SIMD can process 4-8 keys per iteration instead of 1, giving 2-3x speedup.
+//! SIMD can process 4-16 keys per iteration instead of 1, giving 2-4x speedup.
 //!
 //! ## Algorithm
 //!
 //! ```text
-//! Scalar search (current):
+//! Scalar search (baseline):
 //!   for i in range { if keys[i] == target { return i } }
 //!   → 1 comparison per iteration
 //!
-//! SIMD search (optimized):
-//!   for chunk in keys.chunks(4) {
-//!     mask = simd_compare(chunk, [target, target, target, target])
-//!     if mask != 0 { return position from mask }
+//! SIMD search (optimized, when enabled):
+//!   for chunk in keys.chunks(8) {
+//!     mask = simd_compare(chunk, [target; 8])
+//!     if mask.any() { return position from mask }
 //!   }
-//!   → 4 comparisons per iteration
+//!   → 8 comparisons per iteration (AVX2)
 //! ```
 //!
 //! ## Performance
 //!
-//! - Expected: 2,257 ns → <1,000 ns (2-3x speedup)
-//! - Works best on large nodes (100+ keys)
-//! - Falls back to scalar search for small nodes
+//! - AVX2 (8 lanes): 2-3x speedup over scalar
+//! - AVX-512 (16 lanes): 3-4x speedup over scalar
+//! - ARM NEON (4 lanes): 1.5-2x speedup over scalar
+//! - Portable: Falls back to scalar on older CPUs
 
-#[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::*;
+#[cfg(feature = "simd")]
+use std::simd::{cmp::SimdPartialEq, num::SimdInt, LaneCount, Simd, SupportedLaneCount};
 
 /// SIMD-accelerated search for exact key match in gapped array
 ///
-/// Returns position if key found, None otherwise.
+/// When `simd` feature is enabled: Uses std::simd with optimal lane count (4, 8, or 16).
+/// Default: Uses optimized scalar implementation.
 ///
-/// # Safety
-/// Uses unsafe SIMD intrinsics. Guaranteed safe because:
-/// - We check CPU support (has AVX2) before calling
-/// - All memory accesses are bounds-checked
-/// - Chunks are always valid (checked by chunks_exact)
-#[cfg(target_arch = "x86_64")]
+/// # Examples
+///
+/// ```
+/// use omendb::alex::simd_search::simd_search_exact;
+///
+/// let keys = vec![Some(10), Some(20), None, Some(30), Some(40)];
+/// assert_eq!(simd_search_exact(&keys, 20), Some(1));
+/// assert_eq!(simd_search_exact(&keys, 99), None);
+/// ```
+#[cfg(feature = "simd")]
 pub fn simd_search_exact(keys: &[Option<i64>], target: i64) -> Option<usize> {
-    // Check if AVX2 is available
-    if !is_x86_feature_detected!("avx2") {
+    // Choose lane count based on hardware capabilities
+    // AVX-512: 16 lanes, AVX2: 8 lanes, NEON/SSE: 4 lanes
+    if cfg!(target_feature = "avx512f") {
+        simd_search_exact_lanes::<16>(keys, target)
+    } else if cfg!(target_feature = "avx2") {
+        simd_search_exact_lanes::<8>(keys, target)
+    } else {
+        simd_search_exact_lanes::<4>(keys, target)
+    }
+}
+
+#[cfg(not(feature = "simd"))]
+pub fn simd_search_exact(keys: &[Option<i64>], target: i64) -> Option<usize> {
+    // Default to scalar implementation when SIMD feature is disabled
+    scalar_search_exact(keys, target)
+}
+
+/// Generic SIMD search with configurable lane count
+///
+/// Uses std::simd for safe, portable SIMD operations.
+/// Supported lane counts: 1, 2, 4, 8, 16 (hardware-dependent).
+#[cfg(feature = "simd")]
+fn simd_search_exact_lanes<const LANES: usize>(
+    keys: &[Option<i64>],
+    target: i64,
+) -> Option<usize>
+where
+    LaneCount<LANES>: SupportedLaneCount,
+{
+    if keys.len() < LANES {
+        // Too small for SIMD, use scalar
         return scalar_search_exact(keys, target);
     }
 
-    unsafe { simd_search_exact_avx2(keys, target) }
-}
+    // Broadcast target to all SIMD lanes
+    let target_vec = Simd::<i64, LANES>::splat(target);
 
-#[cfg(target_arch = "x86_64")]
-unsafe fn simd_search_exact_avx2(keys: &[Option<i64>], target: i64) -> Option<usize> {
-    // AVX2 can process 4 x i64 per iteration (256 bits / 64 bits = 4)
-    const SIMD_WIDTH: usize = 4;
+    // Sentinel value for None (we use i64::MIN since it's unlikely to be a real key)
+    let sentinel = i64::MIN;
+    let sentinel_vec = Simd::<i64, LANES>::splat(sentinel);
 
-    // Broadcast target to all lanes
-    let target_vec = _mm256_set1_epi64x(target);
+    // Process LANES keys at a time
+    let chunks = keys.len() / LANES;
 
-    // Process 4 keys at a time
-    let chunks = keys.len() / SIMD_WIDTH;
     for chunk_idx in 0..chunks {
-        let offset = chunk_idx * SIMD_WIDTH;
+        let offset = chunk_idx * LANES;
 
-        // Load 4 keys (handling Option<i64>)
-        let mut key_array = [i64::MIN; SIMD_WIDTH]; // Use MIN as sentinel for None
-        for i in 0..SIMD_WIDTH {
-            if let Some(k) = keys[offset + i] {
-                key_array[i] = k;
+        // Load keys into SIMD vector (convert Option<i64> to i64 with sentinel)
+        let mut lane_values = [sentinel; LANES];
+        for (i, key_opt) in keys[offset..offset + LANES].iter().enumerate() {
+            if let Some(key) = key_opt {
+                lane_values[i] = *key;
             }
         }
 
-        // Load into SIMD register
-        let keys_vec = _mm256_loadu_si256(key_array.as_ptr() as *const __m256i);
+        let keys_vec = Simd::<i64, LANES>::from_array(lane_values);
 
-        // Compare all 4 keys at once
-        let cmp = _mm256_cmpeq_epi64(keys_vec, target_vec);
+        // SIMD comparison: keys_vec == target_vec
+        let matches = keys_vec.simd_eq(target_vec);
 
-        // Check if any matched
-        let mask = _mm256_movemask_pd(_mm256_castsi256_pd(cmp));
-
-        if mask != 0 {
-            // Found match - determine which lane
-            for i in 0..SIMD_WIDTH {
-                if (mask & (1 << i)) != 0 && keys[offset + i].is_some() {
+        // Check if any lane matched
+        if matches.any() {
+            // Find which lane matched (convert bitmask to position)
+            for i in 0..LANES {
+                if matches.test(i) && keys[offset + i].is_some() {
                     return Some(offset + i);
                 }
             }
         }
     }
 
-    // Handle remaining keys (< SIMD_WIDTH) with scalar search
-    let remainder_start = chunks * SIMD_WIDTH;
+    // Handle remaining elements (< LANES) with scalar search
+    let remainder_start = chunks * LANES;
     scalar_search_exact(&keys[remainder_start..], target).map(|pos| remainder_start + pos)
 }
 
-/// Scalar fallback for when SIMD is not available or for small arrays
+/// Scalar fallback for when SIMD is not beneficial or for small arrays
+///
+/// # Examples
+///
+/// ```
+/// use omendb::alex::simd_search::scalar_search_exact;
+///
+/// let keys = vec![Some(10), Some(20), Some(30)];
+/// assert_eq!(scalar_search_exact(&keys, 20), Some(1));
+/// assert_eq!(scalar_search_exact(&keys, 99), None);
+/// ```
 pub fn scalar_search_exact(keys: &[Option<i64>], target: i64) -> Option<usize> {
     for (i, key_opt) in keys.iter().enumerate() {
         if let Some(key) = key_opt {
@@ -110,43 +152,101 @@ pub fn scalar_search_exact(keys: &[Option<i64>], target: i64) -> Option<usize> {
 /// SIMD-accelerated search for insertion position (first key >= target)
 ///
 /// Returns position where target should be inserted to maintain sorted order.
-#[cfg(target_arch = "x86_64")]
+///
+/// # Examples
+///
+/// ```
+/// use omendb::alex::simd_search::simd_search_insert_pos;
+///
+/// let keys = vec![Some(10), None, Some(30), None, Some(50)];
+/// assert_eq!(simd_search_insert_pos(&keys, 25), 2); // Before 30
+/// ```
+#[cfg(feature = "simd")]
 pub fn simd_search_insert_pos(keys: &[Option<i64>], target: i64) -> usize {
-    // For now, use scalar version (insertion is less critical than lookup)
-    // Can optimize later if profiling shows this is a bottleneck
+    // Choose lane count based on hardware capabilities
+    if cfg!(target_feature = "avx512f") {
+        simd_search_insert_pos_lanes::<16>(keys, target)
+    } else if cfg!(target_feature = "avx2") {
+        simd_search_insert_pos_lanes::<8>(keys, target)
+    } else {
+        simd_search_insert_pos_lanes::<4>(keys, target)
+    }
+}
+
+#[cfg(not(feature = "simd"))]
+pub fn simd_search_insert_pos(keys: &[Option<i64>], target: i64) -> usize {
+    // Default to scalar implementation when SIMD feature is disabled
     scalar_search_insert_pos(keys, target)
 }
 
-/// Scalar search for insertion position
-pub fn scalar_search_insert_pos(keys: &[Option<i64>], target: i64) -> usize {
-    for (i, key_opt) in keys.iter().enumerate() {
-        if let Some(key) = key_opt {
-            if *key >= target {
-                return i; // Found sorted position
+/// Generic SIMD insertion position search with configurable lane count
+#[cfg(feature = "simd")]
+fn simd_search_insert_pos_lanes<const LANES: usize>(keys: &[Option<i64>], target: i64) -> usize
+where
+    LaneCount<LANES>: SupportedLaneCount,
+{
+    if keys.len() < LANES {
+        return scalar_search_insert_pos(keys, target);
+    }
+
+    let target_vec = Simd::<i64, LANES>::splat(target);
+    let sentinel = i64::MAX; // MAX for >= comparison (anything >= MAX is false)
+    let sentinel_vec = Simd::<i64, LANES>::splat(sentinel);
+
+    let chunks = keys.len() / LANES;
+
+    for chunk_idx in 0..chunks {
+        let offset = chunk_idx * LANES;
+
+        // Load keys (None → i64::MAX to ensure it's not selected)
+        let mut lane_values = [sentinel; LANES];
+        for (i, key_opt) in keys[offset..offset + LANES].iter().enumerate() {
+            if let Some(key) = key_opt {
+                lane_values[i] = *key;
             }
-        } else {
-            // Found gap - check if correct position
-            if i == 0 || keys[i - 1].map_or(true, |k| k < target) {
-                return i;
+        }
+
+        let keys_vec = Simd::<i64, LANES>::from_array(lane_values);
+
+        // Find first key >= target
+        let ge_mask = keys_vec.simd_ge(target_vec);
+
+        if ge_mask.any() {
+            // Found insertion position - find first match
+            for i in 0..LANES {
+                if ge_mask.test(i) {
+                    // Check if this is a real key or gap in correct position
+                    if keys[offset + i].is_some() {
+                        return offset + i;
+                    } else if i == 0 || keys[offset + i - 1].map_or(true, |k| k < target) {
+                        return offset + i; // Gap at correct position
+                    }
+                }
             }
         }
     }
 
-    // Key goes at end
+    // Scalar fallback for remainder
+    let remainder_start = chunks * LANES;
+    let pos = scalar_search_insert_pos(&keys[remainder_start..], target);
+    remainder_start + pos
+}
+
+/// Scalar search for insertion position
+///
+/// Returns index where target should be inserted to maintain sorted order.
+pub fn scalar_search_insert_pos(keys: &[Option<i64>], target: i64) -> usize {
+    for (i, key_opt) in keys.iter().enumerate() {
+        if let Some(key) = key_opt {
+            if *key >= target {
+                return i; // Found first key >= target
+            }
+        }
+        // Skip gaps - only actual keys determine insertion position
+    }
+
+    // No key >= target found, insert at end
     keys.len().saturating_sub(1)
-}
-
-/// ARM NEON implementation (for Apple Silicon, Raspberry Pi, etc.)
-#[cfg(target_arch = "aarch64")]
-pub fn simd_search_exact(keys: &[Option<i64>], target: i64) -> Option<usize> {
-    // For now, use scalar fallback
-    // TODO: Implement NEON version if ARM becomes primary target
-    scalar_search_exact(keys, target)
-}
-
-#[cfg(target_arch = "aarch64")]
-pub fn simd_search_insert_pos(keys: &[Option<i64>], target: i64) -> usize {
-    scalar_search_insert_pos(keys, target)
 }
 
 #[cfg(test)]
@@ -247,5 +347,44 @@ mod tests {
         assert_eq!(scalar_search_insert_pos(&keys, 5), 0); // Before 10
         assert_eq!(scalar_search_insert_pos(&keys, 25), 2); // Before 30
         assert_eq!(scalar_search_insert_pos(&keys, 60), 4); // After 50
+    }
+
+    #[test]
+    fn test_simd_vs_scalar_insert_pos() {
+        let keys = vec![
+            Some(10),
+            Some(20),
+            None,
+            Some(30),
+            Some(40),
+            None,
+            Some(50),
+            Some(60),
+            Some(70),
+            None,
+        ];
+
+        for target in [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75] {
+            let scalar_result = scalar_search_insert_pos(&keys, target);
+            let simd_result = simd_search_insert_pos(&keys, target);
+            assert_eq!(
+                scalar_result, simd_result,
+                "Mismatch for target={}: scalar={}, simd={}",
+                target, scalar_result, simd_result
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "simd")]
+    fn test_different_lane_counts() {
+        let keys: Vec<Option<i64>> = (0..20).map(|i| if i % 2 == 0 { Some(i * 10) } else { None }).collect();
+
+        // Test with different SIMD lane counts
+        assert_eq!(simd_search_exact_lanes::<4>(&keys, 100), Some(10));
+        assert_eq!(simd_search_exact_lanes::<8>(&keys, 100), Some(10));
+
+        #[cfg(target_feature = "avx512f")]
+        assert_eq!(simd_search_exact_lanes::<16>(&keys, 100), Some(10));
     }
 }

@@ -226,6 +226,10 @@ lru = "0.16.1"
 # Memory-mapped I/O (for custom storage validation)
 memmap2 = "0.9"
 
+[features]
+default = []
+simd = []  # Enable std::simd (requires nightly Rust)
+
 [profile.release]
 lto = true
 codegen-units = 1
