@@ -232,10 +232,11 @@ impl AlexStorage {
         Ok(())
     }
 
-    /// Query value by key
+    /// Query value by key (zero-copy - returns slice reference)
     ///
-    /// Performance: ~389 ns (ALEX 218ns + mmap 151ns + overhead 20ns)
-    pub fn get(&self, key: i64) -> Result<Option<Vec<u8>>> {
+    /// Performance target: ~1,020 ns at 1M scale (vs 1,051 ns with Vec allocation)
+    /// Returns a slice reference to avoid allocation overhead (~30ns saved)
+    pub fn get(&self, key: i64) -> Result<Option<&[u8]>> {
         // Lookup offset in ALEX
         let offset_bytes = match self.alex.get(key)? {
             Some(bytes) => bytes,
@@ -273,7 +274,16 @@ impl AlexStorage {
             return Ok(None);
         }
 
-        Ok(Some(data[8..].to_vec()))
+        // Zero-copy: return slice reference instead of Vec
+        Ok(Some(&data[8..]))
+    }
+
+    /// Query value by key (owned copy - returns Vec)
+    ///
+    /// Use this if you need an owned copy of the value.
+    /// For most use cases, prefer get() which returns a slice reference.
+    pub fn get_owned(&self, key: i64) -> Result<Option<Vec<u8>>> {
+        Ok(self.get(key)?.map(|slice| slice.to_vec()))
     }
 
     /// Remap file after writes (grows in chunks to minimize remap frequency)
@@ -332,9 +342,9 @@ mod tests {
         // Insert
         storage.insert(42, b"hello world").unwrap();
 
-        // Query
+        // Query (zero-copy - returns slice)
         let result = storage.get(42).unwrap();
-        assert_eq!(result, Some(b"hello world".to_vec()));
+        assert_eq!(result, Some(b"hello world" as &[u8]));
 
         // Non-existent key
         let result = storage.get(99).unwrap();
@@ -354,10 +364,10 @@ mod tests {
         ];
         storage.insert_batch(entries).unwrap();
 
-        // Query all
-        assert_eq!(storage.get(1).unwrap(), Some(b"one".to_vec()));
-        assert_eq!(storage.get(2).unwrap(), Some(b"two".to_vec()));
-        assert_eq!(storage.get(3).unwrap(), Some(b"three".to_vec()));
+        // Query all (zero-copy - returns slices)
+        assert_eq!(storage.get(1).unwrap(), Some(b"one" as &[u8]));
+        assert_eq!(storage.get(2).unwrap(), Some(b"two" as &[u8]));
+        assert_eq!(storage.get(3).unwrap(), Some(b"three" as &[u8]));
     }
 
     #[test]
@@ -370,11 +380,11 @@ mod tests {
             storage.insert(100, b"persistent data").unwrap();
         }
 
-        // Reopen and query
+        // Reopen and query (zero-copy - returns slice)
         {
             let storage = AlexStorage::new(dir.path()).unwrap();
             let result = storage.get(100).unwrap();
-            assert_eq!(result, Some(b"persistent data".to_vec()));
+            assert_eq!(result, Some(b"persistent data" as &[u8]));
         }
     }
 }
