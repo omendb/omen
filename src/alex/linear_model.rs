@@ -78,7 +78,8 @@ impl LinearModel {
     /// Train on full dataset (original implementation)
     ///
     /// Used internally for small datasets or when full accuracy is needed.
-    fn train_full(&mut self, data: &[(i64, usize)]) {
+    /// Can also be called directly for benchmarking/comparison.
+    pub fn train_full(&mut self, data: &[(i64, usize)]) {
         if data.is_empty() {
             // No data - keep identity function
             return;

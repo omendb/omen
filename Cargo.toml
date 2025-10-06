@@ -106,6 +106,10 @@ path = "src/bin/benchmark_mmap_validation.rs"
 name = "benchmark_alex_storage"
 path = "src/bin/benchmark_alex_storage.rs"
 
+[[bin]]
+name = "benchmark_alex_improvements"
+path = "src/bin/benchmark_alex_improvements.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
