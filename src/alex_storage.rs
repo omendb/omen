@@ -442,6 +442,156 @@ impl AlexStorage {
             num_leaves: self.alex.num_leaves(),
         }
     }
+
+    /// Compact storage file (reclaim space from deleted entries)
+    ///
+    /// Process:
+    /// 1. Scan storage file, collect live entries (skip tombstones)
+    /// 2. Write live entries to temporary file
+    /// 3. Build new ALEX index with new offsets
+    /// 4. Atomic switchover (rename temp file)
+    /// 5. Checkpoint WAL
+    ///
+    /// Performance: O(N) where N is total entries in file
+    /// Expected time: 1-5 seconds for 1M keys
+    ///
+    /// Returns statistics about space reclaimed.
+    pub fn compact(&mut self) -> Result<CompactionStats> {
+        let bytes_before = self.file_size;
+
+        // 1. Collect live entries (skip tombstones) and count total entries
+        let (live_entries, total_entries) = self.collect_live_entries_with_count()?;
+        let entries_before = total_entries;
+
+        // 2. Write to temporary file
+        let temp_path = self.base_path.join("data.bin.compact");
+        let mut temp_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&temp_path)
+            .context("Failed to create temp compaction file")?;
+
+        // 3. Write entries and build new ALEX index
+        let mut new_alex = AlexTree::new();
+        let mut new_file_size = 0u64;
+        let mut alex_entries = Vec::with_capacity(live_entries.len());
+
+        for (key, value) in &live_entries {
+            // Write entry: [value_len:4][key:8][value:N]
+            let data_len = 8 + value.len();
+            let current_offset = new_file_size;
+
+            temp_file.write_all(&(data_len as u32).to_le_bytes())?;
+            temp_file.write_all(&key.to_le_bytes())?;
+            temp_file.write_all(value)?;
+
+            // Track new offset for ALEX
+            let value_offset = current_offset + ENTRY_HEADER_SIZE as u64;
+            alex_entries.push((*key, value_offset.to_le_bytes().to_vec()));
+
+            new_file_size += (ENTRY_HEADER_SIZE + data_len) as u64;
+        }
+
+        temp_file.flush()?;
+        drop(temp_file);
+
+        // Insert into new ALEX
+        new_alex.insert_batch(alex_entries)?;
+
+        // 4. Atomic switchover
+        self.mmap = None; // Drop old mmap before rename
+        std::fs::rename(&temp_path, &self.data_path)
+            .context("Failed to rename compacted file")?;
+
+        // Reopen file
+        self.write_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&self.data_path)
+            .context("Failed to reopen data file after compaction")?;
+
+        self.file_size = new_file_size;
+        self.mapped_size = new_file_size;
+        self.alex = new_alex;
+
+        // Remap if file is not empty
+        if self.file_size > 0 {
+            let read_file = File::open(&self.data_path)?;
+            self.mmap = Some(unsafe { Mmap::map(&read_file)? });
+        }
+
+        // 5. Checkpoint WAL (all entries now in storage)
+        self.wal.checkpoint()?;
+
+        Ok(CompactionStats {
+            entries_before,
+            entries_after: live_entries.len(),
+            bytes_before,
+            bytes_after: new_file_size,
+            space_reclaimed: bytes_before.saturating_sub(new_file_size),
+            tombstones_removed: entries_before.saturating_sub(live_entries.len()),
+        })
+    }
+
+    /// Collect live entries from storage file (internal helper for compaction)
+    /// Returns (live_entries, total_entry_count)
+    fn collect_live_entries_with_count(&self) -> Result<(Vec<(i64, Vec<u8>)>, usize)> {
+        let mut live_entries = Vec::new();
+        let mut total_count = 0;
+
+        let mmap = match &self.mmap {
+            Some(m) => m,
+            None => return Ok((live_entries, total_count)),
+        };
+
+        let mut offset = 0u64;
+
+        while offset < self.file_size {
+            // Read length header
+            if offset as usize + ENTRY_HEADER_SIZE > mmap.len() {
+                break;
+            }
+
+            let value_len_bytes = &mmap[offset as usize..offset as usize + 4];
+            let data_len = u32::from_le_bytes(value_len_bytes.try_into()?) as usize;
+
+            // Read entry
+            let value_offset = offset + ENTRY_HEADER_SIZE as u64;
+            if value_offset as usize + data_len > mmap.len() {
+                break;
+            }
+
+            let data = &mmap[value_offset as usize..value_offset as usize + data_len];
+
+            // Extract key
+            if data.len() >= 8 {
+                total_count += 1; // Count all entries (including tombstones)
+
+                let key_bytes = &data[0..8];
+                let key = i64::from_le_bytes(key_bytes.try_into().unwrap());
+
+                // Check if key is tombstoned in ALEX
+                let is_live = match self.alex.get(key)? {
+                    Some(offset_bytes) => {
+                        let stored_offset = u64::from_le_bytes(offset_bytes.as_slice().try_into()?);
+                        stored_offset != TOMBSTONE
+                    }
+                    None => false,
+                };
+
+                if is_live {
+                    // Extract value (skip key)
+                    let value = data[8..].to_vec();
+                    live_entries.push((key, value));
+                }
+            }
+
+            offset += (ENTRY_HEADER_SIZE + data_len) as u64;
+        }
+
+        Ok((live_entries, total_count))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -449,6 +599,16 @@ pub struct StorageStats {
     pub num_keys: usize,
     pub file_size: u64,
     pub num_leaves: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompactionStats {
+    pub entries_before: usize,
+    pub entries_after: usize,
+    pub bytes_before: u64,
+    pub bytes_after: u64,
+    pub space_reclaimed: u64,
+    pub tombstones_removed: usize,
 }
 
 #[cfg(test)]
@@ -590,5 +750,152 @@ mod tests {
         assert_eq!(storage.get(7).unwrap().is_some(), true);
         assert_eq!(storage.get(8).unwrap(), None); // Deleted
         assert_eq!(storage.get(9).unwrap().is_some(), true);
+    }
+
+    #[test]
+    fn test_compact_basic() {
+        let dir = tempdir().unwrap();
+        let mut storage = AlexStorage::new(dir.path()).unwrap();
+
+        // Insert 10 keys
+        for i in 0..10 {
+            storage.insert(i, b"value").unwrap();
+        }
+
+        let stats_before = storage.stats();
+        assert_eq!(stats_before.num_keys, 10);
+        let file_size_before = stats_before.file_size;
+
+        // Delete 5 keys
+        for i in (0..10).step_by(2) {
+            storage.delete(i).unwrap();
+        }
+
+        // Verify deletes
+        assert_eq!(storage.get(0).unwrap(), None);
+        assert_eq!(storage.get(2).unwrap(), None);
+
+        // Compact
+        let compact_stats = storage.compact().unwrap();
+
+        // Verify compaction stats
+        assert_eq!(compact_stats.entries_before, 10); // Total keys in ALEX (including tombstones)
+        assert_eq!(compact_stats.entries_after, 5); // Only live keys after compaction
+        assert_eq!(compact_stats.tombstones_removed, 5); // 5 tombstones removed
+        assert!(compact_stats.bytes_after < file_size_before); // Space reclaimed
+
+        // Verify live keys still readable
+        assert_eq!(storage.get(1).unwrap(), Some(b"value" as &[u8]));
+        assert_eq!(storage.get(3).unwrap(), Some(b"value" as &[u8]));
+        assert_eq!(storage.get(5).unwrap(), Some(b"value" as &[u8]));
+
+        // Verify deleted keys still deleted
+        assert_eq!(storage.get(0).unwrap(), None);
+        assert_eq!(storage.get(2).unwrap(), None);
+    }
+
+    #[test]
+    fn test_compact_persistence() {
+        let dir = tempdir().unwrap();
+
+        // Insert, delete, compact
+        {
+            let mut storage = AlexStorage::new(dir.path()).unwrap();
+            for i in 0..10 {
+                storage.insert(i, b"value").unwrap();
+            }
+            for i in (0..10).step_by(2) {
+                storage.delete(i).unwrap();
+            }
+            storage.compact().unwrap();
+        }
+
+        // Reopen and verify
+        {
+            let storage = AlexStorage::new(dir.path()).unwrap();
+
+            // Live keys readable
+            assert_eq!(storage.get(1).unwrap(), Some(b"value" as &[u8]));
+            assert_eq!(storage.get(3).unwrap(), Some(b"value" as &[u8]));
+
+            // Deleted keys still deleted
+            assert_eq!(storage.get(0).unwrap(), None);
+            assert_eq!(storage.get(2).unwrap(), None);
+        }
+    }
+
+    #[test]
+    fn test_compact_all_deleted() {
+        let dir = tempdir().unwrap();
+        let mut storage = AlexStorage::new(dir.path()).unwrap();
+
+        // Insert 5 keys
+        for i in 0..5 {
+            storage.insert(i, b"value").unwrap();
+        }
+
+        // Delete all keys
+        for i in 0..5 {
+            storage.delete(i).unwrap();
+        }
+
+        // Compact
+        let compact_stats = storage.compact().unwrap();
+
+        // Verify all entries removed
+        assert_eq!(compact_stats.entries_after, 0);
+        assert_eq!(compact_stats.bytes_after, 0);
+        assert_eq!(storage.stats().file_size, 0);
+
+        // Verify all keys return None
+        for i in 0..5 {
+            assert_eq!(storage.get(i).unwrap(), None);
+        }
+    }
+
+    #[test]
+    fn test_compact_no_deletes() {
+        let dir = tempdir().unwrap();
+        let mut storage = AlexStorage::new(dir.path()).unwrap();
+
+        // Insert 5 keys (no deletes)
+        for i in 0..5 {
+            storage.insert(i, b"value").unwrap();
+        }
+
+        let file_size_before = storage.stats().file_size;
+
+        // Compact (should have no effect)
+        let compact_stats = storage.compact().unwrap();
+
+        // Verify no space reclaimed
+        assert_eq!(compact_stats.entries_before, 5);
+        assert_eq!(compact_stats.entries_after, 5);
+        assert_eq!(compact_stats.tombstones_removed, 0);
+        assert_eq!(compact_stats.bytes_after, file_size_before);
+
+        // Verify all keys still readable
+        for i in 0..5 {
+            assert_eq!(storage.get(i).unwrap(), Some(b"value" as &[u8]));
+        }
+    }
+
+    #[test]
+    fn test_compact_reinsert_after() {
+        let dir = tempdir().unwrap();
+        let mut storage = AlexStorage::new(dir.path()).unwrap();
+
+        // Insert and delete
+        storage.insert(1, b"value1").unwrap();
+        storage.delete(1).unwrap();
+
+        // Compact
+        storage.compact().unwrap();
+
+        // Reinsert same key
+        storage.insert(1, b"value2").unwrap();
+
+        // Verify new value readable
+        assert_eq!(storage.get(1).unwrap(), Some(b"value2" as &[u8]));
     }
 }

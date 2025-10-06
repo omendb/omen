@@ -117,6 +117,20 @@ impl ConcurrentAlexStorage {
             .map_err(|e| anyhow::anyhow!("Failed to acquire read lock: {}", e))?;
         Ok(storage.stats())
     }
+
+    /// Compact storage file (exclusive lock - blocks all operations)
+    ///
+    /// Reclaims space from deleted entries by rebuilding the storage file.
+    /// This is an offline operation that blocks all concurrent access.
+    ///
+    /// Performance: O(N) where N is total entries, typically 1-5 seconds for 1M keys
+    pub fn compact(&self) -> Result<crate::alex_storage::CompactionStats> {
+        let mut storage = self
+            .storage
+            .write()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))?;
+        storage.compact()
+    }
 }
 
 #[cfg(test)]
@@ -347,6 +361,43 @@ mod tests {
         // Verify non-deletes (keys 50-99 should still exist)
         for i in 50..100 {
             assert_eq!(storage.get(i).unwrap(), Some(b"value".to_vec()));
+        }
+    }
+
+    #[test]
+    fn test_concurrent_compact() {
+        let dir = tempdir().unwrap();
+        let storage = Arc::new(ConcurrentAlexStorage::new(dir.path()).unwrap());
+
+        // Pre-populate 100 keys
+        for i in 0..100 {
+            storage.insert(i, b"value").unwrap();
+        }
+
+        let file_size_before = storage.stats().unwrap().file_size;
+
+        // Delete half
+        for i in (0..100).step_by(2) {
+            storage.delete(i).unwrap();
+        }
+
+        // Compact
+        let compact_stats = storage.compact().unwrap();
+
+        // Verify space reclaimed
+        assert_eq!(compact_stats.entries_before, 100); // Total entries in file
+        assert_eq!(compact_stats.entries_after, 50); // Live entries after compaction
+        assert_eq!(compact_stats.tombstones_removed, 50);
+        assert!(compact_stats.bytes_after < file_size_before);
+
+        // Verify live keys readable
+        for i in (1..100).step_by(2) {
+            assert_eq!(storage.get(i).unwrap(), Some(b"value".to_vec()));
+        }
+
+        // Verify deleted keys still deleted
+        for i in (0..100).step_by(2) {
+            assert_eq!(storage.get(i).unwrap(), None);
         }
     }
 }
