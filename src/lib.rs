@@ -28,6 +28,7 @@ pub mod index;
 pub mod metrics;
 pub mod postgres;
 pub mod redb_storage;
+pub mod rocks_storage;
 pub mod rest;
 pub mod security;
 pub mod server;

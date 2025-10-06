@@ -102,6 +102,10 @@ datafusion = "43"
 # OLTP Storage - Pure Rust embedded database
 redb = "2.1"
 
+# RocksDB - High-performance storage engine (Facebook)
+# Used as fast storage layer with ALEX learned indexes
+rocksdb = "0.24"
+
 # Arrow for columnar storage (upgraded for DataFusion compatibility)
 arrow = "53"
 parquet = "53"

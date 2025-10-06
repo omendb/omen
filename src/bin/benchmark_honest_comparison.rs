@@ -8,7 +8,7 @@
 //!
 //! What we're testing:
 //! - SQLite: B-tree indexes with full ACID
-//! - OmenDB: redb + learned indexes with full ACID
+//! - OmenDB: RocksDB (LSM-tree) + ALEX learned indexes with full ACID
 //!
 //! Tested workloads:
 //! - Sequential keys (time-series pattern) - our sweet spot
@@ -17,7 +17,7 @@
 //! Usage: cargo run --release --bin benchmark_honest_comparison
 
 use anyhow::Result;
-use omendb::redb_storage::RedbStorage;
+use omendb::rocks_storage::RocksStorage;
 use rusqlite::{Connection, params};
 use std::time::Instant;
 use tempfile::TempDir;
@@ -234,7 +234,7 @@ fn benchmark_sqlite_point_query(keys: &[i64], temp_dir: &TempDir) -> Result<f64>
 // OmenDB Benchmarks
 fn benchmark_omendb_insert(size: usize, keys: &[i64], temp_dir: &TempDir) -> Result<f64> {
     let db_path = temp_dir.path().join("omendb_insert.db");
-    let mut storage = RedbStorage::new(&db_path)?;
+    let mut storage = RocksStorage::new(&db_path)?;
 
     let start = Instant::now();
 
@@ -254,7 +254,7 @@ fn benchmark_omendb_insert(size: usize, keys: &[i64], temp_dir: &TempDir) -> Res
 
 fn benchmark_omendb_point_query(keys: &[i64], temp_dir: &TempDir) -> Result<f64> {
     let db_path = temp_dir.path().join("omendb_query.db");
-    let mut storage = RedbStorage::new(&db_path)?;
+    let mut storage = RocksStorage::new(&db_path)?;
 
     let entries: Vec<(i64, Vec<u8>)> = keys.iter()
         .map(|&key| {
