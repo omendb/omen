@@ -110,6 +110,14 @@ path = "src/bin/benchmark_alex_storage.rs"
 name = "benchmark_alex_improvements"
 path = "src/bin/benchmark_alex_improvements.rs"
 
+[[bin]]
+name = "benchmark_temperature"
+path = "src/bin/benchmark_temperature.rs"
+
+[[bin]]
+name = "benchmark_htap"
+path = "src/bin/benchmark_htap.rs"
+
 
 [dev-dependencies]
 criterion = "0.5"
