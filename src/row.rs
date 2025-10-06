@@ -185,6 +185,11 @@ impl Row {
         RecordBatch::try_new(schema.clone(), arrays)
             .map_err(|e| anyhow!("Failed to create RecordBatch: {}", e))
     }
+
+    /// Convert single row to RecordBatch
+    pub fn to_batch(&self, schema: &SchemaRef) -> Result<RecordBatch> {
+        Self::rows_to_batch(&[self.clone()], schema)
+    }
 }
 
 /// Convert Value to single-element Arrow array

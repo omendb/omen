@@ -461,6 +461,18 @@ impl Table {
             _ => Err(anyhow!("Unsupported data type: {}", s)),
         }
     }
+
+    // Public accessors for DataFusion integration
+
+    /// Get user-facing schema (without MVCC columns)
+    pub fn user_schema(&self) -> &SchemaRef {
+        &self.user_schema
+    }
+
+    /// Get all RecordBatches for DataFusion scan (includes MVCC columns)
+    pub fn scan_batches(&mut self) -> Result<Vec<RecordBatch>> {
+        self.scan()
+    }
 }
 
 #[cfg(test)]
