@@ -392,31 +392,75 @@ impl TemperatureModel {
 
 ---
 
-## 6. Competitive Positioning
+## 6. Current Reality & Honest Positioning
 
-### OmenDB's Advantages
+### What OmenDB Actually Has (January 2025)
 
-**vs TiDB**:
-- ✅ Simpler architecture (no distributed consensus initially)
-- ✅ Learned indexes (4.81x faster reads than RocksDB)
-- ✅ PostgreSQL compatibility (TiDB uses MySQL protocol)
+**Validated**:
+- ✅ ALEX learned index implementation (4.81x faster point queries vs RocksDB on 10M sequential keys)
+- ✅ CDFShop adaptive sampling (78-593x faster index building)
+- ✅ All tests passing (63/63)
+- ✅ Single-node OLTP performance
 
-**vs CockroachDB**:
-- ✅ Specialized column store (better OLAP performance)
-- ✅ Learned optimization (more intelligent routing)
-- ✅ Lower cost (no synchronous replication overhead)
+**Scope**: Single-node, in-memory/mmap, OLTP-focused prototype
 
-**vs ClickHouse + CDC**:
-- ✅ Unified system (no separate CDC pipeline)
-- ✅ Stronger consistency (WAL-based replication)
-- ✅ Lower operational complexity
+### What We Don't Have
 
-### Differentiation
+**Critical Gaps**:
+- ❌ High Availability - No replication, no failover
+- ❌ Distributed System - Single node only
+- ❌ OLAP Engine - Arrow/Parquet integration not implemented yet
+- ❌ Production Testing - No chaos engineering, no customer deployments
+- ❌ Enterprise Features - No security, monitoring, compliance tooling
 
-**Unique Value Proposition**:
-1. **Learned Everything**: Indexes (ALEX), routing (temperature model), optimization (query predictor)
-2. **Progressive Complexity**: Start simple (WAL replication), scale to CDC when needed
-3. **PostgreSQL Native**: Drop-in replacement, no protocol changes
+### Fair Comparison to Production Systems
+
+**vs TiDB ($270M funding, market leader)**:
+- ✅ OmenDB: 4.81x faster point queries (learned-friendly workloads)
+- ❌ TiDB: Distributed, HA, geo-replication, mature OLAP (TiFlash), thousands of customers
+- **Reality**: OmenDB is faster on specific workloads; TiDB is production-ready distributed system
+
+**vs CockroachDB ($5B valuation, ~$200M ARR)**:
+- ✅ OmenDB: Potential for specialized column store (not built yet)
+- ❌ CockroachDB: Battle-tested distributed SQL, MVCC, follower reads, compliance features
+- **Reality**: OmenDB is prototype; CockroachDB is enterprise-grade
+
+**vs ClickHouse + CDC (100+ PB deployments)**:
+- ✅ OmenDB: Simpler unified vision (when fully implemented)
+- ❌ ClickHouse: Best-in-class OLAP, mature CDC ecosystem, proven at scale
+- **Reality**: OmenDB is concept; ClickHouse is proven at massive scale
+
+### Research Positioning
+
+**What We Are**:
+- Research-driven prototype exploring learned index optimization for HTAP workloads
+- Single validated advantage: 4.81x faster point queries on learned-friendly distributions
+- Building toward simpler HTAP architecture than multi-component pipelines
+
+**What We're Not**:
+- Not production-ready (no HA, single-node, prototype quality)
+- Not enterprise-grade (missing security, compliance, support)
+- Not proven at scale (zero customer deployments)
+
+**Target Market** (when production-ready):
+- Developers building real-time analytics apps
+- Teams prioritizing simplicity over maximum scale
+- Workloads with learned-friendly data distributions
+- NOT for: Enterprise workloads needing HA, compliance, 99.99% uptime
+
+### Research Roadmap to Parity
+
+**Phase 9-11** (Next 6 weeks):
+- WAL replication (OLTP → OLAP sync)
+- Temperature-based query routing
+- Arrow/Parquet integration
+
+**Phase 12+** (Months 3-6):
+- High availability (Raft consensus)
+- Distributed execution
+- Production hardening
+
+**Honest Timeline**: 12+ months to approach feature parity with TiDB/CockroachDB
 
 ---
 
