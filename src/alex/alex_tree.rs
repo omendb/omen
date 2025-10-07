@@ -101,6 +101,7 @@ impl AlexTree {
         }
 
         // Bulk insert into each leaf
+        let mut modified_leaves = Vec::new();
         for (leaf_idx, group) in leaf_groups.iter_mut().enumerate() {
             if group.is_empty() {
                 continue;
@@ -117,6 +118,14 @@ impl AlexTree {
                     self.insert(key, value)?;
                 }
             }
+
+            modified_leaves.push(leaf_idx);
+        }
+
+        // Retrain modified leaves ONCE after all batches complete
+        // This amortizes the O(n log n) retrain cost across all inserts
+        for leaf_idx in modified_leaves {
+            self.leaves[leaf_idx].retrain()?;
         }
 
         Ok(())

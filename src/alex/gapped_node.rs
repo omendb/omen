@@ -326,9 +326,6 @@ impl GappedNode {
     ///
     /// Uses SIMD to search 4 keys at once on x86_64 (AVX2).
     /// Falls back to scalar search on other platforms.
-    ///
-    /// Note: Does not assume sorted order - scans entire range
-    /// Keys only become sorted after retrain()
     fn binary_search_exact(&self, start: usize, end: usize, key: i64) -> Option<usize> {
         // Use SIMD for search if range is large enough to benefit
         if end - start >= 8 {
