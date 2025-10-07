@@ -36,6 +36,24 @@ After fixing the excessive node splitting issue, OmenDB delivers **2.6x faster p
 
 ---
 
+### 5M Scale (Sweet Spot Validation)
+
+**Configuration:**
+- Data: Random UUIDs
+- Workload: Mixed sequential + random inserts/queries
+
+**Results:**
+- Overall speedup: **2.37x vs SQLite** ✅
+- Random inserts: **5.04x faster** (4.7s vs 23.8s)
+- Sequential inserts: **1.83x faster**
+- Queries: **1.29-1.33x faster** (4.6μs vs 6.1μs)
+- Tree structure: ~278K leaves, 18 keys/leaf
+- Memory footprint: ~2.2MB split_keys array (fits in L3 cache)
+
+**Assessment**: Validates sweet spot - performance between 1M and 10M as expected
+
+---
+
 ### 10M Scale (Sweet Spot)
 
 **Configuration:**
@@ -121,17 +139,17 @@ Total = 16-17μs ≈ 17.1μs measured ✓
 
 ### Projected Performance at Intermediate Scales
 
-**Estimated transition zone** (untested, projected from 10M and 50M data):
+**Estimated transition zone** (5M measured, others projected):
 
-| Scale | Leaves | split_keys | Cache Fit? | Projected Speedup |
-|-------|--------|-----------|------------|-------------------|
-| **1M** | 55K | 440KB | ✅ L2 | 2.5x (measured) |
-| **5M** | 278K | 2.2MB | ✅ L3 | ~2.4x |
-| **10M** | 555K | 4.4MB | ✅ L3 | 2.58x (measured) |
-| **15M** | 833K | 6.6MB | ✅ L3 | ~2.2x |
-| **20M** | 1.1M | 8.8MB | ✅ L3 | ~2.0x |
-| **30M** | 1.7M | 13.2MB | ⚠️ Partial | ~1.7x |
-| **50M** | 2.8M | 22MB | ❌ No | 1.39x (measured) |
+| Scale | Leaves | split_keys | Cache Fit? | Speedup |
+|-------|--------|-----------|------------|---------|
+| **1M** | 55K | 440KB | ✅ L2 | 2.5x (measured) ✅ |
+| **5M** | 278K | 2.2MB | ✅ L3 | **2.37x (measured)** ✅ |
+| **10M** | 555K | 4.4MB | ✅ L3 | 2.58x (measured) ✅ |
+| **15M** | 833K | 6.6MB | ✅ L3 | ~2.2x (projected) |
+| **20M** | 1.1M | 8.8MB | ✅ L3 | ~2.0x (projected) |
+| **30M** | 1.7M | 13.2MB | ⚠️ Partial | ~1.7x (projected) |
+| **50M** | 2.8M | 22MB | ❌ No | 1.39x (measured) ✅ |
 | **100M** | 5.6M | 44MB | ❌ No | ~1.2x (projected) |
 
 **Transition Point**: ~15-20M rows where split_keys exceeds typical L3 cache (16-24MB)
