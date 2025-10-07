@@ -254,3 +254,7 @@ opt-level = 3
 [[bin]]
 name = "stress_test_concurrent"
 path = "src/bin/stress_test_concurrent.rs"
+
+[[bin]]
+name = "profile_query_path"
+path = "src/bin/profile_query_path.rs"
