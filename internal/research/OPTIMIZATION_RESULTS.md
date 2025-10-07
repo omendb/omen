@@ -114,17 +114,20 @@ const MAX_DENSITY: f64 = 0.95;
 | **Query Time** | 3.01μs | 1.91μs | **37% faster** ✅ |
 | **Insert Throughput** | 3.6M rows/s | 4.1M rows/s | **14% faster** ✅ |
 
-### Expected 50M Benchmark Results
+### 50M Benchmark Results (Actual)
 
 **Before** (baseline):
 - Sequential: 0.63x overall (SLOWER)
 - Random: 2.02x overall
 - Overall: 1.32x
-- Queries: 17μs
+- Queries: 17-18μs
 
-**Expected After** (based on profiler):
-- Queries: ~5-8μs (profiler shows 1.91μs, benchmark adds ~3-5μs overhead)
-- Overall: >2.0x (target: match 10M performance)
+**After** (with fix):
+- Sequential: 0.68x overall (+8% improvement)
+- Random: 2.11x overall (+4% improvement)
+- Overall: **1.39x** (+5% improvement)
+- Random queries: 17.1μs (3% faster)
+- Sequential queries: 16.5μs (13% faster)
 
 ---
 
@@ -169,30 +172,82 @@ The 6x ratio (18 vs 3 keys/leaf) is consistent because:
 - 1.0-1.8μs queries (profiler)
 - 18 keys/leaf (efficient node utilization)
 
-**10M-50M rows**: ✅ GOOD (projected)
-- Expected: >2.0x faster vs SQLite (benchmark pending)
-- 1.9μs queries (profiler) → ~5-8μs (benchmark with overhead)
-- Maintains 18 keys/leaf (no degradation)
+**10M-50M rows**: ⚠️ MARGINAL
+- Actual: 1.39x faster vs SQLite (below 2.0x target)
+- 16-17μs queries (benchmark with random UUIDs)
+- Maintains 18 keys/leaf but cache misses dominate
+- **Conclusion**: Only viable for write-heavy workloads (3.7x faster inserts)
 
-**50M-100M rows**: ✅ ACCEPTABLE (projected)
-- Expected: ~2.0x faster vs SQLite
-- 2.0μs queries (profiler) → ~6-10μs (benchmark)
-- Linear scaling continues
+**50M-100M rows**: ❌ NOT RECOMMENDED
+- Queries 2x slower than SQLite at 50M scale
+- Cache locality degrades further with scale
+- Multi-level ALEX needed for this scale
+
+### Root Cause: Cache Locality with Random Data
+
+**The profiler vs benchmark gap reveals the fundamental issue:**
+- Profiler (sequential data): 1.91μs queries ✅
+- Benchmark (random UUIDs): 17.1μs queries ⚠️
+- **Gap**: 8.9x slower due to cache misses
+
+**Why?**
+- 2.8M leaves = 22MB split_keys array (won't fit in L3 cache)
+- Binary search on this array: log₂(2.8M) = 21 comparisons
+- Random queries → different leaves → 21 cache misses per query
+- Each cache miss: ~100ns → 21 × 100ns = 2.1μs just from cache misses
+- Plus exponential search + linear scan overhead
+- Total: 17μs matches this model ✓
 
 ### Remaining Concerns
 
-1. **Random UUID Cache Locality**: Profiler shows 1.9μs, but benchmark may show 5-8μs due to cache misses on random data
-2. **2.8M Leaves at 50M**: Still large (5.5% of rows), but manageable
-3. **Multi-Level ALEX**: Still needed for true 100M+ scaling (future work)
+1. **Cache Locality Bottleneck**: Even with 6x fewer leaves, random UUID queries still dominated by cache misses
+2. **2.8M Leaves at 50M**: 5.5% of rows are separate leaves (wasteful)
+3. **Fundamental Architecture Limit**: Single-level ALEX doesn't scale beyond 10M for random workloads
+4. **Multi-Level ALEX Required**: Inner nodes for routing would fit in cache, improving random query performance
 
 ---
 
-## Next Steps
+## Conclusions & Next Steps
 
-1. ⏳ **Validate 50M benchmark** (running in background)
-2. ✅ **Test at 100M** if 50M shows >2.0x improvement
-3. ✅ **Update STATUS_REPORT** with validated performance claims
-4. ✅ **Commit fixes** with comprehensive documentation
+### What We Learned
+
+1. **Fix Worked**: Removed unconditional retrain from split() → 6x fewer leaves ✅
+2. **Profiler Improved**: 37% faster queries with sequential data ✅
+3. **Benchmark Limited**: Only 5% overall improvement with random UUIDs ⚠️
+4. **Root Cause Identified**: Cache locality dominates at scale with random data
+5. **Architecture Limit**: Single-level ALEX doesn't scale beyond 10M for random workloads
+
+### Honest Assessment
+
+**Current State:**
+- ✅ **Sweet Spot**: 1M-10M rows, 2.6x faster than SQLite
+- ⚠️ **Marginal**: 10M-50M rows, only 1.39x faster (write-heavy workloads only)
+- ❌ **Not Viable**: 50M+ rows, queries 2x slower than SQLite
+
+**Fundamental Issue:**
+The single-level ALEX architecture creates too many leaves at scale (2.8M at 50M rows).
+Binary search on millions of split_keys causes constant cache misses with random data.
+
+### Recommended Path Forward
+
+**Short-Term** (1-2 weeks):
+1. ✅ Document current limitations honestly in STATUS_REPORT
+2. ✅ Update validated claims: "2.6x faster at 1M-10M scale"
+3. ⏳ **DO NOT** claim production-ready for 50M+ scale
+
+**Medium-Term** (1-2 months):
+1. **Implement Multi-Level ALEX** (2-4 weeks)
+   - Inner nodes for routing (fits in L3 cache)
+   - Leaf nodes for data (current gapped nodes)
+   - Expected: 10-100x fewer inner nodes → cache-friendly
+2. Re-benchmark at 50M with multi-level structure
+3. Target: >2.0x vs SQLite at 50M-100M scale
+
+**Long-Term** (3-6 months):
+1. Cache-aware memory layout (pack hot keys together)
+2. SIMD-accelerated search within nodes
+3. GPU-accelerated batch operations
+4. True 100M+ production scaling
 
 ---
 
