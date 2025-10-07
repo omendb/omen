@@ -409,6 +409,29 @@ Overall: 2.91x faster ✅
 
 ---
 
+## Update: Query Optimization Complete (January 2025)
+
+**Commit**: `133aba1`
+
+**Fix Applied**: Auto-retrain ALEX nodes after batch inserts
+
+**Results** (10M scale):
+- Sequential queries: **0.91x → 1.06x** (16% improvement) ✅
+- Random queries: **1.10x → 1.17x** (6% improvement) ✅
+- Overall: **2.06x → 2.11x** (2.4% improvement)
+
+**Key Achievement**: Sequential queries now FASTER than SQLite (was 9% slower).
+
+**Validated Claims** (10M scale after optimization):
+- ✅ "2.11x faster than SQLite overall"
+- ✅ "4.71x faster random inserts"
+- ✅ "1.06-1.17x faster queries"
+- ✅ "Competitive with SQLite at scale" (not slower)
+
+**Details**: See `QUERY_OPTIMIZATION_RESULTS.md` for full analysis.
+
+---
+
 **Last Updated:** January 2025
-**Status:** 10M validation complete, query optimization needed
-**Next Action:** Profile query path, optimize ALEX lookups
+**Status:** 10M validation complete, query optimization applied ✅
+**Next Action:** Customer acquisition for write-heavy use cases
