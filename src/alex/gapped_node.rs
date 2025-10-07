@@ -30,8 +30,9 @@ use anyhow::Result;
 use std::fmt;
 
 /// Maximum density before triggering node split
-/// 0.8 = 80% full (leaves 20% gaps for future inserts)
-const MAX_DENSITY: f64 = 0.8;
+/// 0.95 = 95% full (leaves 5% gaps for future inserts)
+/// Increased from 0.8 to reduce excessive splitting at scale
+const MAX_DENSITY: f64 = 0.95;
 
 /// Minimum density to maintain (prevents too sparse nodes)
 const MIN_DENSITY: f64 = 0.3;
