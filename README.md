@@ -26,11 +26,13 @@ OmenDB is a multi-table database powered by ALEX (Adaptive Learned indEX), deliv
 ```
 Workload                  OmenDB          SQLite        Speedup
 ──────────────────────────────────────────────────────────────
-Sequential Inserts        5.7 seconds     8.7 seconds   1.5x faster
-Random Inserts           10.6 seconds    49.8 seconds   4.7x faster ✅
+Sequential Inserts        5.9 seconds     8.8 seconds   1.5x faster
+Sequential Queries        6.54 μs         6.92 μs       1.1x faster
+Random Inserts           10.6 seconds    50.2 seconds   4.7x faster ✅
+Random Queries            6.29 μs         7.36 μs       1.2x faster
 Overall Performance                                      2.1x faster
 
-Random insert throughput: 944K rows/sec vs 201K rows/sec (SQLite)
+Random insert throughput: 940K rows/sec vs 199K rows/sec (SQLite)
 ```
 
 #### 1M Scale Results
@@ -89,7 +91,7 @@ Speedup: 14.7x on write-heavy workloads
 
 **Query performance:**
 - 1M scale: 2.2-2.8x faster queries
-- 10M scale: Competitive (optimization ongoing)
+- 10M scale: 1.1-1.2x faster (competitive with SQLite)
 
 ## 🏗️ Architecture
 
