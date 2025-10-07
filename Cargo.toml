@@ -250,3 +250,7 @@ simd = []  # Enable std::simd (requires nightly Rust)
 lto = true
 codegen-units = 1
 opt-level = 3
+
+[[bin]]
+name = "stress_test_concurrent"
+path = "src/bin/stress_test_concurrent.rs"
