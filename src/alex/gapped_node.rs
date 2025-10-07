@@ -549,9 +549,9 @@ impl GappedNode {
             right.insert(key, value)?;
         }
 
-        // Retrain models for both nodes
-        left.retrain()?;
-        right.retrain()?;
+        // Don't retrain immediately after split - let adaptive retraining decide
+        // Retraining here creates perfectly accurate models that cause immediate
+        // re-splitting when new keys arrive (they pack too tightly, hitting MAX_DENSITY)
 
         // Replace self with left node
         *self = left;
