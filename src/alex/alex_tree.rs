@@ -122,11 +122,18 @@ impl AlexTree {
             modified_leaves.push(leaf_idx);
         }
 
-        // Retrain modified leaves ONCE after all batches complete
-        // This amortizes the O(n log n) retrain cost across all inserts
+        // Adaptive retraining: Only retrain leaves with high model error
+        // This prevents excessive splitting from over-accurate models
+        let mut retrained = 0;
         for leaf_idx in modified_leaves {
-            self.leaves[leaf_idx].retrain()?;
+            if self.leaves[leaf_idx].needs_retrain() {
+                self.leaves[leaf_idx].retrain()?;
+                retrained += 1;
+            }
         }
+
+        // Debug: Uncomment to see retrain rate
+        // eprintln!("Retrained {}/{} leaves", retrained, modified_leaves.len());
 
         Ok(())
     }

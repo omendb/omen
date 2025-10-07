@@ -424,9 +424,41 @@ impl GappedNode {
         Ok(())
     }
 
+    /// Check if model needs retraining based on error threshold
+    ///
+    /// Returns true if current model error exceeds acceptable threshold.
+    /// This prevents excessive retraining that causes too many node splits.
+    ///
+    /// **Threshold**: Retrain if error > 20% of node capacity
+    pub fn needs_retrain(&self) -> bool {
+        if self.num_keys < 10 {
+            return false; // Too few keys to benefit from retraining
+        }
+
+        // Calculate current model error
+        let mut data: Vec<(i64, usize)> = self
+            .keys
+            .iter()
+            .enumerate()
+            .filter_map(|(pos, key)| key.map(|k| (k, pos)))
+            .collect();
+
+        if data.is_empty() {
+            return false;
+        }
+
+        data.sort_by_key(|(k, _)| *k);
+        let current_error = self.model.max_error(&data);
+
+        // Retrain if error exceeds 20% of capacity
+        // This allows some model inaccuracy to avoid over-fitting
+        let error_threshold = (self.keys.len() as f64 * 0.2) as usize;
+        current_error > error_threshold.max(50) // At least 50 to avoid constant retraining
+    }
+
     /// Retrain model on current data
     ///
-    /// Should be called after bulk inserts or splits.
+    /// Should be called after bulk inserts or splits, OR when needs_retrain() returns true.
     /// **Time complexity**: O(n log n) where n is number of keys (due to sorting)
     pub fn retrain(&mut self) -> Result<()> {
         // Collect (key, position) pairs for training
