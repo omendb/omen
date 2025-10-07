@@ -21,14 +21,19 @@
 
 **Current Status:**
 - **Technology**: Strong foundation, proven architecture
-- **Competitive Validation**: Missing (need SQLite, CockroachDB comparisons)
+- **Competitive Validation**: ✅ Complete (SQLite validated at 1M-10M scale)
 - **Market Validation**: Missing (need customer LOIs)
-- **Funding Readiness**: 2-4 weeks away
+- **Funding Readiness**: 1-2 weeks away
+
+**Validated Performance (10M Scale):**
+- **Overall**: 2.11x faster than SQLite
+- **Inserts**: 4.71x faster (write-heavy workloads)
+- **Queries**: 1.06-1.17x faster
 
 **Critical Next Steps:**
-1. Run competitive benchmarks (SQLite, CockroachDB) - 1-2 weeks
-2. Acquire 3-5 customer LOIs - 2-4 weeks
-3. Prepare seed fundraising ($1-3M) - Q1 2026
+1. ✅ Competitive benchmarks complete (SQLite at 1M-10M scale)
+2. ⏳ Acquire 3-5 customer LOIs for write-heavy use cases - 2-4 weeks
+3. ⏳ Prepare seed fundraising with honest "2-3x faster" claims - Q1 2026
 
 ---
 
@@ -43,20 +48,24 @@
 - Zero-config, battle-tested
 - 20+ years of optimization
 
-**Our Validation (RMI baseline):**
-- 2.18-3.98x average speedup (1M keys, honest comparison)
-- Best case: 20.79x (sequential workload)
-- Worst case: 2.16x (random workload)
+**Our Validation (ALEX vs SQLite):**
+- **1M scale**: 2.57x average speedup ✅
+  - Sequential: 2.06x (time-series workloads)
+  - Random: 3.07x (UUID-like workloads)
+- **10M scale**: 2.11x average speedup ✅
+  - Sequential: 1.28x (queries: 1.06x, inserts: 1.50x)
+  - Random: 2.94x (queries: 1.17x, inserts: 4.71x)
 
-**Our ALEX Projection (needs validation):**
-- 5-15x at 10M+ scale (leveraging linear scaling)
-- Even better on write-heavy workloads (14.7x proven)
+**Key Strengths:**
+- 4.71x faster random inserts (write-heavy workloads)
+- Queries competitive at scale (1.06-1.17x faster)
+- Linear scaling validated (10x data ≈ 10x time)
 
-**Status**: ⚠️ **Need to re-run benchmark_honest_comparison with ALEX**
+**Status**: ✅ **Competitive validation complete** (Commit: 133aba1)
 
 **Use Case Differentiation:**
 - SQLite: General-purpose embedded, OLTP-focused
-- OmenDB: Time-series + analytics, HTAP-optimized
+- OmenDB: Write-heavy workloads, analytics, HTAP-optimized
 
 #### DuckDB - $52.5M Funding
 
@@ -419,14 +428,15 @@ Arrow RecordBatch
    - Tested: OLTP, OLAP, Mixed (80/20, 50/50, 20/80)
    - Status: Validated in Phase 9.4
 
+5. **"2-3x faster than SQLite at 1M-10M scale"**
+   - 1M: 2.57x average speedup
+   - 10M: 2.11x average speedup
+   - Write-heavy: 4.71x faster inserts
+   - Status: ✅ Validated (Commit: 133aba1)
+
 ### ⚠️ Need Validation (2-4 weeks)
 
-1. **"5-15x faster than SQLite at 10M+ scale"**
-   - RMI baseline: 2.18-3.98x at 1M
-   - ALEX expected: 5-15x at 10M (linear scaling advantage)
-   - **Action**: Re-run benchmark_honest_comparison with ALEX
-
-2. **"10-50x faster single-node writes vs CockroachDB"**
+1. **"10-50x faster single-node writes vs CockroachDB"**
    - CockroachDB: ~50K txn/sec (distributed overhead)
    - OmenDB target: 500K+ txn/sec (no coordination, ALEX)
    - **Action**: Docker setup + equivalent workload
@@ -438,9 +448,9 @@ Arrow RecordBatch
 
 ### ❌ Cannot Claim (Yet)
 
-1. **"100x faster than competitors"**
-   - Reality: 2-15x depending on workload
-   - Need full competitive benchmarks
+1. **"5-15x faster than SQLite"**
+   - Reality: 2-3x at 1M-10M scale (validated)
+   - Projections were too optimistic
 
 2. **"Production-ready for billion-row datasets"**
    - Validated to 10M, projected to 100M+
@@ -474,9 +484,9 @@ Arrow RecordBatch
 
 ### Competitive Differentiation
 
-**vs SQLite:** 5-15x faster at scale, HTAP-optimized
+**vs SQLite:** 2-3x faster at scale (validated), write-heavy optimized (4.71x inserts)
 **vs DuckDB:** OLTP performance + unified HTAP
-**vs CockroachDB:** 10-50x single-node writes, simpler architecture
+**vs CockroachDB:** 10-50x single-node writes (projected), simpler architecture
 **vs TiDB:** No replication lag, better capital efficiency
 **vs SingleStore:** ALEX learned index advantage
 
@@ -598,10 +608,11 @@ Arrow RecordBatch
 3. PostgreSQL-compatible (large TAM)
 4. Simpler architecture (single-node initially)
 
-**Traction (Target by Q1 2026):**
-- 5-15x faster than SQLite (validated)
-- 10-50x single-node writes vs CockroachDB (validated)
-- 3-5 customer LOIs (time-series/analytics)
+**Traction (Validated + Target by Q1 2026):**
+- ✅ 2-3x faster than SQLite (validated at 1M-10M scale)
+- ✅ 4.71x faster writes for write-heavy workloads (validated)
+- ⏳ 10-50x single-node writes vs CockroachDB (projected)
+- ⏳ 3-5 customer LOIs (time-series/analytics)
 
 **Ask:**
 - $1-3M seed round
