@@ -35,6 +35,7 @@ pub mod alex_storage_concurrent; // Thread-safe wrapper for AlexStorage
 pub mod backup;
 pub mod concurrent;
 pub mod datafusion;
+pub mod memory_pool;
 pub mod index;
 pub mod metrics;
 pub mod postgres;

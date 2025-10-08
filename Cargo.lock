@@ -3151,6 +3151,7 @@ dependencies = [
  "glob",
  "governor",
  "hyper 0.14.32",
+ "lazy_static",
  "lru",
  "memmap2",
  "miette",

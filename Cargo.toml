@@ -147,6 +147,8 @@ reqwest = { version = "0.12", features = ["json"] }
 # SQLite for comparison benchmarks
 rusqlite = { version = "0.32", features = ["bundled"] }
 
+# Memory optimization
+lazy_static = "1.4"
 
 # SQL Engine - Apache DataFusion
 datafusion = "43"
@@ -314,3 +316,7 @@ path = "src/bin/htap_demo.rs"
 [[bin]]
 name = "stress_test_concurrent_advanced"
 path = "src/bin/stress_test_concurrent_advanced.rs"
+
+[[bin]]
+name = "benchmark_memory_optimization"
+path = "src/bin/benchmark_memory_optimization.rs"
