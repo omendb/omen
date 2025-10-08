@@ -16,7 +16,7 @@
 use crate::alex::AlexTree;
 use crate::alex_storage_wal::AlexStorageWal;
 use anyhow::{Context, Result};
-use memmap2::{Mmap, MmapMut, MmapOptions};
+use memmap2::Mmap;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};

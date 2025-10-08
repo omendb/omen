@@ -10,13 +10,13 @@ use anyhow::{anyhow, Result};
 use arrow::datatypes::{DataType, Field, Schema};
 use sqlparser::ast::{
     ColumnDef, DataType as SqlDataType, Expr, ObjectName, OrderByExpr, Query, Select, SelectItem,
-    SetExpr, Statement, TableFactor, TableWithJoins, Values,
+    SetExpr, Statement, TableFactor, Values,
 };
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tracing::{debug, error, info, instrument, span, warn, Level};
+use tracing::{debug, error, info, instrument, warn};
 
 /// Configuration for SQL engine execution
 #[derive(Clone, Debug)]
@@ -449,7 +449,7 @@ impl SqlEngine {
         if let ExecutionResult::Selected {
             columns,
             rows,
-            mut data,
+            data,
         } = result
         {
             if data.len() > self.config.max_rows {
@@ -547,7 +547,7 @@ impl SqlEngine {
         group_by: &sqlparser::ast::GroupByExpr,
         table: &crate::table::Table,
     ) -> Result<ExecutionResult> {
-        use sqlparser::ast::Function;
+        
         use std::collections::HashMap;
 
         // Parse GROUP BY columns
@@ -982,7 +982,7 @@ impl SqlEngine {
         op1: sqlparser::ast::BinaryOperator,
         op2: sqlparser::ast::BinaryOperator,
     ) -> Option<(String, sqlparser::ast::Value)> {
-        use sqlparser::ast::BinaryOperator;
+        
 
         if let Expr::BinaryOp { left, op, right } = expr {
             if matches!(op, x if *x == op1 || *x == op2) {

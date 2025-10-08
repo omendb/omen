@@ -8,7 +8,6 @@ use hyper::{Body, Method, Request, Response, Result as HyperResult, Server, Stat
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio;
 
 /// Handle HTTP requests for metrics and health with authentication
 async fn handle_request_with_auth(

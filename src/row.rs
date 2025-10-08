@@ -4,7 +4,7 @@
 use crate::value::Value;
 use anyhow::{anyhow, Result};
 use arrow::array::*;
-use arrow::datatypes::{Schema, SchemaRef};
+use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
 use std::collections::HashMap;
 use std::sync::Arc;

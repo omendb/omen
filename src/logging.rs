@@ -3,12 +3,10 @@
 
 use anyhow::Result;
 use std::io;
-use tracing::{Level, Subscriber};
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt,
-    registry::LookupSpan,
-    EnvFilter, Layer, Registry,
+    EnvFilter, Registry,
 };
 
 /// Logging configuration

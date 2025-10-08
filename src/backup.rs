@@ -1,8 +1,7 @@
 //! Enterprise backup and restore functionality for OmenDB
 //! Supports full backups, incremental backups, and point-in-time recovery
 
-use crate::storage::ArrowStorage;
-use crate::wal::{WalEntry, WalManager, WalOperation};
+use crate::wal::{WalEntry, WalManager};
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
 use flate2::read::GzDecoder;
@@ -11,10 +10,9 @@ use flate2::Compression;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 /// Backup metadata with version tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]

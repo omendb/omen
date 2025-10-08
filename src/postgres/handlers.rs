@@ -4,12 +4,9 @@ use super::encoding::record_batches_to_query_response;
 use async_trait::async_trait;
 use datafusion::prelude::*;
 use pgwire::api::auth::noop::NoopStartupHandler;
-use pgwire::api::auth::{
-    AuthSource, DefaultServerParameterProvider, LoginInfo, Password, StartupHandler,
-};
 use pgwire::api::copy::NoopCopyHandler;
 use pgwire::api::query::{
-    ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler,
+    PlaceholderExtendedQueryHandler, SimpleQueryHandler,
 };
 use pgwire::api::results::{Response, Tag};
 use pgwire::api::{ClientInfo, PgWireHandlerFactory};
@@ -17,7 +14,7 @@ use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 /// OmenDB query handler that executes queries using DataFusion
 pub struct OmenDbQueryHandler {

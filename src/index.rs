@@ -1,7 +1,6 @@
 //! Learned Index Module - RMI with range query support
 //! Week 3: Adding range queries to our 8.39x speedup implementation
 
-use std::collections::BTreeMap;
 use std::time::Instant;
 use tracing::{debug, info, instrument, warn};
 
@@ -75,7 +74,7 @@ impl RecursiveModelIndex {
     #[instrument(skip(self))]
     pub fn retrain(&mut self) {
         info!("Retraining learned index");
-        let mut data = self.data.clone();
+        let data = self.data.clone();
         self.train(data);
     }
 

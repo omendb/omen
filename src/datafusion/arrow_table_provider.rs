@@ -5,10 +5,9 @@
 //! - Point queries (WHERE id = X) → ALEX learned index (fast)
 //! - Range/aggregates → DataFusion vectorized execution (OLAP-optimized)
 
-use crate::row::Row;
 use crate::table::Table;
 use crate::value::Value;
-use arrow::array::{ArrayRef, RecordBatch};
+use arrow::array::RecordBatch;
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use datafusion::catalog::Session;
@@ -16,12 +15,8 @@ use datafusion::datasource::TableProvider;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::logical_expr::{Expr, TableProviderFilterPushDown, TableType};
 use datafusion::physical_plan::memory::MemoryExec;
-use datafusion::physical_plan::{
-    DisplayAs, DisplayFormatType, ExecutionMode, ExecutionPlan, Partitioning, PlanProperties,
-};
-use datafusion::physical_expr::EquivalenceProperties;
+use datafusion::physical_plan::ExecutionPlan;
 use std::any::Any;
-use std::fmt;
 use std::sync::{Arc, RwLock};
 
 /// TableProvider that wraps OmenDB Table with learned index optimization

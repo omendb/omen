@@ -10,7 +10,6 @@ use parquet::arrow::ArrowWriter;
 use parquet::file::properties::WriterProperties;
 use std::fs::{File, OpenOptions};
 use std::path::PathBuf;
-use std::sync::Arc;
 
 /// Schema-agnostic storage for table rows
 #[derive(Debug)]

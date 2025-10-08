@@ -1,13 +1,10 @@
 //! Large-scale performance and reliability tests
 //! Essential for validating enterprise production readiness
 
-use crate::index::RecursiveModelIndex;
-use crate::metrics::*;
-use crate::storage::ArrowStorage;
 use crate::OmenDB;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Comprehensive scale testing configuration
 #[derive(Debug, Clone)]

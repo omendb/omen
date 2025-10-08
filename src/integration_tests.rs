@@ -3,7 +3,7 @@
 
 use crate::metrics::*;
 use crate::security::SecurityContext;
-use crate::server::{start_monitoring_server, start_secure_monitoring_server};
+use crate::server::start_secure_monitoring_server;
 use crate::*;
 use hyper::{Body, Client, Method, Request, StatusCode};
 use std::sync::Arc;

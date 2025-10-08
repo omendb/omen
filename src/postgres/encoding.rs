@@ -1,12 +1,12 @@
 //! Arrow to PostgreSQL type conversion and encoding
 
 use arrow::array::*;
-use arrow::datatypes::{DataType, Field, Schema};
+use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
 use futures::{stream, Stream};
 use pgwire::api::results::{DataRowEncoder, FieldFormat, FieldInfo, QueryResponse, Response};
 use pgwire::api::Type as PgType;
-use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
+use pgwire::error::PgWireResult;
 use pgwire::messages::data::DataRow;
 use std::sync::Arc;
 

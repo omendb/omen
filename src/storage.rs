@@ -3,14 +3,12 @@
 
 use crate::wal::{WalManager, WalOperation};
 use anyhow::Result;
-use arrow::array::{ArrayRef, Float64Array, Int64Array, TimestampMicrosecondArray};
+use arrow::array::{Float64Array, Int64Array, TimestampMicrosecondArray};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::ArrowWriter;
 use parquet::file::properties::WriterProperties;
-use parquet::file::reader::FileReader;
-use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;

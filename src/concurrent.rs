@@ -3,7 +3,7 @@
 
 use crate::index::RecursiveModelIndex;
 use crate::storage::ArrowStorage;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
