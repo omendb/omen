@@ -320,3 +320,7 @@ path = "src/bin/stress_test_concurrent_advanced.rs"
 [[bin]]
 name = "benchmark_memory_optimization"
 path = "src/bin/benchmark_memory_optimization.rs"
+
+[[bin]]
+name = "test_extreme_scale"
+path = "src/bin/test_extreme_scale.rs"
