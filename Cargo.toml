@@ -306,3 +306,7 @@ path = "src/bin/ycsb_quick_test.rs"
 [[bin]]
 name = "ycsb_subset"
 path = "src/bin/ycsb_subset.rs"
+
+[[bin]]
+name = "htap_demo"
+path = "src/bin/htap_demo.rs"
