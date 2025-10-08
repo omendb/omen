@@ -310,3 +310,7 @@ path = "src/bin/ycsb_subset.rs"
 [[bin]]
 name = "htap_demo"
 path = "src/bin/htap_demo.rs"
+
+[[bin]]
+name = "stress_test_concurrent_advanced"
+path = "src/bin/stress_test_concurrent_advanced.rs"
