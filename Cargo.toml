@@ -294,3 +294,15 @@ path = "src/bin/test_25m_quick.rs"
 [[bin]]
 name = "test_postgres_compatibility"
 path = "src/bin/test_postgres_compatibility.rs"
+
+[[bin]]
+name = "ycsb_benchmark"
+path = "src/bin/ycsb_benchmark.rs"
+
+[[bin]]
+name = "ycsb_quick_test"
+path = "src/bin/ycsb_quick_test.rs"
+
+[[bin]]
+name = "ycsb_subset"
+path = "src/bin/ycsb_subset.rs"
