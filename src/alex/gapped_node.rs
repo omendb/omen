@@ -35,6 +35,7 @@ use std::fmt;
 const MAX_DENSITY: f64 = 0.95;
 
 /// Minimum density to maintain (prevents too sparse nodes)
+#[allow(dead_code)]
 const MIN_DENSITY: f64 = 0.3;
 
 /// Gapped array node for ALEX
@@ -382,6 +383,7 @@ impl GappedNode {
     }
 
     /// Find any available gap
+    #[allow(dead_code)]
     fn find_any_gap(&self) -> usize {
         self.keys
             .iter()

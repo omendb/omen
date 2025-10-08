@@ -5,7 +5,6 @@
 //! the hot routing data in CPU cache.
 
 use anyhow::{anyhow, Result};
-use std::cmp::Ordering;
 
 use super::gapped_node::GappedNode;
 use super::linear_model::LinearModel;
@@ -31,9 +30,9 @@ pub struct InnerNode {
     /// Split keys between children
     split_keys: Vec<i64>,
     /// Total keys in this subtree
-    num_keys: usize,
+    _num_keys: usize,
     /// Node level (0 = parents of leaves, increases up tree)
-    level: usize,
+    _level: usize,
 }
 
 /// Children of an inner node
@@ -45,8 +44,12 @@ pub enum InnerNodeChildren {
 }
 
 // Configuration constants
+// Constants for future multi-level optimization
+#[allow(dead_code)]
 const MIN_FANOUT: usize = 16;      // Minimum children per inner node
+#[allow(dead_code)]
 const MAX_FANOUT: usize = 256;     // Maximum children per inner node
+#[allow(dead_code)]
 const BULK_BUILD_FANOUT: usize = 64; // Default fanout for bulk building
 
 impl MultiLevelAlexTree {
@@ -140,7 +143,7 @@ impl MultiLevelAlexTree {
     }
 
     /// Build inner node tree from leaves
-    fn build_inner_tree(leaves: &[GappedNode], target_height: usize) -> Result<Box<InnerNode>> {
+    fn build_inner_tree(leaves: &[GappedNode], _target_height: usize) -> Result<Box<InnerNode>> {
         // Collect leaf metadata for building inner nodes
         let leaf_keys: Vec<(i64, usize)> = leaves
             .iter()
@@ -289,12 +292,13 @@ impl InnerNode {
             model,
             children: InnerNodeChildren::Leaves(leaf_indices),
             split_keys,
-            num_keys: leaf_keys.len(),
-            level: 0,
+            _num_keys: leaf_keys.len(),
+            _level: 0,
         })
     }
 
     /// Build inner node from leaf metadata (recursive version - currently unused)
+    #[allow(dead_code)]
     fn build_from_leaves(
         leaf_keys: &[(i64, usize)],
         level: usize,
@@ -337,12 +341,13 @@ impl InnerNode {
             model,
             children,
             split_keys,
-            num_keys: leaf_keys.len(),
-            level,
+            _num_keys: leaf_keys.len(),
+            _level: level,
         })
     }
 
     /// Calculate appropriate fanout for node
+    #[allow(dead_code)]
     fn calculate_fanout(num_children: usize) -> usize {
         if num_children <= MIN_FANOUT {
             MIN_FANOUT
@@ -354,6 +359,7 @@ impl InnerNode {
     }
 
     /// Partition leaves into groups for children
+    #[allow(dead_code)]
     fn partition_leaves(leaves: &[(i64, usize)], fanout: usize) -> Vec<Vec<(i64, usize)>> {
         let mut groups = Vec::new();
         let chunk_size = (leaves.len() + fanout - 1) / fanout;
@@ -366,6 +372,7 @@ impl InnerNode {
     }
 
     /// Extract split keys from partitioned groups
+    #[allow(dead_code)]
     fn extract_split_keys(groups: &[Vec<(i64, usize)>]) -> Vec<i64> {
         let mut split_keys = Vec::new();
 
@@ -399,7 +406,7 @@ impl InnerNode {
     }
 
     /// Find child index for key
-    fn find_child(&self, key: i64, predicted: usize) -> usize {
+    fn find_child(&self, key: i64, _predicted: usize) -> usize {
         // Binary search on split keys for correction
         match self.split_keys.binary_search(&key) {
             Ok(idx) | Err(idx) => idx.min(self.num_children() - 1)
