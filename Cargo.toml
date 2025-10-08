@@ -262,3 +262,15 @@ path = "src/bin/profile_query_path.rs"
 [[bin]]
 name = "test_edge_cases"
 path = "src/bin/test_edge_cases.rs"
+
+[[bin]]
+name = "benchmark_multi_level_alex"
+path = "src/bin/benchmark_multi_level_alex.rs"
+
+[[bin]]
+name = "test_multi_level"
+path = "src/bin/test_multi_level.rs"
+
+[[bin]]
+name = "debug_multi_level"
+path = "src/bin/debug_multi_level.rs"
