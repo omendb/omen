@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use omendb::alex::MultiLevelAlexTree;
-use rand::distributions::Distribution;
 use rand::prelude::*;
 use std::time::{Duration, Instant};
 use tracing::info;
