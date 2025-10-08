@@ -12,11 +12,13 @@
 //!   cargo run --release --bin stress_test_concurrent 10 100000
 
 use anyhow::Result;
-use omendb::{Catalog, Row, Schema, Value};
-use std::sync::Arc;
+use omendb::catalog::Catalog;
+use omendb::row::Row;
+use omendb::value::Value;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
-use arrow::datatypes::{DataType, Field};
+use arrow::datatypes::{DataType, Field, Schema};
 use tempfile::TempDir;
 
 fn main() -> Result<()> {
@@ -49,7 +51,7 @@ fn main() -> Result<()> {
         let mut cat = catalog.lock().unwrap();
         let schema = Arc::new(Schema::new(vec![
             Field::new("id", DataType::Int64, false),
-            Field::new("thread_id", DataType::Int32, false),
+            Field::new("thread_id", DataType::Int64, false),
             Field::new("value", DataType::Utf8, false),
         ]));
         cat.create_table("stress_test".to_string(), schema, "id".to_string())?;
@@ -61,7 +63,7 @@ fn main() -> Result<()> {
     let mut handles = vec![];
 
     for thread_id in 0..num_threads {
-        let catalog_clone = Arc::clone(&catalog);
+        let catalog_clone: Arc<Mutex<Catalog>> = Arc::clone(&catalog);
         let rows_per_thread = rows_per_thread;
 
         let handle = thread::spawn(move || -> Result<()> {
@@ -73,7 +75,7 @@ fn main() -> Result<()> {
                 let key = (base_key + i) as i64;
                 rows.push(Row::new(vec![
                     Value::Int64(key),
-                    Value::Int32(thread_id as i32),
+                    Value::Int64(thread_id as i64),
                     Value::Text(format!("value_{}_{}", thread_id, i)),
                 ]));
             }
@@ -111,7 +113,7 @@ fn main() -> Result<()> {
     let mut handles = vec![];
 
     for thread_id in 0..num_threads {
-        let catalog_clone = Arc::clone(&catalog);
+        let catalog_clone: Arc<Mutex<Catalog>> = Arc::clone(&catalog);
         let rows_per_thread = rows_per_thread;
 
         let handle = thread::spawn(move || -> Result<usize> {
@@ -124,7 +126,7 @@ fn main() -> Result<()> {
             // Verify random sample (10%)
             for i in (0..rows_per_thread).step_by(10) {
                 let key = (base_key + i) as i64;
-                if table.get(key)?.is_some() {
+                if table.get(&Value::Int64(key))?.is_some() {
                     found += 1;
                 }
             }
@@ -163,7 +165,7 @@ fn main() -> Result<()> {
 
     // Half threads do writes, half do reads
     for thread_id in 0..num_threads {
-        let catalog_clone = Arc::clone(&catalog);
+        let catalog_clone: Arc<Mutex<Catalog>> = Arc::clone(&catalog);
         let is_reader = thread_id % 2 == 0;
         let ops_per_thread = 10_000;
 
@@ -178,7 +180,7 @@ fn main() -> Result<()> {
 
                 for i in 0..ops_per_thread {
                     let key = (i % 100_000) as i64;
-                    if table.get(key)?.is_some() {
+                    if table.get(&Value::Int64(key))?.is_some() {
                         reads += 1;
                     }
                 }
@@ -191,7 +193,7 @@ fn main() -> Result<()> {
                     let key = (base_key + i) as i64;
                     rows.push(Row::new(vec![
                         Value::Int64(key),
-                        Value::Int32(thread_id as i32),
+                        Value::Int64(thread_id as i64),
                         Value::Text(format!("mixed_{}", i)),
                     ]));
                 }

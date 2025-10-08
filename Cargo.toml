@@ -258,3 +258,7 @@ path = "src/bin/stress_test_concurrent.rs"
 [[bin]]
 name = "profile_query_path"
 path = "src/bin/profile_query_path.rs"
+
+[[bin]]
+name = "test_edge_cases"
+path = "src/bin/test_edge_cases.rs"
