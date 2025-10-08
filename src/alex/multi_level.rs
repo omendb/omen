@@ -154,8 +154,9 @@ impl MultiLevelAlexTree {
             return Err(anyhow!("No keys in leaves"));
         }
 
-        // Build inner node
-        let node = InnerNode::build_from_leaves(&leaf_keys, 0, target_height)?;
+        // For now, just build a single inner node pointing to all leaves
+        // This avoids the stack overflow issue
+        let node = InnerNode::build_simple_root(&leaf_keys)?;
 
         Ok(Box::new(node))
     }
@@ -269,7 +270,31 @@ impl MultiLevelAlexTree {
 }
 
 impl InnerNode {
-    /// Build inner node from leaf metadata
+    /// Build a simple root node pointing to all leaves
+    fn build_simple_root(leaf_keys: &[(i64, usize)]) -> Result<Self> {
+        // Train linear model on leaf positions
+        let mut model = LinearModel::new();
+        model.train(leaf_keys);
+
+        // Extract just the leaf indices
+        let leaf_indices: Vec<usize> = leaf_keys.iter().map(|(_, idx)| *idx).collect();
+
+        // Create split keys (first key of each leaf except the first)
+        let mut split_keys = Vec::new();
+        for i in 1..leaf_keys.len() {
+            split_keys.push(leaf_keys[i].0);
+        }
+
+        Ok(Self {
+            model,
+            children: InnerNodeChildren::Leaves(leaf_indices),
+            split_keys,
+            num_keys: leaf_keys.len(),
+            level: 0,
+        })
+    }
+
+    /// Build inner node from leaf metadata (recursive version - currently unused)
     fn build_from_leaves(
         leaf_keys: &[(i64, usize)],
         level: usize,
