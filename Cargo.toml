@@ -278,3 +278,11 @@ path = "src/bin/debug_multi_level.rs"
 [[bin]]
 name = "benchmark_multilevel_vs_sqlite"
 path = "src/bin/benchmark_multilevel_vs_sqlite.rs"
+
+[[bin]]
+name = "stress_test_100m"
+path = "src/bin/stress_test_100m.rs"
+
+[[bin]]
+name = "test_25m_quick"
+path = "src/bin/test_25m_quick.rs"
