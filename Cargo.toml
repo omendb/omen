@@ -324,3 +324,11 @@ path = "src/bin/benchmark_memory_optimization.rs"
 [[bin]]
 name = "test_extreme_scale"
 path = "src/bin/test_extreme_scale.rs"
+
+[[bin]]
+name = "crash_recovery_test"
+path = "src/bin/crash_recovery_test.rs"
+
+[[bin]]
+name = "durability_validation"
+path = "src/bin/durability_validation.rs"
