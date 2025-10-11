@@ -34,9 +34,9 @@ pub struct DurabilityConfig {
 impl Default for DurabilityConfig {
     fn default() -> Self {
         Self {
-            operations_before_crash: 100, // Quick test
-            crash_cycles: 2,
-            continuous_test_duration: 5, // 5 second test
+            operations_before_crash: 5_000, // Balanced stress test
+            crash_cycles: 5,
+            continuous_test_duration: 15, // 15 second continuous test
         }
     }
 }
