@@ -83,7 +83,7 @@ impl TpchBenchmark {
                 .arg(format!("{}", sf))
                 .arg("--format")
                 .arg("parquet")
-                .arg("--output")
+                .arg("--output-dir")
                 .arg(&self.config.data_dir)
                 .output()
                 .context("Failed to run tpchgen-cli. Install with: cargo install tpchgen-cli")?;
