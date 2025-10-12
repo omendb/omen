@@ -127,12 +127,14 @@ cargo build --release            # Optimized build
 ## Documentation Structure
 
 **For AI assistants starting a session**:
-1. **Start here**: `internal/STATUS_REPORT_OCT_2025.md` (comprehensive current status)
-2. **Quick overview**: `STATUS_UPDATE.md` (brief summary)
-3. **Architecture**: `ARCHITECTURE.md` (system design)
-4. **Performance data**: `internal/research/100M_SCALE_RESULTS.md`
+1. **Universal patterns**: `external/agent-contexts/` (Rust, doc patterns, error patterns)
+2. **Project status**: `internal/STATUS_REPORT_OCT_2025.md` (comprehensive current status)
+3. **Quick overview**: `STATUS_UPDATE.md` (brief summary)
+4. **Architecture**: `ARCHITECTURE.md` (system design)
+5. **Performance data**: `internal/research/100M_SCALE_RESULTS.md`
 
 **For implementation work**:
+- Universal Rust patterns: `external/agent-contexts/languages/rust/RUST_PATTERNS.md`
 - Code guidelines: `CONTRIBUTING.md`
 - Test conventions: See `tests/` directory
 - Deployment: `docs/deployment.md`
