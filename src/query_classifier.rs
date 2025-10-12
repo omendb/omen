@@ -81,7 +81,7 @@ impl QueryClassifier {
             if let Expr::BinaryExpr(binary) = expr {
                 // Check for: pk = value
                 if binary.op == Operator::Eq {
-                    if let (Expr::Column(col), Expr::Literal(scalar)) =
+                    if let (Expr::Column(col), Expr::Literal(scalar, _)) =
                         (&*binary.left, &*binary.right)
                     {
                         if col.name == self.pk_column {
@@ -89,7 +89,7 @@ impl QueryClassifier {
                         }
                     }
                     // Also check reversed: value = pk
-                    if let (Expr::Literal(scalar), Expr::Column(col)) =
+                    if let (Expr::Literal(scalar, _), Expr::Column(col)) =
                         (&*binary.left, &*binary.right)
                     {
                         if col.name == self.pk_column {
@@ -109,7 +109,7 @@ impl QueryClassifier {
             if let Expr::Between(between) = expr {
                 if let Expr::Column(col) = &*between.expr {
                     if col.name == self.pk_column && !between.negated {
-                        if let (Expr::Literal(low), Expr::Literal(high)) =
+                        if let (Expr::Literal(low, _), Expr::Literal(high, _)) =
                             (&*between.low, &*between.high)
                         {
                             if let (Some(start), Some(end)) =
@@ -131,7 +131,7 @@ impl QueryClassifier {
             if let Expr::BinaryExpr(binary) = expr {
                 if let Expr::Column(col) = &*binary.left {
                     if col.name == self.pk_column {
-                        if let Expr::Literal(scalar) = &*binary.right {
+                        if let Expr::Literal(scalar, _) = &*binary.right {
                             match binary.op {
                                 Operator::GtEq | Operator::Gt => {
                                     if let Some(val) = Self::scalar_to_value(scalar) {

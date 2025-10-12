@@ -9,9 +9,10 @@ use datafusion::datasource::TableProvider;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::logical_expr::{Expr, TableProviderFilterPushDown, TableType};
 use datafusion::physical_plan::{
-    DisplayAs, DisplayFormatType, ExecutionMode, ExecutionPlan, Partitioning, PlanProperties,
+    DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties,
     RecordBatchStream, SendableRecordBatchStream,
 };
+use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
 use datafusion::physical_expr::EquivalenceProperties;
 use futures::stream::Stream;
 use std::any::Any;
@@ -67,7 +68,7 @@ impl RedbTable {
         for expr in filters {
             if let Expr::BinaryExpr(binary) = expr {
                 // Check for: id = <value>
-                if let (Expr::Column(col), Expr::Literal(scalar_value)) =
+                if let (Expr::Column(col), Expr::Literal(scalar_value, _)) =
                     (&*binary.left, &*binary.right)
                 {
                     if col.name == "id" && binary.op == datafusion::logical_expr::Operator::Eq {
@@ -77,7 +78,7 @@ impl RedbTable {
                     }
                 }
                 // Also check reversed: <value> = id
-                if let (Expr::Literal(scalar_value), Expr::Column(col)) =
+                if let (Expr::Literal(scalar_value, _), Expr::Column(col)) =
                     (&*binary.left, &*binary.right)
                 {
                     if col.name == "id" && binary.op == datafusion::logical_expr::Operator::Eq {
@@ -103,7 +104,7 @@ impl RedbTable {
                 if let Expr::Column(col) = &*between.expr {
                     if col.name == "id" && !between.negated {
                         // Extract low and high bounds
-                        if let (Expr::Literal(ScalarValue::Int64(Some(low))), Expr::Literal(ScalarValue::Int64(Some(high)))) =
+                        if let (Expr::Literal(ScalarValue::Int64(Some(low)), _), Expr::Literal(ScalarValue::Int64(Some(high)), _)) =
                             (&*between.low, &*between.high)
                         {
                             return Some((*low, *high));
@@ -123,7 +124,7 @@ impl RedbTable {
                 // Check if this is a comparison on id column
                 if let Expr::Column(col) = &*binary.left {
                     if col.name == "id" {
-                        if let Expr::Literal(ScalarValue::Int64(Some(value))) = &*binary.right {
+                        if let Expr::Literal(ScalarValue::Int64(Some(value)), _) = &*binary.right {
                             match binary.op {
                                 Operator::GtEq | Operator::Gt => {
                                     let adjusted = if binary.op == Operator::Gt { value + 1 } else { *value };
@@ -141,7 +142,7 @@ impl RedbTable {
                 // Also check reversed comparisons: value <= id, value >= id
                 if let Expr::Column(col) = &*binary.right {
                     if col.name == "id" {
-                        if let Expr::Literal(ScalarValue::Int64(Some(value))) = &*binary.left {
+                        if let Expr::Literal(ScalarValue::Int64(Some(value)), _) = &*binary.left {
                             match binary.op {
                                 Operator::LtEq | Operator::Lt => {
                                     let adjusted = if binary.op == Operator::Lt { value + 1 } else { *value };
@@ -182,7 +183,7 @@ impl RedbTable {
                         // Extract all literal integers from the list
                         let mut ids = Vec::new();
                         for list_expr in &in_list.list {
-                            if let Expr::Literal(ScalarValue::Int64(Some(value))) = list_expr {
+                            if let Expr::Literal(ScalarValue::Int64(Some(value)), _) = list_expr {
                                 ids.push(*value);
                             } else {
                                 // Non-integer or non-literal in list, can't optimize
@@ -256,7 +257,7 @@ impl TableProvider for RedbTable {
                         if col.name == "id" && !in_list.negated {
                             // Check all items are literals - if so, we can push down
                             let all_literals = in_list.list.iter().all(|expr| {
-                                matches!(expr, Expr::Literal(_))
+                                matches!(expr, Expr::Literal(_, _))
                             });
                             if all_literals {
                                 return TableProviderFilterPushDown::Exact;
@@ -346,7 +347,8 @@ impl RedbExec {
         let properties = PlanProperties::new(
             EquivalenceProperties::new(output_schema.clone()),
             Partitioning::UnknownPartitioning(1),
-            ExecutionMode::Bounded,
+            EmissionType::Incremental,
+            Boundedness::Bounded,
         );
 
         Self {

@@ -14,8 +14,8 @@ use datafusion::catalog::Session;
 use datafusion::datasource::TableProvider;
 use datafusion::error::{DataFusionError, Result};
 use datafusion::logical_expr::{Expr, TableProviderFilterPushDown, TableType};
-use datafusion::physical_plan::memory::MemoryExec;
 use datafusion::physical_plan::ExecutionPlan;
+use datafusion::datasource::MemTable;
 use std::any::Any;
 use std::sync::{Arc, RwLock};
 
@@ -54,7 +54,7 @@ impl ArrowTableProvider {
         for expr in filters {
             if let Expr::BinaryExpr(binary) = expr {
                 // Check for: pk = <value>
-                if let (Expr::Column(col), Expr::Literal(scalar_value)) =
+                if let (Expr::Column(col), Expr::Literal(scalar_value, _)) =
                     (&*binary.left, &*binary.right)
                 {
                     if col.name == pk_name
@@ -67,7 +67,7 @@ impl ArrowTableProvider {
                     }
                 }
                 // Also check reversed: <value> = pk
-                if let (Expr::Literal(scalar_value), Expr::Column(col)) =
+                if let (Expr::Literal(scalar_value, _), Expr::Column(col)) =
                     (&*binary.left, &*binary.right)
                 {
                     if col.name == pk_name
@@ -188,10 +188,11 @@ impl TableProvider for ArrowTableProvider {
             batches
         };
 
-        // Create memory execution plan
-        let plan = MemoryExec::try_new(&[projected_batches], projected_schema.clone(), None)?;
+        // Create memory table and get execution plan
+        let mem_table = MemTable::try_new(projected_schema.clone(), vec![projected_batches])?;
+        let plan = mem_table.scan(_state, projection, filters, _limit).await?;
 
-        Ok(Arc::new(plan))
+        Ok(plan)
     }
 
     fn supports_filters_pushdown(
