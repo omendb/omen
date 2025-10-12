@@ -124,24 +124,31 @@ cargo build --release            # Optimized build
 ./target/release/rest_server     # Port 8080
 ```
 
-## Documentation Structure
+## Documentation Navigation
 
-**For AI assistants starting a session**:
-1. **Universal patterns**: `external/agent-contexts/` (Rust, doc patterns, error patterns)
-2. **Project status**: `internal/STATUS_REPORT_OCT_2025.md` (comprehensive current status)
-3. **Quick overview**: `STATUS_UPDATE.md` (brief summary)
-4. **Architecture**: `ARCHITECTURE.md` (system design)
-5. **Performance data**: `internal/research/100M_SCALE_RESULTS.md`
+**Starting a session? Load in this order**:
+1. This file (quick context)
+2. For detailed status → `internal/STATUS_REPORT_OCT_2025.md`
+3. For architecture → `ARCHITECTURE.md`
+4. For universal patterns → `~/.claude/CLAUDE.md` (points to agent-contexts)
 
-**For implementation work**:
-- Universal Rust patterns: `external/agent-contexts/languages/rust/RUST_PATTERNS.md`
-- Code guidelines: `CONTRIBUTING.md`
-- Test conventions: See `tests/` directory
-- Deployment: `docs/deployment.md`
+**Task-specific documentation**:
+- **Rust development** → `~/.claude/CLAUDE.md` → agent-contexts Rust patterns
+- **Architecture changes** → `ARCHITECTURE.md`
+- **Performance work** → `internal/research/100M_SCALE_RESULTS.md`
+- **Code guidelines** → `CONTRIBUTING.md`
+- **Business strategy** → `internal/business/`
+- **Competitive analysis** → `internal/research/COMPETITIVE_ASSESSMENT_POST_ALEX.md`
+- **Deployment** → `docs/deployment.md`
 
-**For business context**:
-- Strategy: `internal/business/`
-- Competitive analysis: `internal/research/COMPETITIVE_ASSESSMENT_POST_ALEX.md`
+**Decision tree**:
+```
+IF writing Rust code → ~/.claude/CLAUDE.md → languages/rust/RUST_PATTERNS.md
+IF modifying architecture → ARCHITECTURE.md
+IF performance optimization → internal/research/ + Rust patterns
+IF error debugging → ~/.claude/CLAUDE.md → standards/ERROR_PATTERNS.md
+IF organizing docs → ~/.claude/CLAUDE.md → standards/DOC_PATTERNS.md
+```
 
 ## Development Principles
 
