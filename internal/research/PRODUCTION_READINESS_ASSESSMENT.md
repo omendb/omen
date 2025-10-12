@@ -36,11 +36,18 @@ While OmenDB demonstrates impressive core performance, **we are significantly un
 
 **Completed Benchmarks**:
 - ✅ **TPC-C** (OLTP industry standard) - 1.86M NOPM, 40μs P95 latency
+- ⚠️ **TPC-H** (OLAP industry standard) - Infrastructure complete, awaiting full validation
 - ✅ Basic YCSB subset (limited workload patterns)
 - ✅ Extreme scale testing (1B+ records, 1.7M ops/sec)
 
+**TPC-H Status** (Oct 2025):
+- ✅ Framework established (all 22 queries documented)
+- ✅ Data generation infrastructure (tpchgen-cli integration)
+- ✅ 5 core queries implemented (Q1, Q3, Q5, Q6, Q10)
+- ⚠️ Full query suite pending (17 remaining queries)
+- ⚠️ Competitive comparison not yet performed
+
 **Missing Standard Benchmarks**:
-- ❌ **TPC-H** (OLAP industry standard)
 - ❌ **TPC-DS** (Decision Support)
 - ❌ **CH-benCHmark** (HTAP industry standard)
 - ❌ **LDBC** (Graph workloads)
@@ -268,10 +275,11 @@ While OmenDB demonstrates impressive core performance, **we are significantly un
 - ✅ Durability & crash recovery validated (100% success)
 - ✅ Concurrent crash scenarios validated (Jepsen-style)
 - ✅ TPC-C benchmark implemented (1.86M NOPM)
+- ⚠️ TPC-H benchmark framework established (5/22 queries implemented)
 - ✅ Extreme scale testing completed (1B+ records)
 - ✅ Enterprise metrics & observability (Prometheus/K8s)
 - ✅ Backup system (point-in-time recovery ready)
-- 📈 ~45% of critical gaps addressed
+- 📈 ~48% of critical gaps addressed
 
 ## Honest Recommendations
 
