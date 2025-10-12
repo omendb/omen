@@ -94,22 +94,24 @@ omendb/core/
 
 **Machine Usage Strategy**:
 
-**Mac (M3 Max, 128GB RAM)** - Development & Quick Checks:
-- ✅ Code editing, file operations, git operations
-- ✅ Quick checks: `cargo check`, reading files, grepping
-- ✅ Fast iteration during development
-- ❌ Avoid: Heavy compilation, long benchmarks (fans spin up)
+**Mac (M3 Max, 128GB RAM)** - Primary Development Machine:
+- ✅ All development work: code editing, git operations
+- ✅ Compilation: `cargo build --release` (fast, surprisingly quiet)
+- ✅ Benchmarks: Performance testing, most workloads
+- ✅ Quick iteration: Fast single-threaded performance
+- ✅ 128GB RAM: Handles large datasets easily
+- 💡 **Use for 95% of work** - faster and quieter than expected
 
-**Fedora PC (i9-13900KF 24-core, 32GB DDR5)** - Heavy Lifting:
-- ✅ Parallel compilation: `cargo build --release` (24 cores vs ~16)
-- ✅ Benchmarks: All performance testing, stress tests
-- ✅ Long-running tasks: Multi-hour benchmarks, overnight runs
-- ✅ Desktop cooling: Quieter under sustained load, won't heat up laptop
+**Fedora PC (i9-13900KF 24-core, 32GB DDR5)** - Backup/Specialized:
+- ✅ Multi-hour stress tests (if Mac is needed elsewhere)
+- ✅ GPU workloads (RTX 4090)
+- ⚠️ Requires clang-devel for RocksDB compilation
 - 🔌 Access via: `ssh nick@fedora` (Tailscale)
+- 📝 Note: 32GB RAM may limit very large datasets vs Mac's 128GB
 
 **Rule of Thumb**:
-- Development/checks → Mac (faster feedback)
-- Compilation/benchmarks → Fedora (more cores, better cooling)
+- **Default: Use Mac for everything** (fast, quiet, more RAM)
+- Only use Fedora if Mac is busy or for GPU tasks
 
 **Hardware Details**:
 - Fedora: i9-13900KF (8P + 16E cores), 32GB DDR5, RTX 4090, NVMe SSD
