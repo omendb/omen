@@ -247,6 +247,7 @@ lru = "0.16.1"
 
 # Memory-mapped I/O (for custom storage validation)
 memmap2 = "0.9"
+sys-info = "0.9.1"
 
 [features]
 default = []
