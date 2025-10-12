@@ -117,3 +117,7 @@ test_data/*.omen
 **/docs/_build/
 **/docs/build/
 docs/api/
+
+# Personal AI assistant overrides
+CLAUDE.local.md
+**/claude.local.md
