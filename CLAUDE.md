@@ -92,10 +92,28 @@ omendb/core/
 
 ## Development Environment
 
-**Your Hardware**:
-- Fedora PC: i9-13900KF, 32GB DDR5, RTX 4090, NVMe SSD
-- Mac: M3 Max, 128GB RAM
-- Tailscale network for remote access
+**Machine Usage Strategy**:
+
+**Mac (M3 Max, 128GB RAM)** - Development & Quick Checks:
+- ✅ Code editing, file operations, git operations
+- ✅ Quick checks: `cargo check`, reading files, grepping
+- ✅ Fast iteration during development
+- ❌ Avoid: Heavy compilation, long benchmarks (fans spin up)
+
+**Fedora PC (i9-13900KF 24-core, 32GB DDR5)** - Heavy Lifting:
+- ✅ Parallel compilation: `cargo build --release` (24 cores vs ~16)
+- ✅ Benchmarks: All performance testing, stress tests
+- ✅ Long-running tasks: Multi-hour benchmarks, overnight runs
+- ✅ Desktop cooling: Quieter under sustained load, won't heat up laptop
+- 🔌 Access via: `ssh nick@fedora` (Tailscale)
+
+**Rule of Thumb**:
+- Development/checks → Mac (faster feedback)
+- Compilation/benchmarks → Fedora (more cores, better cooling)
+
+**Hardware Details**:
+- Fedora: i9-13900KF (8P + 16E cores), 32GB DDR5, RTX 4090, NVMe SSD
+- Mac: M3 Max (~16 cores), 128GB RAM, Tailscale network
 
 **Stack**:
 - Rust (cargo, rustc)
