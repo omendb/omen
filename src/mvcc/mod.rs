@@ -5,6 +5,7 @@
 // - Versioned Storage: multi-version key-value storage
 // - Schema Utilities: MVCC metadata column management
 
+pub mod conflict;
 pub mod mvcc_storage;
 pub mod oracle;
 pub mod schema;
@@ -20,6 +21,7 @@ pub use schema::{
     MVCC_TXN_ID_COL, MVCC_VERSION_COL,
 };
 
+pub use conflict::{ConflictDetector, WriteConflict};
 pub use mvcc_storage::MvccStorage;
 pub use storage::{VersionedKey, VersionedValue};
 pub use visibility::{Snapshot, VisibilityEngine};
