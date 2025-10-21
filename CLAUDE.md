@@ -1,15 +1,15 @@
 # OmenDB Development Context
 
-**Last Updated**: October 21, 2025
+**Last Updated**: October 21, 2025 (Late Evening)
 
 ## Current Status
 
 **Product**: PostgreSQL-compatible HTAP database with multi-level learned indexes
 **Achievement**: 1.5-3x faster than SQLite (validated), scales to 100M+ rows
-**Status**: Phase 3 Week 1-2 COMPLETE (UPDATE/DELETE/JOIN), Cache optimization next
-**Stack**: Rust (Multi-level ALEX + DataFusion + PostgreSQL protocol + RocksDB)
-**Phase**: Performance optimization (cache layer) → 0.1.0 in 8 weeks
-**Priority**: 🔥 Cache Layer Implementation (2-3 weeks, HN validated)
+**Status**: Cache Layer Day 1-5 COMPLETE, RocksDB tuning + benchmarking next
+**Stack**: Rust (Multi-level ALEX + DataFusion + PostgreSQL protocol + RocksDB + LRU cache)
+**Phase**: Performance validation (Days 6-15) → 0.1.0 in 7 weeks
+**Priority**: 🔧 RocksDB Tuning + Benchmark Validation (Days 6-15)
 
 ## Technical Core
 
@@ -27,16 +27,16 @@
 - **vs TiDB**: No replication lag, simpler architecture
 - **vs SingleStore**: Multi-level ALEX vs B-tree advantage
 
-## Architecture (Current - October 21, 2025)
+## Architecture (Current - October 21, 2025 Late Evening)
 
 ```
 Production Stack:
 ├── Protocol Layer: PostgreSQL wire protocol (port 5433)
-├── SQL Layer: UPDATE/DELETE/JOIN support (Phase 3 Week 1-2) ✅ NEW
+├── SQL Layer: UPDATE/DELETE/JOIN support (Phase 3 Week 1-2) ✅
 ├── MVCC Layer: Snapshot isolation (Phase 1) ✅
 ├── Index Layer: Multi-level ALEX (3-level hierarchy)
+├── Cache Layer: 1-10GB LRU cache (Day 1-5 complete) ✅ NEW
 ├── Storage Layer: RocksDB (LSM tree, HN validated) ✅
-├── [NEXT] Cache Layer: 1-10GB LRU cache (Priority 1) 🔥
 └── Recovery: 100% crash recovery success
 ```
 
@@ -53,20 +53,23 @@ omendb/core/
 │   ├── alex/              # Multi-level ALEX implementation
 │   ├── postgres/          # PostgreSQL wire protocol
 │   ├── mvcc/              # MVCC snapshot isolation (Phase 1) ✅
+│   ├── cache.rs           # LRU cache layer (Day 1-5 complete) ✅ NEW
 │   ├── sql_engine.rs      # SQL: UPDATE/DELETE/JOIN (Phase 3) ✅
-│   ├── table.rs           # Table storage + ALEX integration
-│   └── [next] cache.rs    # LRU cache layer (Priority 1) 🔥
+│   ├── table.rs           # Table storage + ALEX + cache integration
+│   └── value.rs           # Hash/Eq for cache keys ✅ NEW
 ├── internal/              # Strategy & status docs
-│   ├── STATUS_REPORT.md   # Current status (Oct 21) ⭐
+│   ├── STATUS_REPORT.md   # Current status (Oct 21 late evening) ⭐
+│   ├── CACHE_IMPLEMENTATION_PLAN.md   # 15-day cache plan
 │   ├── research/          # HN insights, custom storage analysis
-│   │   ├── HN_DATABASE_INSIGHTS_ANALYSIS.md ✅ NEW
-│   │   └── CUSTOM_STORAGE_ANALYSIS.md ✅ NEW
+│   │   ├── HN_DATABASE_INSIGHTS_ANALYSIS.md ✅
+│   │   └── CUSTOM_STORAGE_ANALYSIS.md ✅
 │   ├── PHASE_1_COMPLETE.md   # MVCC complete
 │   ├── PHASE_3_WEEK_1_COMPLETE.md   # UPDATE/DELETE
 │   └── PHASE_3_WEEK_2_JOIN_COMPLETE.md   # JOIN
-└── tests/                 # 456 tests (all passing)
-    ├── update_delete_tests.rs (30 tests) ✅ NEW
-    └── join_tests.rs (14 tests) ✅ NEW
+└── tests/                 # 436 tests (all passing)
+    ├── cache_integration_tests.rs (7 tests) ✅ NEW
+    ├── update_delete_tests.rs (30 tests) ✅
+    └── join_tests.rs (14 tests) ✅
 ```
 
 ## Validated Competitive Advantages
@@ -97,14 +100,12 @@ omendb/core/
 - Bottleneck identified: RocksDB (77%), not ALEX (21%)
 - Path forward: Large cache + tuning (2-3 weeks to 2x target)
 
-## Recent Achievements (Last 7 Days - Oct 21, 2025)
+## Recent Achievements (Last 24 Hours - Oct 21, 2025)
 
 **✅ Phase 3 Week 1-2 COMPLETE:**
 - **UPDATE/DELETE support**: 30 tests, PRIMARY KEY immutability ✅
 - **INNER JOIN + LEFT JOIN**: 14 tests, nested loop algorithm ✅
 - **SQL coverage**: 15% → 35% (major milestone) ✅
-- **Tests**: 442 → 456 (all passing, 100%)
-- **Documentation**: Phase 3 complete summaries
 
 **✅ HN Database Insights Analysis (Oct 21):**
 - **Architecture validated**: ALEX + LSM + MVCC = best practices ✅
@@ -112,14 +113,22 @@ omendb/core/
 - **Cache layer validated**: HN insights confirm this is the right solution ✅
 - **Custom storage analyzed**: Documented for future, defer to post-0.1.0 ✅
 
-**🔥 PRIORITY 1 (Next 2-3 weeks):**
-- **Large LRU cache implementation** (1-10GB)
-- Target: Reduce RocksDB overhead 77% → 30%
-- Expected: 2-3x speedup at 10M+ scale
-- Timeline: 2-3 weeks to implementation + validation
+**✅ Cache Layer Day 1-5 COMPLETE (Oct 21 Late Evening):** ⭐ NEW
+- **LRU cache implementation**: src/cache.rs (289 lines) ✅
+- **Table integration**: Optional cache, get/update/delete with invalidation ✅
+- **Hash/Eq for Value**: Required for LruCache keys ✅
+- **Tests**: 436/436 passing (429 lib + 7 cache integration) ✅
+- **Timeline**: Ahead of schedule (1 session vs planned 5 days) ✅
+- **Commit**: 8443e1c
 
-**🔜 Next Steps (8 weeks to 0.1.0):**
-1. Cache optimization (2-3 weeks) - **IMMEDIATE**
+**🔧 CURRENT PRIORITY (Days 6-15):**
+- **RocksDB tuning**: Optimize compaction parameters
+- **Benchmark validation**: Measure cache effectiveness at 10M scale
+- **Target**: 2-3x speedup, RocksDB overhead 77% → <30%
+- **Timeline**: 10 days (Week 2-3 of cache plan)
+
+**🔜 Next Steps (7 weeks to 0.1.0):**
+1. Cache validation + RocksDB tuning (2 weeks) - **IN PROGRESS**
 2. Phase 2: Security (2 weeks)
 3. Phase 3 Week 3-4: SQL features (2 weeks)
 4. Observability, Backup, Hardening (2-3 weeks)
