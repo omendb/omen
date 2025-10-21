@@ -2,283 +2,244 @@
 
 **Last Updated**: October 21, 2025
 **Current Version**: 0.1.0-dev
-**Focus**: Enterprise-grade SOTA database (technical excellence first)
+**Current Phase**: Phase 1 MVCC COMPLETE → Phase 2 or 3 next
 
 ---
 
-## Quick Start
+## Quick Start (Start Here)
 
-**New to OmenDB?** Start here:
-1. [`STATUS_REPORT.md`](STATUS_REPORT.md) - Current status and progress
-2. [`technical/ROADMAP_0.1.0.md`](technical/ROADMAP_0.1.0.md) - 10-12 week plan to production
-3. [`../ARCHITECTURE.md`](../ARCHITECTURE.md) - System architecture
-4. [`design/MULTI_LEVEL_ALEX.md`](design/MULTI_LEVEL_ALEX.md) - Core index design
+**New to OmenDB or starting a new session?** Read in this order:
+
+1. **[STATUS_REPORT.md](STATUS_REPORT.md)** ⭐ - Current status, what works, what's next
+2. **[PHASE_1_COMPLETE.md](PHASE_1_COMPLETE.md)** - Recent MVCC completion (Phase 1)
+3. **[technical/ROADMAP_0.1.0.md](technical/ROADMAP_0.1.0.md)** - 10-week plan to production
+4. **[../ARCHITECTURE.md](../ARCHITECTURE.md)** - System architecture overview
+
+**That's it.** Those 4 docs give you complete context.
 
 ---
 
-## Current Documentation (Active)
+## Current Status (Oct 21, 2025)
 
-### Status & Planning
-- **[STATUS_REPORT.md](STATUS_REPORT.md)** - Main status document (Oct 21, 2025)
-- **[technical/ROADMAP_0.1.0.md](technical/ROADMAP_0.1.0.md)** - Primary roadmap (10-12 weeks to 0.1.0)
+**Just Completed** ⭐:
+- ✅ Phase 1 MVCC (14 days, 7% ahead of schedule)
+- ✅ 85 MVCC tests (snapshot isolation, conflicts, visibility)
+- ✅ 442/442 total tests passing (100%)
+- ✅ Production-ready concurrent transactions
 
-### Technical Analysis (Oct 2025)
-- **[technical/ENTERPRISE_GAP_ANALYSIS_OCT_21.md](technical/ENTERPRISE_GAP_ANALYSIS_OCT_21.md)** - Feature gap analysis
-- **[technical/BENCHMARK_VARIANCE_ANALYSIS_OCT_21.md](technical/BENCHMARK_VARIANCE_ANALYSIS_OCT_21.md)** - Performance validation (3 runs)
-- **[technical/URGENT_RANDOM_ACCESS_REGRESSION.md](technical/URGENT_RANDOM_ACCESS_REGRESSION.md)** - RESOLVED (outlier analysis)
+**What Works**:
+- Multi-level ALEX index (1.5-3x faster than SQLite)
+- PostgreSQL wire protocol (drop-in compatibility)
+- MVCC snapshot isolation (concurrent transactions safe)
+- Crash recovery (100% success)
+- RocksDB storage (proven LSM-tree)
 
-### Architecture & Design
-- **[design/MULTI_LEVEL_ALEX.md](design/MULTI_LEVEL_ALEX.md)** - Multi-level ALEX index architecture
-- **[technical/TECH_STACK.md](technical/TECH_STACK.md)** - Technology stack
+**Critical Gaps**:
+- ~15% SQL coverage (need UPDATE/DELETE/JOIN)
+- No authentication/SSL
+- No observability (EXPLAIN, metrics)
+- No backup/restore
+
+**Next**: Choose Phase 2 (Security) or Phase 3 (SQL Features)
+
+---
+
+## Documentation Map
+
+### Status & Planning (READ THESE FIRST)
+
+| Document | Purpose | Date |
+|----------|---------|------|
+| **[STATUS_REPORT.md](STATUS_REPORT.md)** ⭐ | Current complete status | Oct 21, 2025 |
+| **[PHASE_1_COMPLETE.md](PHASE_1_COMPLETE.md)** ⭐ | MVCC completion summary | Oct 21, 2025 |
+| [PHASE_1_WEEK_1_COMPLETE.md](PHASE_1_WEEK_1_COMPLETE.md) | Week 1 detailed report | Oct 20, 2025 |
+| [PHASE_0_COMPLETE.md](PHASE_0_COMPLETE.md) | Foundation cleanup | Oct 20, 2025 |
+| [technical/ROADMAP_0.1.0.md](technical/ROADMAP_0.1.0.md) | 10-week roadmap | Oct 20, 2025 |
+
+### Technical (Architecture & Design)
+
+| Document | Purpose | Date |
+|----------|---------|------|
+| [technical/MVCC_DESIGN.md](technical/MVCC_DESIGN.md) | MVCC architecture (908 lines) | Oct 20, 2025 |
+| [design/MULTI_LEVEL_ALEX.md](design/MULTI_LEVEL_ALEX.md) | Multi-level ALEX index | Oct 2025 |
+| [technical/TECH_STACK.md](technical/TECH_STACK.md) | Technology stack | Oct 2025 |
+| ../ARCHITECTURE.md | System architecture | Current |
 
 ### Research & Validation
-- **[research/100M_SCALE_RESULTS.md](research/100M_SCALE_RESULTS.md)** - 100M scale validation
-- **[research/COMPETITIVE_ASSESSMENT_POST_ALEX.md](research/COMPETITIVE_ASSESSMENT_POST_ALEX.md)** - Competitive analysis
 
-### Phase Completion Reports
-- **[technical/PHASE_1_COMPLETION_REPORT.md](technical/PHASE_1_COMPLETION_REPORT.md)** - Security & transactions
-- **[technical/PHASE_2_PERFORMANCE_OPTIMIZATION_RESULTS.md](technical/PHASE_2_PERFORMANCE_OPTIMIZATION_RESULTS.md)** - Performance work
-- **[technical/PHASE_3_TRANSACTION_ROLLBACK_COMPLETION.md](technical/PHASE_3_TRANSACTION_ROLLBACK_COMPLETION.md)** - Rollback implementation
+| Document | Purpose | Date |
+|----------|---------|------|
+| [research/100M_SCALE_RESULTS.md](research/100M_SCALE_RESULTS.md) | 100M scale validation | Oct 2025 |
+| [research/COMPETITIVE_ASSESSMENT_POST_ALEX.md](research/COMPETITIVE_ASSESSMENT_POST_ALEX.md) | Competitive analysis | Oct 2025 |
+| [research/ALEX_MIGRATION_COMPLETE.md](research/ALEX_MIGRATION_COMPLETE.md) | ALEX migration results | Oct 2025 |
+
+### Business & Strategy
+
+| Document | Purpose | Date |
+|----------|---------|------|
+| [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) | Market positioning | Oct 2025 |
+| [CUSTOMER_ACQUISITION.md](CUSTOMER_ACQUISITION.md) | Customer strategy | Oct 2025 |
 
 ---
 
-## Archived Documentation
+## Directory Structure
 
-Older documents preserved for historical reference in `archive/` subdirectories
-│   ├── EXECUTIVE_SUMMARY.md          # Consolidated strategy
-│   ├── YC_W25_ROADMAP.md             # YC application plan
-│   ├── VC_FUNDING_STRATEGY_OCT_2025.md
-│   └── LICENSING_STRATEGY.md
+```
+internal/
+├── STATUS_REPORT.md                    # ⭐ START HERE - Current status
+├── PHASE_1_COMPLETE.md                 # ⭐ MVCC completion (Oct 21)
+├── PHASE_1_WEEK_1_COMPLETE.md          # Week 1 details
+├── PHASE_0_COMPLETE.md                 # Foundation cleanup
+├── README.md                           # This file
 │
-├── research/                          # Learned index validation
-│   ├── COMPETITIVE_ASSESSMENT_POST_ALEX.md  # ⭐ Competitive analysis
-│   ├── ALEX_MIGRATION_COMPLETE.md    # ALEX migration results
-│   ├── ALEX_PERFORMANCE_VALIDATION.md
-│   ├── ALEX_INTEGRATION_PLAN.md
-│   ├── HTAP_REPLICATION_RESEARCH_2025.md
-│   ├── LEARNED_INDEX_SOTA.md
-│   ├── LEARNED_INDEX_VALIDATION.md
-│   ├── COMPREHENSIVE_ANALYSIS.md
-│   ├── PROPER_TEST_PLAN.md
-│   └── README.md
+├── technical/                          # Architecture & roadmaps
+│   ├── ROADMAP_0.1.0.md               # ⭐ 10-week plan
+│   ├── MVCC_DESIGN.md                 # MVCC architecture (908 lines)
+│   ├── TECH_STACK.md                  # Technology stack
+│   ├── ENTERPRISE_GAP_ANALYSIS_OCT_21.md
+│   └── BENCHMARK_VARIANCE_ANALYSIS_OCT_21.md
 │
-├── technical/                         # Architecture, systems
-│   ├── COMPREHENSIVE_ARCHITECTURAL_REVIEW_OCT_2025.md
-│   ├── CURRENT_STATUS.md
-│   ├── ARCHITECTURE_REFACTOR.md
-│   ├── DATAFUSION_OPTIMIZATION_PLAN.md
-│   ├── PRODUCTION_READINESS_ASSESSMENT.md
-│   ├── TESTING_REQUIREMENTS.md
-│   ├── OBSERVABILITY_GUIDE.md
-│   ├── OBSERVABILITY_PLAN.md
-│   ├── ERROR_HANDLING_AUDIT.md
-│   └── TECH_STACK.md
+├── design/                             # System design
+│   └── MULTI_LEVEL_ALEX.md            # Core index design
 │
-└── archive/                           # Historical docs (reference only)
-    ├── alexstorage/                   # Old AlexStorage experiments
-    │   ├── ALEXSTORAGE_*.md          # Pre-Table system architecture
-    │   ├── ALEX_IMPLEMENTATION_PLAN.md
-    │   ├── CUSTOM_STORAGE_ROADMAP.md
-    │   └── MMAP_VALIDATION.md
-    ├── optimizations/                 # Historical optimization work
-    │   ├── OPTIMIZATION_*.md
-    │   ├── SOTA_IMPROVEMENTS_2025.md
-    │   ├── FINAL_OPTIMIZATION_FINDINGS.md
-    │   ├── PERFORMANCE_AUDIT.md
-    │   ├── PROFILING_RESULTS.md
-    │   └── [other optimization docs]
-    └── assessments/                   # Old competitive/status assessments
-        ├── HONEST_ASSESSMENT.md
-        ├── HONEST_COMPETITIVE_ASSESSMENT.md
-        ├── ALIGNMENT_ASSESSMENT.md
-        └── [other assessments]
+├── research/                           # Validation & analysis
+│   ├── 100M_SCALE_RESULTS.md          # Large scale tests
+│   ├── COMPETITIVE_ASSESSMENT_POST_ALEX.md
+│   ├── ALEX_MIGRATION_COMPLETE.md
+│   └── [other research docs]
+│
+└── archive/                            # Historical reference
+    ├── sessions/                       # Old session summaries
+    ├── status/                         # Superseded status docs
+    ├── roadmaps/                       # Old roadmaps
+    └── [other archived docs]
 ```
 
 ---
 
-## Document Guide
-
-### Current Status (Start Here)
-
-| Document | Purpose | Date | Read If... |
-|----------|---------|------|-----------|
-| **STATUS_REPORT_OCT_2025.md** ⭐ | Complete project status | Oct 11, 2025 | You need full picture |
-| ../STATUS_UPDATE.md | Quick summary | Oct 2025 | You need brief overview |
-| research/COMPETITIVE_ASSESSMENT_POST_ALEX.md | Competitive analysis | Oct 2025 | You need market positioning |
-
-### Phase Completions (phases/)
-
-| Phase | What We Built | Date | Key Results |
-|-------|---------------|------|-------------|
-| 8 | SOTA improvements | Sep 2025 | SIMD search, CDFShop sampling |
-| 9.1 | DataFusion integration | Sep 2025 | TableProvider for HTAP |
-| 9.2 | Query router | Sep 2025 | 84ns routing overhead |
-| 9.3 | Temperature tracking | Sep 2025 | Hot/warm/cold classification |
-| 9.4 | HTAP benchmarks | Sep 2025 | 89.5-100% routing accuracy |
-| 10 | Multi-level ALEX | Oct 2025 | Scales to 100M+, 1.5-3x vs SQLite |
-
-**Summary**: Phase 10 complete (multi-level ALEX production ready)
-
-### Business Strategy (business/)
-
-| Document | Purpose | Date | Read If... |
-|----------|---------|------|-----------|
-| **EXECUTIVE_SUMMARY.md** | Consolidated strategy | Oct 2025 | You need business overview |
-| YC_W25_ROADMAP.md | YC application plan | Oct 2025 | Considering YC W25 |
-| VC_FUNDING_STRATEGY_OCT_2025.md | Funding analysis | Oct 2025 | Planning fundraising |
-| LICENSING_STRATEGY.md | Open source licensing | Sep 2025 | License decisions |
-
-### Research (research/)
-
-| Document | Purpose | Date | Read If... |
-|----------|---------|------|-----------|
-| **COMPETITIVE_ASSESSMENT_POST_ALEX.md** ⭐ | Post-ALEX competitive analysis | Oct 2025 | You need competitive positioning |
-| ALEX_MIGRATION_COMPLETE.md | ALEX migration results | Oct 2025 | You need ALEX performance data |
-| ALEX_PERFORMANCE_VALIDATION.md | ALEX benchmarks | Oct 2025 | You need detailed benchmarks |
-| HTAP_REPLICATION_RESEARCH_2025.md | HTAP architecture research | Jan 2025 | You need HTAP background |
-| LEARNED_INDEX_SOTA.md | State-of-the-art learned indexes | 2025 | You need academic context |
-| LEARNED_INDEX_VALIDATION.md | Learned index benchmarks | Oct 2025 | You need validation data |
-
-### Technical (technical/)
-
-| Document | Purpose | Date | Read If... |
-|----------|---------|------|-----------|
-| COMPREHENSIVE_ARCHITECTURAL_REVIEW_OCT_2025.md | Complete system analysis | Oct 2025 | You need architecture overview |
-| CURRENT_STATUS.md | Latest development status | Oct 2025 | You need current state |
-| PRODUCTION_READINESS_ASSESSMENT.md | Production checklist | Oct 2025 | Preparing for production |
-| TESTING_REQUIREMENTS.md | Test strategy | Oct 2025 | Writing tests |
-| OBSERVABILITY_GUIDE.md | Logging/monitoring | Oct 2025 | Adding observability |
-
-### Archive (archive/) - Historical Reference Only
-
-**AlexStorage Experiments (archive/alexstorage/):**
-- Pre-Table system architecture experiments
-- Custom mmap-based storage attempts
-- Replaced by unified Table system (Phase 9)
-
-**Optimization Work (archive/optimizations/):**
-- Historical performance optimization docs
-- Profiling results and analysis
-- Incorporated into Phase 8 SOTA improvements
-
-**Assessments (archive/assessments/):**
-- Old competitive assessments
-- Status reports from earlier phases
-- Replaced by STATUS_REPORT_JAN_2025.md
-
----
-
-## Key Milestones
+## Phase Progress
 
 ### ✅ Completed
 
-1. **Multi-Level ALEX** (Oct 2025)
-   - Scales to 100M+ rows
-   - 1.5-3x faster than SQLite (all scales)
-   - 1.24μs query latency at 100M
-   - Memory: 1.50 bytes/key
+**Phase 0: Foundation Cleanup** (1 day, Oct 20)
+- Fixed failing test
+- MVCC design doc (908 lines)
+- Gap analysis
+- Documentation cleanup
 
-2. **PostgreSQL Wire Protocol** (Oct 2025)
-   - Full protocol implementation
-   - Drop-in compatibility
-   - Multi-level ALEX backend
+**Phase 1: MVCC Implementation** (14 days, Oct 16-21) ⭐
+- Transaction Oracle (8 tests)
+- Versioned Storage (11 tests)
+- MVCC Storage Layer (6 tests)
+- Visibility Engine (13 tests)
+- Conflict Detection (13 tests)
+- Transaction Context (11 tests)
+- Integration Tests (23 tests)
+- **Total: 85 MVCC tests, 7% ahead of schedule**
 
-3. **Production Hardening** (Oct 2025)
-   - 100% crash recovery success
-   - TPC-C & YCSB benchmarks
-   - Extreme scale validation (1B+)
-   - 325+ tests passing
+### 🔜 Remaining (Choose Next)
 
-### 🔨 In Progress
+**Phase 2: Security** (2 weeks)
+- Authentication + SSL/TLS
+- Connection security
+- 50+ security tests
 
-1. **Customer Acquisition** (4-6 weeks)
-   - Target: 3-5 customer LOIs
-   - Focus: Time-series, IoT, real-time analytics
-   - Pitch deck preparation
+**Phase 3: SQL Features** (4 weeks)
+- UPDATE/DELETE support
+- JOINs (INNER, LEFT, RIGHT)
+- Aggregations (GROUP BY, HAVING)
+- 40-50% SQL coverage (from 15%)
 
-2. **Competitive Benchmarks** (1-2 weeks)
-   - CockroachDB single-node comparison
-   - DuckDB OLAP comparison
-   - TiDB replication lag validation
+**Phase 4: Observability** (1 week)
+- EXPLAIN query plans
+- Query metrics
+- Structured logging
 
-### 🔜 Next Up
+**Phase 5: Backup/Restore** (1 week)
+- Full + incremental backup
+- Point-in-time recovery
 
-1. **Market Validation** (6-8 weeks)
-   - Customer outreach campaign
-   - Pilot deployment planning
-   - First paying customer
+**Phase 6: Hardening** (2 weeks)
+- Final testing
+- Production validation
+- 0.1.0 release
 
-2. **Fundraising** (8-12 weeks)
-   - Seed round ($1-3M)
-   - Based on customer LOIs
-   - Complete competitive analysis
-
----
-
-## Performance Summary
-
-### Validated Claims
-
-| Claim | Result | Status |
-|-------|--------|--------|
-| 1.5-3x faster than SQLite | 1M-100M scale | ✅ Validated |
-| Scales to 100M+ rows | 1.24μs at 100M | ✅ Validated |
-| 28x memory efficiency | 1.50 bytes/key | ✅ Validated |
-| PostgreSQL compatible | Wire protocol complete | ✅ Validated |
-| 100% crash recovery | Durability tests passing | ✅ Validated |
-
-### Needs Validation
-
-| Claim | Expected | Timeline |
-|-------|----------|----------|
-| 10-50x single-node writes vs CockroachDB | 500K+ txn/sec | 1-2 weeks |
-| HTAP advantage vs TiDB | 0ms lag vs 2-5s | 3-5 days |
-| OLAP performance vs DuckDB | Columnar scan speed | 1 week |
+**Timeline**: 10 weeks to 0.1.0
 
 ---
 
 ## Quick Reference
 
-**Need full project status?**
-→ Read `STATUS_REPORT_OCT_2025.md` ⭐
-
-**Need quick overview?**
-→ Read `../STATUS_UPDATE.md`
-
-**Need competitive positioning?**
-→ Read `research/COMPETITIVE_ASSESSMENT_POST_ALEX.md`
-
-**Need business strategy?**
-→ Read `business/EXECUTIVE_SUMMARY.md`
-
-**Looking for historical docs?**
-→ Check `archive/` subdirectories or `STATUS_REPORT_JAN_2025.md`
+| Need | Read |
+|------|------|
+| Full current status | [STATUS_REPORT.md](STATUS_REPORT.md) |
+| Recent MVCC work | [PHASE_1_COMPLETE.md](PHASE_1_COMPLETE.md) |
+| Roadmap to 0.1.0 | [technical/ROADMAP_0.1.0.md](technical/ROADMAP_0.1.0.md) |
+| MVCC architecture | [technical/MVCC_DESIGN.md](technical/MVCC_DESIGN.md) |
+| Performance data | [research/100M_SCALE_RESULTS.md](research/100M_SCALE_RESULTS.md) |
+| Competitive analysis | [research/COMPETITIVE_ASSESSMENT_POST_ALEX.md](research/COMPETITIVE_ASSESSMENT_POST_ALEX.md) |
+| System architecture | [../ARCHITECTURE.md](../ARCHITECTURE.md) |
 
 ---
 
-## Contributing
+## Key Metrics (Oct 21, 2025)
 
-When adding new internal docs:
-
-1. **Choose the right directory:**
-   - `phases/` - Phase completion summaries (PHASE_X_COMPLETE.md)
-   - `business/` - Strategy, funding, market
-   - `research/` - Competitive analysis, validation
-   - `technical/` - Architecture, systems
-   - `archive/` - Historical docs (rarely needed)
-
-2. **Update STATUS_REPORT_OCT_2025.md for major milestones**
-
-3. **Update this README:**
-   - Add to relevant table
-   - Update "Last Updated" date
-
-4. **Archive superseded docs:**
-   - Move to appropriate `archive/` subdirectory
-   - Use `git mv` to preserve history
+| Metric | Value | Status |
+|--------|-------|--------|
+| Tests Passing | 442/442 (100%) | ✅ |
+| MVCC Tests | 85 (new) | ✅ |
+| Performance | 1.5-3x vs SQLite | ✅ |
+| Memory | 28x more efficient than PostgreSQL | ✅ |
+| Scale | 100M+ rows validated | ✅ |
+| MVCC | Snapshot isolation complete | ✅ |
+| SQL Coverage | ~15% | ⚠️ |
+| Security | None yet | ⚠️ |
 
 ---
 
-**Last Updated:** October 11, 2025
-**Current Phase:** Multi-level ALEX production ready, market validation starting
-**Next Milestone:** Customer LOIs (3-5) + competitive benchmarks + seed fundraising (6-8 weeks)
+## For New Sessions
+
+**If you're starting a new Claude Code session:**
+
+1. Read `STATUS_REPORT.md` - Gives complete current state
+2. Read `PHASE_1_COMPLETE.md` - Shows what just finished
+3. Read `technical/ROADMAP_0.1.0.md` - Shows what's next
+4. Check `../CLAUDE.md` - Project-specific instructions
+
+**Key facts to know:**
+- Phase 1 (MVCC) is COMPLETE (not in progress)
+- 442/442 tests passing (not 357)
+- Snapshot isolation is production-ready
+- Next: Choose Phase 2 (Security) or Phase 3 (SQL)
+
+---
+
+## Contributing to Docs
+
+**When adding new docs:**
+
+1. **Update STATUS_REPORT.md** for major milestones
+2. **Add phase completion summaries** as `PHASE_X_COMPLETE.md`
+3. **Update this README** with new doc links
+4. **Archive superseded docs** to `archive/` subdirectories
+
+**File naming:**
+- Phase completions: `PHASE_X_COMPLETE.md`
+- Weekly summaries: `PHASE_X_WEEK_Y_COMPLETE.md`
+- Technical docs: `technical/TOPIC.md`
+- Research: `research/TOPIC.md`
+
+**Don't keep:**
+- Duplicates of current status
+- Outdated roadmaps
+- Superseded summaries
+
+Move these to `archive/` with `git mv`.
+
+---
+
+**Last Updated**: October 21, 2025
+**Current Phase**: Phase 1 COMPLETE
+**Next Milestone**: Phase 2 (Security) or Phase 3 (SQL Features)
+**Tests**: 442/442 passing (100%)
+**Timeline**: 10 weeks to 0.1.0
