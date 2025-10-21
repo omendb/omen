@@ -7,6 +7,7 @@
 
 pub mod conflict;
 pub mod mvcc_storage;
+pub mod mvcc_transaction;
 pub mod oracle;
 pub mod schema;
 pub mod storage;
@@ -23,5 +24,6 @@ pub use schema::{
 
 pub use conflict::{ConflictDetector, WriteConflict};
 pub use mvcc_storage::MvccStorage;
+pub use mvcc_transaction::MvccTransactionContext;
 pub use storage::{VersionedKey, VersionedValue};
 pub use visibility::{Snapshot, VisibilityEngine};
