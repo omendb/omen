@@ -9,6 +9,7 @@ pub mod mvcc_storage;
 pub mod oracle;
 pub mod schema;
 pub mod storage;
+pub mod visibility;
 
 pub use oracle::{
     CommittedTransaction, TransactionMode, TransactionOracle, TransactionState, TxnStatus,
@@ -21,3 +22,4 @@ pub use schema::{
 
 pub use mvcc_storage::MvccStorage;
 pub use storage::{VersionedKey, VersionedValue};
+pub use visibility::{Snapshot, VisibilityEngine};
