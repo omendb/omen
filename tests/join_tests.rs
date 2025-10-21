@@ -323,3 +323,370 @@ fn test_inner_join_with_where_clause() {
         _ => panic!("Expected Selected result"),
     }
 }
+
+#[test]
+fn test_inner_join_one_to_many() {
+    // One user with multiple orders
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine
+        .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, user_id BIGINT, total DOUBLE)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO users VALUES (1, 'Alice', 30)")
+        .unwrap();
+
+    // Alice has 3 orders
+    engine
+        .execute("INSERT INTO orders VALUES (100, 1, 50.00)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO orders VALUES (101, 1, 75.00)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO orders VALUES (102, 1, 100.00)")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT users.name, orders.total FROM users INNER JOIN orders ON users.id = orders.user_id")
+        .unwrap();
+
+    match result {
+        ExecutionResult::Selected { rows, data, .. } => {
+            assert_eq!(rows, 3, "Expected 3 rows (one user, three orders)");
+
+            // All rows should have Alice
+            for i in 0..3 {
+                assert_eq!(data[i].get(0).unwrap(), &Value::Text("Alice".to_string()));
+            }
+
+            // Check order totals
+            assert_eq!(data[0].get(1).unwrap(), &Value::Float64(50.00));
+            assert_eq!(data[1].get(1).unwrap(), &Value::Float64(75.00));
+            assert_eq!(data[2].get(1).unwrap(), &Value::Float64(100.00));
+        }
+        _ => panic!("Expected Selected result"),
+    }
+}
+
+#[test]
+fn test_inner_join_all_rows_match() {
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine
+        .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, user_id BIGINT, total DOUBLE)")
+        .unwrap();
+
+    // Every user has exactly one order
+    engine
+        .execute("INSERT INTO users VALUES (1, 'Alice', 30)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO users VALUES (2, 'Bob', 25)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO users VALUES (3, 'Charlie', 35)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO orders VALUES (100, 1, 50.00)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO orders VALUES (101, 2, 75.00)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO orders VALUES (102, 3, 100.00)")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM users INNER JOIN orders ON users.id = orders.user_id")
+        .unwrap();
+
+    match result {
+        ExecutionResult::Selected { rows, .. } => {
+            assert_eq!(rows, 3, "Expected 3 rows (all match)");
+        }
+        _ => panic!("Expected Selected result"),
+    }
+}
+
+#[test]
+fn test_left_join_all_rows_match() {
+    // LEFT JOIN where all left rows have matches - same as INNER JOIN
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine
+        .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, user_id BIGINT, total DOUBLE)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO users VALUES (1, 'Alice', 30)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO users VALUES (2, 'Bob', 25)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO orders VALUES (100, 1, 50.00)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO orders VALUES (101, 2, 75.00)")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT users.name, orders.total FROM users LEFT JOIN orders ON users.id = orders.user_id")
+        .unwrap();
+
+    match result {
+        ExecutionResult::Selected { rows, data, .. } => {
+            assert_eq!(rows, 2, "Expected 2 rows");
+
+            // No NULLs - all rows matched
+            for i in 0..2 {
+                assert!(!matches!(data[i].get(1).unwrap(), Value::Null));
+            }
+        }
+        _ => panic!("Expected Selected result"),
+    }
+}
+
+#[test]
+fn test_left_join_no_matches() {
+    // LEFT JOIN where no left rows have matches - all right columns NULL
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine
+        .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, user_id BIGINT, total DOUBLE)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO users VALUES (1, 'Alice', 30)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO users VALUES (2, 'Bob', 25)")
+        .unwrap();
+
+    // No orders
+    let result = engine
+        .execute("SELECT users.name, orders.total FROM users LEFT JOIN orders ON users.id = orders.user_id")
+        .unwrap();
+
+    match result {
+        ExecutionResult::Selected { rows, data, .. } => {
+            assert_eq!(rows, 2, "Expected 2 rows (all users, no orders)");
+
+            // All order columns should be NULL
+            assert_eq!(data[0].get(0).unwrap(), &Value::Text("Alice".to_string()));
+            assert_eq!(data[0].get(1).unwrap(), &Value::Null);
+
+            assert_eq!(data[1].get(0).unwrap(), &Value::Text("Bob".to_string()));
+            assert_eq!(data[1].get(1).unwrap(), &Value::Null);
+        }
+        _ => panic!("Expected Selected result"),
+    }
+}
+
+#[test]
+fn test_inner_join_empty_left_table() {
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine
+        .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, user_id BIGINT, total DOUBLE)")
+        .unwrap();
+
+    // No users, but has orders
+    engine
+        .execute("INSERT INTO orders VALUES (100, 1, 50.00)")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM users INNER JOIN orders ON users.id = orders.user_id")
+        .unwrap();
+
+    match result {
+        ExecutionResult::Selected { rows, .. } => {
+            assert_eq!(rows, 0, "Expected 0 rows (empty left table)");
+        }
+        _ => panic!("Expected Selected result"),
+    }
+}
+
+#[test]
+fn test_inner_join_empty_right_table() {
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine
+        .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, user_id BIGINT, total DOUBLE)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO users VALUES (1, 'Alice', 30)")
+        .unwrap();
+
+    // No orders
+    let result = engine
+        .execute("SELECT * FROM users INNER JOIN orders ON users.id = orders.user_id")
+        .unwrap();
+
+    match result {
+        ExecutionResult::Selected { rows, .. } => {
+            assert_eq!(rows, 0, "Expected 0 rows (empty right table)");
+        }
+        _ => panic!("Expected Selected result"),
+    }
+}
+
+#[test]
+fn test_left_join_empty_left_table() {
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine
+        .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, user_id BIGINT, total DOUBLE)")
+        .unwrap();
+
+    // No users
+    engine
+        .execute("INSERT INTO orders VALUES (100, 1, 50.00)")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM users LEFT JOIN orders ON users.id = orders.user_id")
+        .unwrap();
+
+    match result {
+        ExecutionResult::Selected { rows, .. } => {
+            assert_eq!(rows, 0, "Expected 0 rows (empty left table)");
+        }
+        _ => panic!("Expected Selected result"),
+    }
+}
+
+#[test]
+fn test_left_join_one_to_many() {
+    // One user with multiple orders, one user with no orders
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine
+        .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE orders (id BIGINT PRIMARY KEY, user_id BIGINT, total DOUBLE)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO users VALUES (1, 'Alice', 30)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO users VALUES (2, 'Bob', 25)")
+        .unwrap();
+
+    // Alice has 2 orders, Bob has none
+    engine
+        .execute("INSERT INTO orders VALUES (100, 1, 50.00)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO orders VALUES (101, 1, 75.00)")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT users.name, orders.total FROM users LEFT JOIN orders ON users.id = orders.user_id")
+        .unwrap();
+
+    match result {
+        ExecutionResult::Selected { rows, data, .. } => {
+            assert_eq!(rows, 3, "Expected 3 rows (Alice twice, Bob once)");
+
+            // Alice's orders
+            assert_eq!(data[0].get(0).unwrap(), &Value::Text("Alice".to_string()));
+            assert_eq!(data[0].get(1).unwrap(), &Value::Float64(50.00));
+
+            assert_eq!(data[1].get(0).unwrap(), &Value::Text("Alice".to_string()));
+            assert_eq!(data[1].get(1).unwrap(), &Value::Float64(75.00));
+
+            // Bob with NULL
+            assert_eq!(data[2].get(0).unwrap(), &Value::Text("Bob".to_string()));
+            assert_eq!(data[2].get(1).unwrap(), &Value::Null);
+        }
+        _ => panic!("Expected Selected result"),
+    }
+}
+
+#[test]
+fn test_inner_join_non_primary_key_column() {
+    // Join on a non-primary key column
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine
+        .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE profiles (id BIGINT PRIMARY KEY, user_age BIGINT, bio VARCHAR(255))")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO users VALUES (1, 'Alice', 30)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO users VALUES (2, 'Bob', 30)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO profiles VALUES (100, 30, 'Profile for age 30')")
+        .unwrap();
+
+    // Join on age (non-primary key)
+    let result = engine
+        .execute("SELECT users.name, profiles.bio FROM users INNER JOIN profiles ON users.age = profiles.user_age")
+        .unwrap();
+
+    match result {
+        ExecutionResult::Selected { rows, data, .. } => {
+            assert_eq!(rows, 2, "Expected 2 rows (both Alice and Bob match age 30)");
+
+            // Both should have the same bio
+            assert_eq!(data[0].get(1).unwrap(), &Value::Text("Profile for age 30".to_string()));
+            assert_eq!(data[1].get(1).unwrap(), &Value::Text("Profile for age 30".to_string()));
+        }
+        _ => panic!("Expected Selected result"),
+    }
+}
