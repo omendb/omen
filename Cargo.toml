@@ -373,3 +373,7 @@ path = "src/bin/benchmark_cache_effectiveness.rs"
 name = "test_cache_simple"
 path = "src/bin/test_cache_simple.rs"
 
+[[bin]]
+name = "benchmark_cache_scale"
+path = "src/bin/benchmark_cache_scale.rs"
+
