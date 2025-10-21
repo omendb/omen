@@ -157,7 +157,7 @@ pub async fn test_http_server_integration() -> IntegrationTestResults {
 
     // Create HTTP client
     let client = Client::new();
-    let base_url = format!("http://127.0.0.1:3000"); // Default port for testing
+    let base_url = "http://127.0.0.1:3000".to_string(); // Default port for testing
 
     // Test 1: Public endpoints (no auth required)
     let endpoints = vec!["/ready", "/status"];
@@ -506,7 +506,7 @@ pub async fn test_complete_end_to_end() -> IntegrationTestResults {
     let test_data = generate_test_time_series(config.test_data_size);
 
     for (ts, value) in &test_data {
-        match db.insert(*ts, *value, (*ts % 10) as i64) {
+        match db.insert(*ts, *value, (*ts % 10)) {
             Ok(_) => operations += 1,
             Err(_) => errors += 1,
         }

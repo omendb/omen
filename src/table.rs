@@ -326,13 +326,15 @@ impl Table {
 
         let deleted_internal_row = Row::new(internal_values);
 
+        // Get new position for deleted row
+        let new_position = self.storage.row_count();
+
         // Store deleted version
         self.storage.insert(deleted_internal_row)?;
 
-        // Remove from index
-        // (Index will no longer return this row)
-        // Note: Index doesn't have remove method, so it will still point to old position
-        // But get() checks is_deleted, so it will return None
+        // Update index to point to new deleted version
+        // This ensures scan_all and get() see the deleted flag
+        self.index.insert(key_value, new_position)?;
 
         Ok(1) // 1 row deleted
     }
@@ -402,13 +404,21 @@ impl Table {
     }
 
     /// Get all rows as Row objects (filters deleted, strips MVCC columns)
+    /// Only returns current versions (rows pointed to by the index)
     pub fn scan_all(&self) -> Result<Vec<Row>> {
         let all_internal_rows = self.storage.scan_all()?;
         let mut user_rows = Vec::new();
 
-        for internal_row in all_internal_rows {
-            if !self.is_deleted(&internal_row) {
-                user_rows.push(self.strip_mvcc_columns(&internal_row));
+        for (position, internal_row) in all_internal_rows.iter().enumerate() {
+            // Extract primary key from this row
+            let pk_value = internal_row.get(self.primary_key_index)?;
+
+            // Check if this row is the current version (pointed to by index)
+            if let Some(indexed_position) = self.index.search(pk_value)? {
+                if indexed_position == position && !self.is_deleted(internal_row) {
+                    // This is the current version and not deleted
+                    user_rows.push(self.strip_mvcc_columns(internal_row));
+                }
             }
         }
 

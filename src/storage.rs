@@ -41,6 +41,12 @@ pub trait LearnedIndexTrait: Send + Sync {
     fn range_search(&self, start: i64, end: i64) -> Vec<usize>;
 }
 
+impl Default for ArrowStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ArrowStorage {
     /// Create new storage for time-series data
     pub fn new() -> Self {
@@ -69,7 +75,7 @@ impl ArrowStorage {
     /// Create storage with persistence and WAL
     pub fn with_persistence<P: AsRef<Path>>(data_dir: P) -> Result<Self> {
         let data_path = data_dir.as_ref();
-        std::fs::create_dir_all(&data_path)?;
+        std::fs::create_dir_all(data_path)?;
 
         // Initialize WAL
         let wal_dir = data_path.join("wal");
@@ -171,7 +177,7 @@ impl ArrowStorage {
         self.insert_without_wal(timestamp, value, series_id)?;
 
         // Retrain index periodically (every 1000 inserts)
-        if self.hot_batches.len() % 1000 == 0 {
+        if self.hot_batches.len().is_multiple_of(1000) {
             self.rebuild_index()?;
         }
 
@@ -291,9 +297,9 @@ impl ArrowStorage {
     pub fn load_from_parquet(&mut self, path: &Path) -> Result<()> {
         let file = File::open(path)?;
         let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
-        let mut reader = builder.build()?;
+        let reader = builder.build()?;
 
-        while let Some(batch) = reader.next() {
+        for batch in reader {
             self.hot_batches.push(batch?);
         }
 
