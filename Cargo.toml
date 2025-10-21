@@ -63,6 +63,10 @@ name = "postgres_server"
 path = "src/bin/postgres_server.rs"
 
 [[bin]]
+name = "postgres_server_auth"
+path = "src/bin/postgres_server_auth.rs"
+
+[[bin]]
 name = "postgres_alex_server"
 path = "src/bin/postgres_alex_server.rs"
 
@@ -137,13 +141,15 @@ wiremock = "0.6"
 assert_cmd = "2.0"
 predicates = "3.0"
 
-# PostgreSQL client for testing wire protocol
-tokio-postgres = "0.7"
-
 # HTTP client for testing REST API
 reqwest = { version = "0.12", features = ["json"] }
 
+# PostgreSQL client for testing Extended Query Protocol
+postgres = "0.19"
+
 [dependencies]
+# PostgreSQL client for benchmarks and testing
+tokio-postgres = "0.7"
 # SQLite for comparison benchmarks
 rusqlite = { version = "0.32", features = ["bundled"] }
 
@@ -169,7 +175,7 @@ parquet = "56"
 sqlparser = "0.49"
 
 # PostgreSQL Wire Protocol
-pgwire = "0.27"
+pgwire = { version = "0.27", features = ["scram"] }
 
 # HTTP REST API
 axum = "0.7"
@@ -354,3 +360,16 @@ path = "src/bin/tpch_framework.rs"
 [[bin]]
 name = "tpch_benchmark"
 path = "src/bin/tpch_benchmark_real.rs"
+
+[[bin]]
+name = "test_extended"
+path = "test_extended.rs"
+
+[[bin]]
+name = "benchmark_cache_effectiveness"
+path = "src/bin/benchmark_cache_effectiveness.rs"
+
+[[bin]]
+name = "test_cache_simple"
+path = "src/bin/test_cache_simple.rs"
+
