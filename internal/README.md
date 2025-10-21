@@ -1,53 +1,50 @@
-# Internal Documentation
+# OmenDB Internal Documentation
 
-**Last Updated:** October 11, 2025
-**Status:** Multi-level ALEX production ready, focus shifting to market validation
-
----
-
-## 🎯 Quick Start
-
-### Current Status
-**Read:** `STATUS_REPORT_OCT_2025.md`
-- Multi-level ALEX validated to 100M+ scale (1.5-3x faster than SQLite)
-- PostgreSQL wire protocol complete
-- Durability validation complete (100% recovery success)
-- Next steps: customer LOIs + competitive benchmarks
-- Fundraising timeline: 6-8 weeks (after market validation)
-
-### Latest Technical Achievements
-**Read:** `phases/PHASE_9.4_COMPLETE.md`
-- HTAP performance benchmarks complete
-- 89.5-100% routing accuracy
-- 2.7K-12.5K q/s across workload types
-- Temperature tracking validated
-
-### Business Strategy
-**Read:** `business/EXECUTIVE_SUMMARY.md`
-- Target market: $22.8B ETL/OLTP+OLAP gap
-- Positioning: PostgreSQL-compatible HTAP with learned indexes
-- Competitive advantages: 14.7x write speedup, no ETL needed
+**Last Updated**: October 21, 2025
+**Current Version**: 0.1.0-dev
+**Focus**: Enterprise-grade SOTA database (technical excellence first)
 
 ---
 
-## Directory Structure
+## Quick Start
 
-```
-internal/
-├── README.md                         # This file
-├── STATUS_REPORT_OCT_2025.md         # ⭐ CURRENT STATUS - Start here
-├── STATUS_REPORT_JAN_2025.md         # Historical (superseded)
-│
-├── phases/                            # Development phase completions
-│   ├── PHASE_8_COMPLETE.md           # SOTA improvements (SIMD, CDFShop)
-│   ├── PHASE_9_HTAP_ARCHITECTURE.md  # HTAP architecture plan
-│   ├── PHASE_9.1_COMPLETE.md         # DataFusion integration
-│   ├── PHASE_9.2_COMPLETE.md         # Query router
-│   ├── PHASE_9.3_COMPLETE.md         # Temperature tracking
-│   └── PHASE_9.4_COMPLETE.md         # HTAP benchmarks
-│   └── PHASE_10_MULTI_LEVEL_ALEX.md  # Multi-level architecture (Oct 2025)
-│
-├── business/                          # Strategy, funding, market
+**New to OmenDB?** Start here:
+1. [`STATUS_REPORT.md`](STATUS_REPORT.md) - Current status and progress
+2. [`technical/ROADMAP_0.1.0.md`](technical/ROADMAP_0.1.0.md) - 10-12 week plan to production
+3. [`../ARCHITECTURE.md`](../ARCHITECTURE.md) - System architecture
+4. [`design/MULTI_LEVEL_ALEX.md`](design/MULTI_LEVEL_ALEX.md) - Core index design
+
+---
+
+## Current Documentation (Active)
+
+### Status & Planning
+- **[STATUS_REPORT.md](STATUS_REPORT.md)** - Main status document (Oct 21, 2025)
+- **[technical/ROADMAP_0.1.0.md](technical/ROADMAP_0.1.0.md)** - Primary roadmap (10-12 weeks to 0.1.0)
+
+### Technical Analysis (Oct 2025)
+- **[technical/ENTERPRISE_GAP_ANALYSIS_OCT_21.md](technical/ENTERPRISE_GAP_ANALYSIS_OCT_21.md)** - Feature gap analysis
+- **[technical/BENCHMARK_VARIANCE_ANALYSIS_OCT_21.md](technical/BENCHMARK_VARIANCE_ANALYSIS_OCT_21.md)** - Performance validation (3 runs)
+- **[technical/URGENT_RANDOM_ACCESS_REGRESSION.md](technical/URGENT_RANDOM_ACCESS_REGRESSION.md)** - RESOLVED (outlier analysis)
+
+### Architecture & Design
+- **[design/MULTI_LEVEL_ALEX.md](design/MULTI_LEVEL_ALEX.md)** - Multi-level ALEX index architecture
+- **[technical/TECH_STACK.md](technical/TECH_STACK.md)** - Technology stack
+
+### Research & Validation
+- **[research/100M_SCALE_RESULTS.md](research/100M_SCALE_RESULTS.md)** - 100M scale validation
+- **[research/COMPETITIVE_ASSESSMENT_POST_ALEX.md](research/COMPETITIVE_ASSESSMENT_POST_ALEX.md)** - Competitive analysis
+
+### Phase Completion Reports
+- **[technical/PHASE_1_COMPLETION_REPORT.md](technical/PHASE_1_COMPLETION_REPORT.md)** - Security & transactions
+- **[technical/PHASE_2_PERFORMANCE_OPTIMIZATION_RESULTS.md](technical/PHASE_2_PERFORMANCE_OPTIMIZATION_RESULTS.md)** - Performance work
+- **[technical/PHASE_3_TRANSACTION_ROLLBACK_COMPLETION.md](technical/PHASE_3_TRANSACTION_ROLLBACK_COMPLETION.md)** - Rollback implementation
+
+---
+
+## Archived Documentation
+
+Older documents preserved for historical reference in `archive/` subdirectories
 │   ├── EXECUTIVE_SUMMARY.md          # Consolidated strategy
 │   ├── YC_W25_ROADMAP.md             # YC application plan
 │   ├── VC_FUNDING_STRATEGY_OCT_2025.md
