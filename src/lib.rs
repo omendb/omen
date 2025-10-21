@@ -46,6 +46,7 @@ pub mod rocks_storage;
 pub mod rest;
 pub mod security;
 pub mod server;
+pub mod user_store;
 pub mod storage;
 pub mod transaction;
 pub mod wal;
