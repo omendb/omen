@@ -9,8 +9,8 @@ use crate::wal::{Transaction, TransactionManager, WalManager};
 use anyhow::{anyhow, Result};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use sqlparser::ast::{
-    ColumnDef, DataType as SqlDataType, Expr, ObjectName, OrderByExpr, Query, Select, SelectItem,
-    SetExpr, Statement, TableFactor, Values,
+    ColumnDef, DataType as SqlDataType, Expr, Ident, Join, JoinConstraint, JoinOperator,
+    ObjectName, OrderByExpr, Query, Select, SelectItem, SetExpr, Statement, TableFactor, Values,
 };
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -638,7 +638,12 @@ impl SqlEngine {
 
     /// Execute SELECT statement
     fn execute_select(&self, select: &Select, order_by: &[OrderByExpr]) -> Result<ExecutionResult> {
-        // Extract table name
+        // Check if this is a JOIN query
+        if select.from.len() == 1 && !select.from[0].joins.is_empty() {
+            return self.execute_join(select, order_by);
+        }
+
+        // Extract table name (single table query)
         if select.from.len() != 1 {
             return Err(anyhow!("Only single table SELECT supported"));
         }
@@ -700,6 +705,352 @@ impl SqlEngine {
             rows: rows.len(),
             data: rows,
         })
+    }
+
+    /// Execute JOIN query (INNER JOIN, LEFT JOIN)
+    fn execute_join(&self, select: &Select, order_by: &[OrderByExpr]) -> Result<ExecutionResult> {
+        // Extract left table
+        let left_table_name = match &select.from[0].relation {
+            TableFactor::Table { name, .. } => Self::extract_table_name(name)?,
+            _ => return Err(anyhow!("Only table JOINs supported")),
+        };
+
+        // Extract right table and join operator
+        if select.from[0].joins.len() != 1 {
+            return Err(anyhow!("Only single JOIN supported (no multi-way joins yet)"));
+        }
+
+        let join = &select.from[0].joins[0];
+        let right_table_name = match &join.relation {
+            TableFactor::Table { name, .. } => Self::extract_table_name(name)?,
+            _ => return Err(anyhow!("Only table JOINs supported")),
+        };
+
+        // Get tables
+        let left_table = self.catalog.get_table(&left_table_name)?;
+        let right_table = self.catalog.get_table(&right_table_name)?;
+
+        // Parse join condition
+        let (left_col, right_col, is_left_join) = match &join.join_operator {
+            JoinOperator::Inner(constraint) => {
+                let (l, r) = Self::parse_join_condition(constraint)?;
+                (l, r, false)
+            }
+            JoinOperator::LeftOuter(constraint) => {
+                let (l, r) = Self::parse_join_condition(constraint)?;
+                (l, r, true)
+            }
+            _ => return Err(anyhow!("Only INNER JOIN and LEFT JOIN supported")),
+        };
+
+        // Get all rows from both tables
+        let left_rows = left_table.scan_all()?;
+        let right_rows = right_table.scan_all()?;
+
+        // Find column indices for join
+        let left_col_idx = left_table
+            .schema()
+            .index_of(&left_col)
+            .map_err(|_| anyhow!("Column '{}' not found in table '{}'", left_col, left_table_name))?;
+
+        let right_col_idx = right_table
+            .schema()
+            .index_of(&right_col)
+            .map_err(|_| anyhow!("Column '{}' not found in table '{}'", right_col, right_table_name))?;
+
+        // Perform join (nested loop)
+        let mut result_rows = Vec::new();
+
+        for left_row in &left_rows {
+            let left_join_val = left_row.get(left_col_idx)?;
+            let mut found_match = false;
+
+            for right_row in &right_rows {
+                let right_join_val = right_row.get(right_col_idx)?;
+
+                // Check if join condition matches
+                if left_join_val == right_join_val {
+                    // Combine rows
+                    let mut combined_values = Vec::new();
+                    for i in 0..left_row.len() {
+                        combined_values.push(left_row.get(i)?.clone());
+                    }
+                    for i in 0..right_row.len() {
+                        combined_values.push(right_row.get(i)?.clone());
+                    }
+                    result_rows.push(Row::new(combined_values));
+                    found_match = true;
+                }
+            }
+
+            // LEFT JOIN: emit row with NULLs if no match
+            if is_left_join && !found_match {
+                let mut combined_values = Vec::new();
+                for i in 0..left_row.len() {
+                    combined_values.push(left_row.get(i)?.clone());
+                }
+                // Add NULLs for right table columns
+                let right_table_col_count = right_table.schema().fields().len();
+                for _ in 0..right_table_col_count {
+                    combined_values.push(Value::Null);
+                }
+                result_rows.push(Row::new(combined_values));
+            }
+        }
+
+        // Build combined schema (prefix columns with table names)
+        let mut combined_fields = Vec::new();
+        for field in left_table.schema().fields() {
+            combined_fields.push(Field::new(
+                format!("{}.{}", left_table_name, field.name()),
+                field.data_type().clone(),
+                field.is_nullable(),
+            ));
+        }
+        for field in right_table.schema().fields() {
+            combined_fields.push(Field::new(
+                format!("{}.{}", right_table_name, field.name()),
+                field.data_type().clone(),
+                field.is_nullable(),
+            ));
+        }
+        let combined_schema = Arc::new(Schema::new(combined_fields));
+
+        // Apply WHERE clause if present
+        if let Some(ref selection) = select.selection {
+            result_rows = self.execute_where_clause_with_schema(&combined_schema, result_rows, selection)?;
+        }
+
+        // Apply ORDER BY if present
+        if !order_by.is_empty() {
+            // TODO: Support ORDER BY with JOIN
+            return Err(anyhow!("ORDER BY with JOIN not yet implemented"));
+        }
+
+        // Project requested columns
+        let (column_names, projected_rows) = self.project_columns(
+            select,
+            result_rows,
+            &combined_schema,
+            &left_table_name,
+            &right_table_name,
+        )?;
+
+        Ok(ExecutionResult::Selected {
+            columns: column_names,
+            rows: projected_rows.len(),
+            data: projected_rows,
+        })
+    }
+
+    /// Parse JOIN condition from ON clause
+    fn parse_join_condition(constraint: &JoinConstraint) -> Result<(String, String)> {
+        match constraint {
+            JoinConstraint::On(expr) => {
+                // Expect: table1.col = table2.col
+                if let Expr::BinaryOp { left, op, right } = expr {
+                    use sqlparser::ast::BinaryOperator;
+                    if !matches!(op, BinaryOperator::Eq) {
+                        return Err(anyhow!("Only equality joins (=) supported"));
+                    }
+
+                    let left_col = Self::extract_column_from_expr(left)?;
+                    let right_col = Self::extract_column_from_expr(right)?;
+
+                    Ok((left_col, right_col))
+                } else {
+                    Err(anyhow!("Invalid JOIN condition (expected col = col)"))
+                }
+            }
+            _ => Err(anyhow!("Only ON clause supported for JOINs")),
+        }
+    }
+
+    /// Extract column name from expression (handles table.column or column)
+    fn extract_column_from_expr(expr: &Expr) -> Result<String> {
+        match expr {
+            Expr::Identifier(ident) => Ok(ident.value.clone()),
+            Expr::CompoundIdentifier(idents) => {
+                // table.column -> return column name
+                if idents.len() == 2 {
+                    Ok(idents[1].value.clone())
+                } else {
+                    Err(anyhow!("Invalid compound identifier in JOIN condition"))
+                }
+            }
+            _ => Err(anyhow!("Invalid expression in JOIN condition")),
+        }
+    }
+
+    /// Execute WHERE clause with explicit schema
+    fn execute_where_clause_with_schema(
+        &self,
+        schema: &SchemaRef,
+        rows: Vec<Row>,
+        expr: &Expr,
+    ) -> Result<Vec<Row>> {
+        // Filter rows based on WHERE expression
+        let filtered: Vec<Row> = rows
+            .into_iter()
+            .filter(|row| self.evaluate_where_expr_with_schema(schema, row, expr).unwrap_or(false))
+            .collect();
+        Ok(filtered)
+    }
+
+    /// Evaluate WHERE expression with explicit schema
+    fn evaluate_where_expr_with_schema(
+        &self,
+        schema: &SchemaRef,
+        row: &Row,
+        expr: &Expr,
+    ) -> Result<bool> {
+        use sqlparser::ast::BinaryOperator;
+
+        match expr {
+            Expr::BinaryOp { left, op, right } => {
+                match op {
+                    BinaryOperator::Eq | BinaryOperator::NotEq
+                    | BinaryOperator::Lt | BinaryOperator::LtEq
+                    | BinaryOperator::Gt | BinaryOperator::GtEq => {
+                        let left_val = self.evaluate_value_expr_with_schema(schema, row, left)?;
+                        let right_val = self.evaluate_value_expr_with_schema(schema, row, right)?;
+
+                        let result = match op {
+                            BinaryOperator::Eq => left_val == right_val,
+                            BinaryOperator::NotEq => left_val != right_val,
+                            BinaryOperator::Gt => left_val > right_val,
+                            BinaryOperator::GtEq => left_val >= right_val,
+                            BinaryOperator::Lt => left_val < right_val,
+                            BinaryOperator::LtEq => left_val <= right_val,
+                            _ => false,
+                        };
+                        Ok(result)
+                    }
+                    _ => Err(anyhow!("Unsupported operator in WHERE clause")),
+                }
+            }
+            _ => Err(anyhow!("Unsupported expression in WHERE clause")),
+        }
+    }
+
+    /// Evaluate value expression with explicit schema
+    fn evaluate_value_expr_with_schema(
+        &self,
+        schema: &SchemaRef,
+        row: &Row,
+        expr: &Expr,
+    ) -> Result<Value> {
+        match expr {
+            Expr::Identifier(ident) => {
+                // Try to find column in schema
+                let col_idx = schema
+                    .index_of(&ident.value)
+                    .map_err(|_| anyhow!("Column '{}' not found", ident.value))?;
+                Ok(row.get(col_idx)?.clone())
+            }
+            Expr::CompoundIdentifier(idents) => {
+                // table.column
+                if idents.len() == 2 {
+                    let full_name = format!("{}.{}", idents[0].value, idents[1].value);
+                    let col_idx = schema
+                        .index_of(&full_name)
+                        .map_err(|_| anyhow!("Column '{}' not found", full_name))?;
+                    Ok(row.get(col_idx)?.clone())
+                } else {
+                    Err(anyhow!("Invalid compound identifier"))
+                }
+            }
+            Expr::Value(val) => {
+                // Convert SQL value to our Value type
+                match val {
+                    sqlparser::ast::Value::Number(n, _) => {
+                        if n.contains('.') {
+                            Ok(Value::Float64(n.parse()?))
+                        } else {
+                            Ok(Value::Int64(n.parse()?))
+                        }
+                    }
+                    sqlparser::ast::Value::SingleQuotedString(s) => Ok(Value::Text(s.clone())),
+                    sqlparser::ast::Value::Boolean(b) => Ok(Value::Boolean(*b)),
+                    sqlparser::ast::Value::Null => Ok(Value::Null),
+                    _ => Err(anyhow!("Unsupported SQL value type")),
+                }
+            }
+            _ => Err(anyhow!("Unsupported expression in WHERE clause")),
+        }
+    }
+
+    /// Project columns from joined rows
+    fn project_columns(
+        &self,
+        select: &Select,
+        rows: Vec<Row>,
+        combined_schema: &SchemaRef,
+        left_table: &str,
+        right_table: &str,
+    ) -> Result<(Vec<String>, Vec<Row>)> {
+        // Handle wildcard (SELECT *)
+        if matches!(&select.projection[0], SelectItem::Wildcard(_)) {
+            let column_names: Vec<String> = combined_schema
+                .fields()
+                .iter()
+                .map(|f| f.name().clone())
+                .collect();
+            return Ok((column_names, rows));
+        }
+
+        // Extract requested columns
+        let mut column_indices = Vec::new();
+        let mut column_names = Vec::new();
+
+        for item in &select.projection {
+            match item {
+                SelectItem::UnnamedExpr(Expr::Identifier(ident)) => {
+                    // Simple column name - could be ambiguous
+                    // Try both tables
+                    let full_left = format!("{}.{}", left_table, ident.value);
+                    let full_right = format!("{}.{}", right_table, ident.value);
+
+                    if let Ok(idx) = combined_schema.index_of(&full_left) {
+                        column_indices.push(idx);
+                        column_names.push(ident.value.clone());
+                    } else if let Ok(idx) = combined_schema.index_of(&full_right) {
+                        column_indices.push(idx);
+                        column_names.push(ident.value.clone());
+                    } else {
+                        return Err(anyhow!("Column '{}' not found in either table", ident.value));
+                    }
+                }
+                SelectItem::UnnamedExpr(Expr::CompoundIdentifier(idents)) => {
+                    // table.column
+                    if idents.len() == 2 {
+                        let full_name = format!("{}.{}", idents[0].value, idents[1].value);
+                        let idx = combined_schema
+                            .index_of(&full_name)
+                            .map_err(|_| anyhow!("Column '{}' not found", full_name))?;
+                        column_indices.push(idx);
+                        column_names.push(idents[1].value.clone());
+                    } else {
+                        return Err(anyhow!("Invalid column reference"));
+                    }
+                }
+                _ => return Err(anyhow!("Unsupported SELECT item in JOIN")),
+            }
+        }
+
+        // Project rows
+        let projected_rows: Vec<Row> = rows
+            .into_iter()
+            .map(|row| {
+                let values: Vec<Value> = column_indices
+                    .iter()
+                    .map(|&idx| row.get(idx).unwrap().clone())
+                    .collect();
+                Row::new(values)
+            })
+            .collect();
+
+        Ok((column_names, projected_rows))
     }
 
     /// Execute aggregate query (COUNT, SUM, AVG, MIN, MAX)
