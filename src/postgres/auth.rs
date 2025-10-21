@@ -1,47 +1,45 @@
 //! Authentication support for OmenDB PostgreSQL server
 //!
-//! Implements SCRAM-SHA-256 authentication with in-memory user store.
+//! Implements SCRAM-SHA-256 authentication with persistent user store.
 
 use anyhow::Result;
 use async_trait::async_trait;
+use crate::user_store::{User, UserStore};
 use pgwire::api::auth::scram::gen_salted_password;
 use pgwire::api::auth::{AuthSource, LoginInfo, Password};
 use pgwire::error::{ErrorInfo, PgWireError, PgWireResult};
-use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
-/// User credentials stored in memory
-#[derive(Debug, Clone)]
-pub struct UserCredentials {
-    /// Salted password hash using SCRAM-SHA-256
-    pub salted_password: Vec<u8>,
-    /// Salt used for password hashing
-    pub salt: Vec<u8>,
-}
-
-/// In-memory user store for authentication
-#[derive(Debug, Clone)]
+/// Persistent user store for authentication
 pub struct OmenDbAuthSource {
-    /// Map of username -> credentials
-    users: Arc<RwLock<HashMap<String, UserCredentials>>>,
+    /// Persistent user storage backend
+    user_store: Arc<UserStore>,
     /// Number of PBKDF2 iterations (default: 4096)
     iterations: usize,
 }
 
-impl Default for OmenDbAuthSource {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl OmenDbAuthSource {
-    /// Create a new authentication source
-    pub fn new() -> Self {
-        Self {
-            users: Arc::new(RwLock::new(HashMap::new())),
+    /// Create a new authentication source with persistent storage
+    pub fn new(data_dir: impl AsRef<Path>) -> Result<Self> {
+        let user_store = UserStore::new(data_dir.as_ref().join("users"))?;
+
+        Ok(Self {
+            user_store: Arc::new(user_store),
             iterations: 4096,
-        }
+        })
+    }
+
+    /// Create in-memory authentication source for testing
+    #[cfg(test)]
+    pub fn new_in_memory() -> Result<Self> {
+        let temp_dir = tempfile::TempDir::new()?;
+        let user_store = UserStore::new(temp_dir.path())?;
+
+        Ok(Self {
+            user_store: Arc::new(user_store),
+            iterations: 4096,
+        })
     }
 
     /// Add a user with plaintext password
@@ -56,33 +54,26 @@ impl OmenDbAuthSource {
         // Hash password with salt using PBKDF2
         let salted_password = gen_salted_password(password, &salt, self.iterations);
 
-        let credentials = UserCredentials {
-            salted_password,
-            salt: salt.to_vec(),
-        };
+        let user = User::new(username, salted_password, salt.to_vec());
 
-        let mut users = self.users.write().await;
-        users.insert(username, credentials);
+        self.user_store.create_user(&user)?;
 
         Ok(())
     }
 
     /// Remove a user
     pub async fn remove_user(&self, username: &str) -> Result<bool> {
-        let mut users = self.users.write().await;
-        Ok(users.remove(username).is_some())
+        self.user_store.delete_user(username)
     }
 
     /// Check if a user exists
     pub async fn user_exists(&self, username: &str) -> bool {
-        let users = self.users.read().await;
-        users.contains_key(username)
+        self.user_store.user_exists(username).unwrap_or(false)
     }
 
     /// Get number of registered users
     pub async fn user_count(&self) -> usize {
-        let users = self.users.read().await;
-        users.len()
+        self.user_store.user_count().unwrap_or(0)
     }
 }
 
@@ -97,9 +88,15 @@ impl AuthSource for OmenDbAuthSource {
             )))
         })?;
 
-        let users = self.users.read().await;
+        let user = self.user_store.get_user(username).map_err(|e| {
+            PgWireError::UserError(Box::new(ErrorInfo::new(
+                "ERROR".to_owned(),
+                "28P01".to_owned(),
+                format!("Failed to retrieve user: {}", e),
+            )))
+        })?;
 
-        let credentials = users.get(username).ok_or_else(|| {
+        let user = user.ok_or_else(|| {
             PgWireError::UserError(Box::new(ErrorInfo::new(
                 "ERROR".to_owned(),
                 "28P01".to_owned(), // invalid_password SQLSTATE
@@ -108,8 +105,8 @@ impl AuthSource for OmenDbAuthSource {
         })?;
 
         Ok(Password::new(
-            Some(credentials.salt.clone()),
-            credentials.salted_password.clone(),
+            Some(user.salt.clone()),
+            user.salted_password.clone(),
         ))
     }
 }
@@ -120,7 +117,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_and_authenticate_user() {
-        let auth = OmenDbAuthSource::new();
+        let auth = OmenDbAuthSource::new_in_memory().unwrap();
 
         // Add user
         auth.add_user("alice", "secret123").await.unwrap();
@@ -136,7 +133,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_user() {
-        let auth = OmenDbAuthSource::new();
+        let auth = OmenDbAuthSource::new_in_memory().unwrap();
 
         auth.add_user("bob", "password456").await.unwrap();
         assert!(auth.user_exists("bob").await);
@@ -149,7 +146,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_nonexistent_user() {
-        let auth = OmenDbAuthSource::new();
+        let auth = OmenDbAuthSource::new_in_memory().unwrap();
 
         let login = LoginInfo::new(Some("nonexistent"), Some("omendb"), "127.0.0.1".to_string());
         let result = auth.get_password(&login).await;
@@ -158,10 +155,36 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_username() {
-        let auth = OmenDbAuthSource::new();
+        let auth = OmenDbAuthSource::new_in_memory().unwrap();
 
         let login = LoginInfo::new(None, Some("omendb"), "127.0.0.1".to_string());
         let result = auth.get_password(&login).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_persistence_across_restarts() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let data_dir = temp_dir.path();
+
+        // Create user in first instance
+        {
+            let auth = OmenDbAuthSource::new(data_dir).unwrap();
+            auth.add_user("alice", "secret123").await.unwrap();
+            assert!(auth.user_exists("alice").await);
+        }
+
+        // Reopen and verify user persisted
+        {
+            let auth = OmenDbAuthSource::new(data_dir).unwrap();
+            assert!(auth.user_exists("alice").await);
+            assert_eq!(auth.user_count().await, 1);
+
+            // Verify password works
+            let login = LoginInfo::new(Some("alice"), Some("omendb"), "127.0.0.1".to_string());
+            let password = auth.get_password(&login).await.unwrap();
+            assert!(password.salt().is_some());
+            assert!(!password.password().is_empty());
+        }
     }
 }
