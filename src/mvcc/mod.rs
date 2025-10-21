@@ -7,6 +7,7 @@
 
 pub mod oracle;
 pub mod schema;
+pub mod storage;
 
 pub use oracle::{
     CommittedTransaction, TransactionMode, TransactionOracle, TransactionState, TxnStatus,
@@ -16,3 +17,5 @@ pub use schema::{
     add_mvcc_columns, extract_user_schema, has_mvcc_columns, MvccIndices, MVCC_DELETED_COL,
     MVCC_TXN_ID_COL, MVCC_VERSION_COL,
 };
+
+pub use storage::{VersionedKey, VersionedValue};
