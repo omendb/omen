@@ -2,6 +2,7 @@
 //! Production hardening: concurrency, testing, monitoring
 
 // New architecture (proper multi-table database)
+pub mod cache;
 pub mod catalog;
 pub mod connection_pool;
 pub mod logging;
@@ -34,6 +35,7 @@ pub mod alex_storage_wal; // Write-Ahead Log for AlexStorage durability
 pub mod alex_storage_concurrent; // Thread-safe wrapper for AlexStorage
 pub mod backup;
 pub mod concurrent;
+pub mod constraints; // Table constraint management (PRIMARY KEY, etc.)
 pub mod datafusion;
 pub mod memory_pool;
 pub mod index;
@@ -45,6 +47,7 @@ pub mod rest;
 pub mod security;
 pub mod server;
 pub mod storage;
+pub mod transaction;
 pub mod wal;
 
 #[cfg(test)]
@@ -114,13 +117,7 @@ impl OmenDB {
         let start = Instant::now();
 
         // Use learned index to find position
-        let result = if let Some(_pos) = self.index.search(timestamp) {
-            // In real implementation, would fetch from storage
-            // For now, return placeholder
-            Some(0.0)
-        } else {
-            None
-        };
+        let result = self.index.search(timestamp).map(|_pos| 0.0);
 
         // Record metrics
         let duration = start.elapsed().as_secs_f64();

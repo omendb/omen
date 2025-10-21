@@ -163,6 +163,46 @@ impl PartialOrd for Value {
     }
 }
 
+impl Eq for Value {}
+
+impl std::hash::Hash for Value {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Value::Int64(v) => {
+                0u8.hash(state);
+                v.hash(state);
+            }
+            Value::UInt64(v) => {
+                1u8.hash(state);
+                v.hash(state);
+            }
+            Value::Float64(v) => {
+                2u8.hash(state);
+                if v.is_nan() {
+                    0u64.hash(state);
+                } else {
+                    v.to_bits().hash(state);
+                }
+            }
+            Value::Text(v) => {
+                3u8.hash(state);
+                v.hash(state);
+            }
+            Value::Timestamp(v) => {
+                4u8.hash(state);
+                v.hash(state);
+            }
+            Value::Boolean(v) => {
+                5u8.hash(state);
+                v.hash(state);
+            }
+            Value::Null => {
+                6u8.hash(state);
+            }
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
