@@ -7,7 +7,7 @@ use crate::row::Row;
 use crate::value::Value;
 use crate::wal::{Transaction, TransactionManager, WalManager};
 use anyhow::{anyhow, Result};
-use arrow::datatypes::{DataType, Field, Schema};
+use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use sqlparser::ast::{
     ColumnDef, DataType as SqlDataType, Expr, ObjectName, OrderByExpr, Query, Select, SelectItem,
     SetExpr, Statement, TableFactor, Values,
@@ -147,17 +147,23 @@ impl SqlEngine {
                 debug!(table = %stmt.table_name, "Inserting data");
                 self.execute_insert(&stmt.table_name, &stmt.source)
             }
-            Statement::Update { .. } => {
-                warn!("UPDATE not yet implemented in current engine (will be available in DataFusion migration)");
-                Err(anyhow!(
-                    "UPDATE statement not yet implemented - coming soon with DataFusion"
-                ))
+            Statement::Update {
+                table,
+                assignments,
+                selection,
+                ..
+            } => {
+                // Extract table name from TableWithJoins
+                let table_name = match &table.relation {
+                    TableFactor::Table { name, .. } => name,
+                    _ => return Err(anyhow!("Complex table expressions not supported in UPDATE")),
+                };
+                info!(table = %table_name, "Updating data");
+                self.execute_update(table_name, assignments, selection.as_ref())
             }
-            Statement::Delete { .. } => {
-                warn!("DELETE not yet implemented in current engine (will be available in DataFusion migration)");
-                Err(anyhow!(
-                    "DELETE statement not yet implemented - coming soon with DataFusion"
-                ))
+            Statement::Delete(delete_stmt) => {
+                info!("Deleting data");
+                self.execute_delete(&delete_stmt.from, delete_stmt.selection.as_ref())
             }
             Statement::Query(query) => {
                 debug!("Executing SELECT query");
@@ -374,6 +380,163 @@ impl SqlEngine {
         Ok(ExecutionResult::Inserted {
             rows: rows_inserted,
         })
+    }
+
+    /// Execute UPDATE statement
+    fn execute_update(
+        &mut self,
+        table_name: &ObjectName,
+        assignments: &[sqlparser::ast::Assignment],
+        selection: Option<&Expr>,
+    ) -> Result<ExecutionResult> {
+        let table_name = Self::extract_table_name(table_name)?;
+
+        // Get schema and primary key info before mutable borrow
+        let (schema, primary_key) = {
+            let table = self.catalog.get_table(&table_name)?;
+            (table.schema().clone(), table.primary_key().to_string())
+        };
+
+        // Extract WHERE clause to get primary key value
+        let key_value = if let Some(where_expr) = selection {
+            Self::extract_primary_key_from_where_static(where_expr, &primary_key, &schema)?
+        } else {
+            return Err(anyhow!("UPDATE without WHERE clause not supported yet"));
+        };
+
+        // Now get mutable table reference
+        let table = self.catalog.get_table_mut(&table_name)?;
+
+        // Get existing row
+        let existing_row = table
+            .get(&key_value)?
+            .ok_or_else(|| anyhow!("Row with key {:?} not found", key_value))?;
+
+        // Build updated row by applying assignments
+        let mut updated_values: Vec<Value> = existing_row.values().to_vec();
+
+        for assignment in assignments {
+            let col_name = match &assignment.target {
+                sqlparser::ast::AssignmentTarget::ColumnName(name) => {
+                    name.0.iter().map(|i| i.value.as_str()).collect::<Vec<_>>().join(".")
+                }
+                _ => return Err(anyhow!("Complex assignment targets not supported")),
+            };
+
+            // PRIMARY KEY constraint: Cannot update primary key column
+            if col_name == primary_key {
+                return Err(anyhow!(
+                    "Cannot update PRIMARY KEY column '{}'. PRIMARY KEY values are immutable.",
+                    primary_key
+                ));
+            }
+
+            let col_idx = schema.index_of(&col_name)?;
+            let col_type = schema.field(col_idx).data_type();
+
+            // Evaluate the new value
+            let new_value = Self::expr_to_value(&assignment.value, col_type)?;
+            updated_values[col_idx] = new_value;
+        }
+
+        let updated_row = Row::new(updated_values);
+
+        // Call Table::update
+        let rows_updated = table.update(&key_value, updated_row)?;
+
+        Ok(ExecutionResult::Updated {
+            rows: rows_updated,
+        })
+    }
+
+    /// Execute DELETE statement
+    fn execute_delete(
+        &mut self,
+        from: &sqlparser::ast::FromTable,
+        selection: Option<&Expr>,
+    ) -> Result<ExecutionResult> {
+        // Extract table name from FromTable
+        let table_name = match from {
+            sqlparser::ast::FromTable::WithFromKeyword(tables) => {
+                if tables.is_empty() {
+                    return Err(anyhow!("DELETE requires table name"));
+                }
+                match &tables[0].relation {
+                    TableFactor::Table { name, .. } => Self::extract_table_name(name)?,
+                    _ => return Err(anyhow!("Complex table expressions not supported in DELETE")),
+                }
+            }
+            sqlparser::ast::FromTable::WithoutKeyword(tables) => {
+                if tables.is_empty() {
+                    return Err(anyhow!("DELETE requires table name"));
+                }
+                match &tables[0].relation {
+                    TableFactor::Table { name, .. } => Self::extract_table_name(name)?,
+                    _ => return Err(anyhow!("Complex table expressions not supported in DELETE")),
+                }
+            }
+        };
+
+        // Get schema and primary key info before mutable borrow
+        let (schema, primary_key) = {
+            let table = self.catalog.get_table(&table_name)?;
+            (table.schema().clone(), table.primary_key().to_string())
+        };
+
+        // Extract WHERE clause to get primary key value
+        let key_value = if let Some(where_expr) = selection {
+            Self::extract_primary_key_from_where_static(where_expr, &primary_key, &schema)?
+        } else {
+            return Err(anyhow!("DELETE without WHERE clause not supported yet"));
+        };
+
+        // Now get mutable table reference
+        let table = self.catalog.get_table_mut(&table_name)?;
+
+        // Call Table::delete
+        let rows_deleted = table.delete(&key_value)?;
+
+        Ok(ExecutionResult::Deleted {
+            rows: rows_deleted,
+        })
+    }
+
+    /// Extract primary key value from WHERE clause (static method)
+    /// Currently supports simple equality: WHERE id = 5
+    fn extract_primary_key_from_where_static(
+        expr: &Expr,
+        primary_key: &str,
+        schema: &SchemaRef,
+    ) -> Result<Value> {
+        use sqlparser::ast::BinaryOperator;
+
+        match expr {
+            Expr::BinaryOp { left, op, right } if matches!(op, BinaryOperator::Eq) => {
+                // Check if this is primary key equality
+                if let (Expr::Identifier(col), Expr::Value(val)) = (left.as_ref(), right.as_ref())
+                {
+                    if col.value == primary_key {
+                        let pk_field = schema.field_with_name(primary_key)?;
+                        return Self::sql_value_to_value(val, pk_field.data_type());
+                    }
+                }
+                // Try reversed: WHERE 5 = id
+                if let (Expr::Value(val), Expr::Identifier(col)) = (left.as_ref(), right.as_ref())
+                {
+                    if col.value == primary_key {
+                        let pk_field = schema.field_with_name(primary_key)?;
+                        return Self::sql_value_to_value(val, pk_field.data_type());
+                    }
+                }
+                Err(anyhow!(
+                    "WHERE clause must be equality on primary key '{}' for UPDATE/DELETE",
+                    primary_key
+                ))
+            }
+            _ => Err(anyhow!(
+                "Only simple WHERE primary_key = value supported for UPDATE/DELETE"
+            )),
+        }
     }
 
     /// Execute SELECT query
@@ -1724,5 +1887,161 @@ mod tests {
         );
 
         println!("  ✅ Learned index providing significant speedup!");
+    }
+
+    #[test]
+    fn test_update_statement() {
+        let temp_dir = TempDir::new().unwrap();
+        let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+        let mut engine = SqlEngine::new(catalog);
+
+        // Create and populate table
+        engine
+            .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255), age BIGINT)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (1, 'Alice', 30), (2, 'Bob', 25), (3, 'Charlie', 35)")
+            .unwrap();
+
+        // Update a single row
+        let result = engine
+            .execute("UPDATE users SET name = 'Alice Smith', age = 31 WHERE id = 1")
+            .unwrap();
+
+        match result {
+            ExecutionResult::Updated { rows } => {
+                assert_eq!(rows, 1);
+            }
+            _ => panic!("Expected Updated result"),
+        }
+
+        // Verify update worked
+        let result = engine.execute("SELECT * FROM users WHERE id = 1").unwrap();
+        match result {
+            ExecutionResult::Selected { rows, data, .. } => {
+                assert_eq!(rows, 1);
+                assert_eq!(data[0].get(1).unwrap(), &Value::Text("Alice Smith".to_string()));
+                assert_eq!(data[0].get(2).unwrap(), &Value::Int64(31));
+            }
+            _ => panic!("Expected Selected result"),
+        }
+    }
+
+    #[test]
+    fn test_delete_statement() {
+        let temp_dir = TempDir::new().unwrap();
+        let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+        let mut engine = SqlEngine::new(catalog);
+
+        // Create and populate table
+        engine
+            .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))")
+            .unwrap();
+        engine
+            .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')")
+            .unwrap();
+
+        // Delete a single row
+        let result = engine.execute("DELETE FROM users WHERE id = 2").unwrap();
+
+        match result {
+            ExecutionResult::Deleted { rows } => {
+                assert_eq!(rows, 1);
+            }
+            _ => panic!("Expected Deleted result"),
+        }
+
+        // Verify delete worked
+        let result = engine.execute("SELECT * FROM users").unwrap();
+        match result {
+            ExecutionResult::Selected { rows, data, .. } => {
+                assert_eq!(rows, 2); // Only 2 rows remain
+                // Verify Bob is gone
+                for row in data {
+                    let name = row.get(1).unwrap();
+                    assert_ne!(name, &Value::Text("Bob".to_string()));
+                }
+            }
+            _ => panic!("Expected Selected result"),
+        }
+    }
+
+    #[test]
+    fn test_update_then_delete() {
+        let temp_dir = TempDir::new().unwrap();
+        let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+        let mut engine = SqlEngine::new(catalog);
+
+        // Create and populate table
+        engine
+            .execute("CREATE TABLE products (id BIGINT PRIMARY KEY, name VARCHAR(255), price DOUBLE)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO products VALUES (1, 'Widget', 10.99), (2, 'Gadget', 25.50)")
+            .unwrap();
+
+        // Update price
+        engine
+            .execute("UPDATE products SET price = 15.99 WHERE id = 1")
+            .unwrap();
+
+        // Verify update
+        let result = engine.execute("SELECT * FROM products WHERE id = 1").unwrap();
+        match result {
+            ExecutionResult::Selected { data, .. } => {
+                assert_eq!(data[0].get(2).unwrap(), &Value::Float64(15.99));
+            }
+            _ => panic!("Expected Selected result"),
+        }
+
+        // Delete the updated row
+        let result = engine.execute("DELETE FROM products WHERE id = 1").unwrap();
+        match result {
+            ExecutionResult::Deleted { rows } => assert_eq!(rows, 1),
+            _ => panic!("Expected Deleted result"),
+        }
+
+        // Verify deletion
+        let result = engine.execute("SELECT * FROM products").unwrap();
+        match result {
+            ExecutionResult::Selected { rows, .. } => {
+                assert_eq!(rows, 1); // Only product 2 remains
+            }
+            _ => panic!("Expected Selected result"),
+        }
+    }
+
+    #[test]
+    fn test_update_nonexistent_row() {
+        let temp_dir = TempDir::new().unwrap();
+        let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+        let mut engine = SqlEngine::new(catalog);
+
+        engine
+            .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))")
+            .unwrap();
+
+        // Try to update nonexistent row
+        let result = engine.execute("UPDATE users SET name = 'Test' WHERE id = 999");
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_delete_nonexistent_row() {
+        let temp_dir = TempDir::new().unwrap();
+        let catalog = Catalog::new(temp_dir.path().to_path_buf()).unwrap();
+        let mut engine = SqlEngine::new(catalog);
+
+        engine
+            .execute("CREATE TABLE users (id BIGINT PRIMARY KEY, name VARCHAR(255))")
+            .unwrap();
+
+        // Try to delete nonexistent row
+        let result = engine.execute("DELETE FROM users WHERE id = 999");
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
     }
 }
