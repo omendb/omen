@@ -14,6 +14,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
+use tokio_rustls::TlsAcceptor;
 use tracing::{error, info, warn};
 
 /// PostgreSQL wire protocol server
@@ -27,8 +28,8 @@ pub struct PostgresServer {
     /// Connection pool for managing concurrent connections
     pool: Arc<ConnectionPool>,
 
-    /// Optional TLS configuration
-    tls_config: Option<Arc<RustlsServerConfig>>,
+    /// Optional TLS acceptor
+    tls_acceptor: Option<Arc<TlsAcceptor>>,
 }
 
 impl PostgresServer {
@@ -41,7 +42,7 @@ impl PostgresServer {
             addr: "127.0.0.1:5432".to_string(),
             factory,
             pool,
-            tls_config: None,
+            tls_acceptor: None,
         }
     }
 
@@ -54,7 +55,7 @@ impl PostgresServer {
             addr: addr.into(),
             factory,
             pool,
-            tls_config: None,
+            tls_acceptor: None,
         }
     }
 
@@ -70,7 +71,7 @@ impl PostgresServer {
             addr: addr.into(),
             factory,
             pool,
-            tls_config: None,
+            tls_acceptor: None,
         }
     }
 
@@ -87,7 +88,7 @@ impl PostgresServer {
             addr: addr.into(),
             factory,
             pool,
-            tls_config: None,
+            tls_acceptor: None,
         }
     }
 
@@ -101,7 +102,8 @@ impl PostgresServer {
         key_path: impl AsRef<Path>,
     ) -> anyhow::Result<Self> {
         let tls_config = Self::load_tls_config(cert_path, key_path)?;
-        self.tls_config = Some(Arc::new(tls_config));
+        let acceptor = TlsAcceptor::from(Arc::new(tls_config));
+        self.tls_acceptor = Some(Arc::new(acceptor));
         Ok(self)
     }
 
@@ -137,7 +139,7 @@ impl PostgresServer {
 
     /// Check if TLS is enabled
     pub fn is_tls_enabled(&self) -> bool {
-        self.tls_config.is_some()
+        self.tls_acceptor.is_some()
     }
 
     /// Get connection pool statistics
@@ -151,10 +153,6 @@ impl PostgresServer {
     }
 
     /// Start serving PostgreSQL wire protocol connections
-    ///
-    /// Note: Direct TLS support requires handling PostgreSQL's SSLRequest negotiation,
-    /// which is not yet implemented with the current pgwire version. For production
-    /// TLS support, use a reverse proxy (pgbouncer, HAProxy, nginx) or connection pooler.
     pub async fn serve(self) -> anyhow::Result<()> {
         info!("Starting PostgreSQL server on {}", self.addr);
         info!(
@@ -163,14 +161,10 @@ impl PostgresServer {
         );
 
         if self.is_tls_enabled() {
-            warn!(
-                "TLS certificates loaded but direct TLS not yet supported. \
-                For TLS connections, use a reverse proxy (pgbouncer, HAProxy, nginx) \
-                for TLS termination."
-            );
+            info!("TLS/SSL enabled - connections will be encrypted");
         } else {
             warn!("TLS/SSL not enabled - connections will be unencrypted");
-            info!("For production, use a reverse proxy with TLS termination");
+            warn!("For production, enable TLS with --cert and --key flags");
         }
 
         let listener = TcpListener::bind(&self.addr).await?;
@@ -219,9 +213,10 @@ impl PostgresServer {
                             let factory_ref = self.factory.clone();
                             let pool_for_cleanup = pool.clone();
 
+                            let tls_acceptor_ref = self.tls_acceptor.clone();
                             tokio::spawn(async move {
                                 // Connection is held for the duration of this task
-                                let result = process_socket(socket, None, factory_ref).await;
+                                let result = process_socket(socket, tls_acceptor_ref, factory_ref).await;
 
                                 if let Err(e) = result {
                                     error!(

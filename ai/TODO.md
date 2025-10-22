@@ -1,15 +1,15 @@
 # TODO
 
-_Last Updated: 2025-10-21_
+_Last Updated: 2025-10-22_
 
 ## High Priority
 
-### Phase 2: Security (Days 6-10 remaining)
-- [ ] **Days 6-7**: SSL/TLS for PostgreSQL wire protocol
-  - [ ] Configure TLS for pgwire connections
-  - [ ] Load certificates from disk
-  - [ ] Add --tls flag to postgres_server
-  - [ ] Test TLS connections with psql
+### Phase 2: Security (Days 8-10 remaining)
+- [x] **Days 6-7**: SSL/TLS for PostgreSQL wire protocol ✅
+  - [x] Configure TLS for pgwire connections
+  - [x] Load certificates from disk
+  - [x] Add --cert and --key flags to postgres_server
+  - [x] Test TLS connections with psql (sslmode=require)
 - [ ] **Day 8**: Security integration tests
   - [ ] End-to-end auth + TLS tests
   - [ ] Multi-user concurrent access tests
@@ -67,6 +67,8 @@ _Last Updated: 2025-10-21_
 
 ## Completed Recently
 
+- [x] Phase 2 Days 6-7: SSL/TLS for PostgreSQL wire protocol ✅
+- [x] Phase 2 Days 1-5: Auth + User Management (40 tests)
 - [x] Cache Layer Days 1-10: LRU cache (1-10GB), 2-3x speedup validated
 - [x] Phase 3 Week 2: INNER JOIN + LEFT JOIN (14 tests)
 - [x] Phase 3 Week 1: UPDATE/DELETE support (30 tests)

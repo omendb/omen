@@ -12,11 +12,12 @@
 
 **→ Continuing work?** Check `ai/TODO.md` and `ai/STATUS.md` first
 
-**→ Need organization guidance?** Reference [agent-contexts/PRACTICES.md](https://github.com/nijaru/agent-contexts/blob/main/PRACTICES.md) for:
-- File update patterns (edit vs append)
-- Context management strategies
-- Multi-session handoff protocols
-- Anti-patterns to avoid
+**→ Need organization guidance?**
+- OmenDB follows standard OSS pattern (docs/ + ai/)
+- See [agent-contexts v0.1.1](https://github.com/nijaru/agent-contexts) for:
+  - File update patterns (edit vs append)
+  - Context management strategies
+  - Multi-session handoff protocols
 
 ## Current Status
 
@@ -62,40 +63,48 @@ Production Stack:
 - MVCC (immutable records): Best practice (append-only) ✅
 - Cache layer: Addresses 80x in-memory gap (HN validated) ✅
 
-**Repository Structure**:
+**Repository Structure** (Standard OSS - agent-contexts v0.1.1):
 ```
 omendb/core/
 ├── CLAUDE.md              # This file - AI agent entry point
-├── ai/                    # AI working context (start here!) ⭐ NEW
-│   ├── TODO.md            # Current tasks and priorities
-│   ├── STATUS.md          # Current state (distilled from STATUS_REPORT)
-│   ├── DECISIONS.md       # Architectural decisions with rationale
-│   └── RESEARCH.md        # Research index with key findings
-├── src/
+├── docs/                  # Documentation (standard OSS pattern) 📚
+│   ├── README.md          # Documentation index
+│   ├── QUICKSTART.md      # Getting started
+│   ├── ARCHITECTURE.md    # System design
+│   ├── PERFORMANCE.md     # Benchmarks
+│   ├── SECURITY.md        # Security guide
+│   ├── architecture/      # Technical deep-dives
+│   │   ├── research/      # Research findings (26+ docs)
+│   │   ├── MULTI_LEVEL_ALEX.md
+│   │   ├── ROADMAP_0.1.0.md
+│   │   ├── ROCKSDB_PERFORMANCE_ANALYSIS_OCT_22.md
+│   │   └── STORAGE_ENGINE_TEST_VALIDATION_OCT_22.md
+│   ├── strategy/          # Business strategy (private repo only)
+│   │   ├── COMPETITIVE_STRATEGY_OCT_2025.md
+│   │   └── CUSTOMER_ACQUISITION.md
+│   └── archive/           # Historical documentation
+│       ├── phases/        # Phase planning docs
+│       └── PHASE_*_COMPLETE.md
+├── ai/                    # AI working context ⭐
+│   ├── TODO.md            # Current tasks (edit in place)
+│   ├── STATUS.md          # Current state (edit in place)
+│   ├── DECISIONS.md       # Working decision log (append-only)
+│   └── RESEARCH.md        # Research index (hybrid)
+├── src/                   # Source code
 │   ├── alex/              # Multi-level ALEX implementation
 │   ├── postgres/          # PostgreSQL wire protocol + auth
 │   ├── mvcc/              # MVCC snapshot isolation ✅
 │   ├── cache.rs           # LRU cache layer ✅
-│   ├── sql_engine.rs      # SQL: UPDATE/DELETE/JOIN + user management ✅
-│   ├── catalog.rs         # Table + user management ✅ NEW
-│   ├── user_store.rs      # Persistent user storage ✅ NEW
+│   ├── sql_engine.rs      # SQL: UPDATE/DELETE/JOIN + user mgmt ✅
+│   ├── catalog.rs         # Table + user management ✅
+│   ├── user_store.rs      # Persistent user storage ✅
 │   └── table.rs           # Table storage + ALEX + cache
-├── internal/              # Permanent project documentation
-│   ├── STATUS_REPORT.md   # Detailed status (reference, not daily use)
-│   ├── research/          # Detailed research findings (26 docs)
-│   ├── business/          # Business strategy, customer acquisition
-│   ├── technical/         # Technical guides, MVCC design
-│   ├── phases/            # Phase planning docs
-│   └── PHASE_*_COMPLETE.md # Historical completion reports
-└── tests/                 # 468 tests (all passing) ✅ NEW
-    ├── user_store_tests.rs (11 tests) ✅ NEW
-    ├── auth_tests.rs (6 tests) ✅ NEW
-    ├── user_management_sql_tests.rs (15 tests) ✅ NEW
-    ├── catalog_user_management_tests.rs (8 tests) ✅ NEW
-    ├── cache_integration_tests.rs (7 tests) ✅
-    ├── update_delete_tests.rs (30 tests) ✅
-    └── join_tests.rs (14 tests) ✅
+└── tests/                 # 520 tests (99.8% passing) ✅
 ```
+
+**Pattern**: Standard OSS database structure (like PostgreSQL, MongoDB, DuckDB, CockroachDB)
+- **docs/** — All permanent documentation (user guides, architecture, research)
+- **ai/** — AI working context (tasks, status, decisions, research notes)
 
 ## Validated Competitive Advantages
 
@@ -217,87 +226,44 @@ cargo build --release            # Optimized build
 
 ## Documentation Organization
 
-**We follow the [agent-contexts](https://github.com/nijaru/agent-contexts) pattern with existing structure respected:**
+**Standard OSS Pattern** (agent-contexts v0.1.1):
 
-### ai/ - Agent Working Context (Start Here!)
-*Evolving, AI-optimized working context - load this first!*
+### Quick Reference
 
-- **ai/TODO.md** - Current tasks and priorities (edit in place)
-- **ai/STATUS.md** - Current state, what worked/didn't (edit in place, distilled from STATUS_REPORT)
-- **ai/DECISIONS.md** - Architectural decisions with rationale (append-only)
-- **ai/RESEARCH.md** - Research index with key findings (hybrid: update summaries, append new)
+| Directory | Purpose | Update Pattern |
+|-----------|---------|----------------|
+| **ai/** | AI working context | Frequent, evolving (edit in place) |
+| **docs/** | All permanent documentation | Versioned, deliberate |
 
-**Load order for new agents**:
-1. CLAUDE.md (this file) - Project overview
-2. ai/TODO.md - What to work on
-3. ai/STATUS.md - Current state
-4. ai/DECISIONS.md (if making architectural changes)
+### Workflow for AI Agents
+
+**Load on session start**:
+1. CLAUDE.md (this file) → Project overview
+2. ai/TODO.md → Current tasks
+3. ai/STATUS.md → Current state
+4. ai/DECISIONS.md → Architectural context (if needed)
 
 **Update every session**:
-- ✅ Mark tasks complete in ai/TODO.md
-- ✅ Update ai/STATUS.md with current state (edit in place, not append)
-- ✅ Append new decisions to ai/DECISIONS.md
-- ✅ Add research findings to ai/RESEARCH.md
+- ✅ ai/TODO.md (mark complete, add new tasks)
+- ✅ ai/STATUS.md (edit in place, current truth)
+- ✅ ai/DECISIONS.md (append new decisions)
+- ✅ ai/RESEARCH.md (add findings)
 
-### internal/ - Permanent Project Documentation (Existing Structure)
-*Reference material - permanent, detailed, not for daily agent use*
+**Graduate to docs/ when**:
+- Research complete and valuable for contributors
+- Technical deep-dive worth preserving
+- Architecture decisions worth documenting
 
-**Note**: New projects would use `docs/` instead. We're respecting OmenDB's existing `internal/` structure.
+### Key Principles
 
-- **internal/STATUS_REPORT.md** - Detailed status (reference only, use ai/STATUS.md for daily work)
-- **internal/research/** - Detailed research findings (26 docs, permanent reference)
-- **internal/business/** - Business strategy, customer acquisition
-- **internal/technical/** - Technical guides, MVCC design, roadmaps
-- **internal/phases/** - Phase planning documents
-- **internal/PHASE_*_COMPLETE.md** - Historical completion reports
+✅ **ai/** = Working scratchpad (concise, current, <2K words per file)
+✅ **docs/** = Permanent knowledge (detailed, versioned, no size limit)
+✅ **Edit in place**: ai/STATUS.md, ai/TODO.md
+✅ **Append-only**: ai/DECISIONS.md
 
-### docs/ - User-Facing Documentation
-*For end users and contributors*
-
-- **ARCHITECTURE.md** - System architecture
-- **CONTRIBUTING.md** - Code guidelines
-- **README.md** - Public project overview
-
-### Knowledge Graduation Flow
-
-```
-Active work → ai/TODO.md
-           ↓ (completed)
-         ai/STATUS.md (what worked/didn't, edit in place)
-           ↓ (important decision)
-         ai/DECISIONS.md (working decision log)
-           ↓ (if significant milestone)
-         internal/PHASE_*_COMPLETE.md (historical record)
-           ↓ (if permanent reference)
-         internal/STATUS_REPORT.md (detailed, permanent)
-
-Research → ai/research/{topic}.md
-        ↓ (if valuable/permanent)
-      internal/research/{topic}.md
-        ↓ (if outdated)
-      ai/research/archive/
-```
-
-### Anti-Patterns to Avoid
-
-❌ **Don't duplicate between ai/ and internal/**
-- Permanent findings → `internal/`
-- Working context → `ai/`
-- Don't copy the same content to both
-
-❌ **Don't treat internal/ as working context**
-- internal/ = permanent reference library
-- ai/ = evolving scratchpad
-- Load ai/ first, reference internal/ as needed
-
-❌ **Don't append to ai/STATUS.md**
-- Edit in place to reflect current truth
-- Historical details stay in internal/STATUS_REPORT.md
-
-❌ **Don't bloat ai/ files**
-- Keep concise and current (optimize for tokens)
-- Move old research to ai/research/archive/
-- Archive completed work to internal/
+❌ **Don't** duplicate content between ai/ and docs/
+❌ **Don't** append to ai/STATUS.md (edit in place for current truth)
+❌ **Don't** bloat ai/ files (archive old content to docs/archive/)
 
 ## Development Principles
 
@@ -308,6 +274,7 @@ Research → ai/research/{topic}.md
 
 ---
 
-*Last Updated: October 21, 2025*
+*Last Updated: October 22, 2025*
 
-**Documentation reorganized following [agent-contexts](https://github.com/nijaru/agent-contexts) best practices**
+**Documentation**: Standard OSS structure (agent-contexts v0.1.1) - docs/ + ai/ only
+**Cleanup**: Migrated from `internal/` to standard `docs/` structure (PostgreSQL, MongoDB, DuckDB pattern)
