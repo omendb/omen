@@ -1,15 +1,25 @@
 # OmenDB Development Context
 
-**Last Updated**: October 21, 2025 (Late Evening)
+**Last Updated**: October 21, 2025 (Night)
+
+## Quick Start for AI Agents
+
+**→ First time?** Load these in order:
+1. This file (CLAUDE.md) - Project overview
+2. `ai/TODO.md` - Current tasks
+3. `ai/STATUS.md` - Current state
+4. `ai/DECISIONS.md` - Key architectural decisions (when needed)
+
+**→ Continuing work?** Check `ai/TODO.md` and `ai/STATUS.md` first
 
 ## Current Status
 
 **Product**: PostgreSQL-compatible HTAP database with multi-level learned indexes
 **Achievement**: 1.5-3x faster than SQLite (validated), scales to 100M+ rows
-**Status**: Cache Layer Day 1-5 COMPLETE, RocksDB tuning + benchmarking next
-**Stack**: Rust (Multi-level ALEX + DataFusion + PostgreSQL protocol + RocksDB + LRU cache)
-**Phase**: Performance validation (Days 6-15) → 0.1.0 in 7 weeks
-**Priority**: 🔧 RocksDB Tuning + Benchmark Validation (Days 6-15)
+**Status**: Phase 2 Security Days 1-5 COMPLETE → Days 6-7 (SSL/TLS) next
+**Stack**: Rust (Multi-level ALEX + DataFusion + PostgreSQL protocol + RocksDB + LRU cache + MVCC)
+**Phase**: Security implementation (Days 6-10) → 0.1.0 in 7 weeks
+**Priority**: 🔒 SSL/TLS for PostgreSQL wire protocol (Days 6-7)
 
 ## Technical Core
 
@@ -49,25 +59,34 @@ Production Stack:
 **Repository Structure**:
 ```
 omendb/core/
+├── CLAUDE.md              # This file - AI agent entry point
+├── ai/                    # AI working context (start here!) ⭐ NEW
+│   ├── TODO.md            # Current tasks and priorities
+│   ├── STATUS.md          # Current state (distilled from STATUS_REPORT)
+│   ├── DECISIONS.md       # Architectural decisions with rationale
+│   └── RESEARCH.md        # Research index with key findings
 ├── src/
 │   ├── alex/              # Multi-level ALEX implementation
-│   ├── postgres/          # PostgreSQL wire protocol
-│   ├── mvcc/              # MVCC snapshot isolation (Phase 1) ✅
-│   ├── cache.rs           # LRU cache layer (Day 1-5 complete) ✅ NEW
-│   ├── sql_engine.rs      # SQL: UPDATE/DELETE/JOIN (Phase 3) ✅
-│   ├── table.rs           # Table storage + ALEX + cache integration
-│   └── value.rs           # Hash/Eq for cache keys ✅ NEW
-├── internal/              # Strategy & status docs
-│   ├── STATUS_REPORT.md   # Current status (Oct 21 late evening) ⭐
-│   ├── CACHE_IMPLEMENTATION_PLAN.md   # 15-day cache plan
-│   ├── research/          # HN insights, custom storage analysis
-│   │   ├── HN_DATABASE_INSIGHTS_ANALYSIS.md ✅
-│   │   └── CUSTOM_STORAGE_ANALYSIS.md ✅
-│   ├── PHASE_1_COMPLETE.md   # MVCC complete
-│   ├── PHASE_3_WEEK_1_COMPLETE.md   # UPDATE/DELETE
-│   └── PHASE_3_WEEK_2_JOIN_COMPLETE.md   # JOIN
-└── tests/                 # 436 tests (all passing)
-    ├── cache_integration_tests.rs (7 tests) ✅ NEW
+│   ├── postgres/          # PostgreSQL wire protocol + auth
+│   ├── mvcc/              # MVCC snapshot isolation ✅
+│   ├── cache.rs           # LRU cache layer ✅
+│   ├── sql_engine.rs      # SQL: UPDATE/DELETE/JOIN + user management ✅
+│   ├── catalog.rs         # Table + user management ✅ NEW
+│   ├── user_store.rs      # Persistent user storage ✅ NEW
+│   └── table.rs           # Table storage + ALEX + cache
+├── internal/              # Permanent project documentation
+│   ├── STATUS_REPORT.md   # Detailed status (reference, not daily use)
+│   ├── research/          # Detailed research findings (26 docs)
+│   ├── business/          # Business strategy, customer acquisition
+│   ├── technical/         # Technical guides, MVCC design
+│   ├── phases/            # Phase planning docs
+│   └── PHASE_*_COMPLETE.md # Historical completion reports
+└── tests/                 # 468 tests (all passing) ✅ NEW
+    ├── user_store_tests.rs (11 tests) ✅ NEW
+    ├── auth_tests.rs (6 tests) ✅ NEW
+    ├── user_management_sql_tests.rs (15 tests) ✅ NEW
+    ├── catalog_user_management_tests.rs (8 tests) ✅ NEW
+    ├── cache_integration_tests.rs (7 tests) ✅
     ├── update_delete_tests.rs (30 tests) ✅
     └── join_tests.rs (14 tests) ✅
 ```
@@ -100,38 +119,41 @@ omendb/core/
 - Bottleneck identified: RocksDB (77%), not ALEX (21%)
 - Path forward: Large cache + tuning (2-3 weeks to 2x target)
 
-## Recent Achievements (Last 24 Hours - Oct 21, 2025)
+## Recent Achievements (Oct 21, 2025)
+
+**✅ Phase 2 Security Days 1-5 COMPLETE:** ⭐ NEW
+- **Day 1**: UserStore with RocksDB persistence (11 tests) ✅
+- **Day 2**: OmenDbAuthSource integration (6 tests) ✅
+- **Day 3-4**: SQL user management - CREATE/DROP/ALTER USER (15 tests) ✅
+- **Day 5**: Catalog integration with default admin user (8 tests) ✅
+- **Total**: 40/40 security tests passing, persistent authentication system
+- **Timeline**: On schedule (5 days), Days 6-10 remaining
+
+**✅ Cache Layer Days 1-10 COMPLETE:**
+- **LRU cache**: 1-10GB configurable, 2-3x speedup validated ✅
+- **90% hit rate** with Zipfian workloads ✅
+- **Optimal cache size**: 1-10% of data (not 50%) ✅
+- **Tests**: 7 cache integration tests passing ✅
 
 **✅ Phase 3 Week 1-2 COMPLETE:**
 - **UPDATE/DELETE support**: 30 tests, PRIMARY KEY immutability ✅
 - **INNER JOIN + LEFT JOIN**: 14 tests, nested loop algorithm ✅
-- **SQL coverage**: 15% → 35% (major milestone) ✅
+- **SQL coverage**: 15% → 35% ✅
 
-**✅ HN Database Insights Analysis (Oct 21):**
-- **Architecture validated**: ALEX + LSM + MVCC = best practices ✅
-- **80x in-memory gap identified**: Explains RocksDB 77% overhead ✅
-- **Cache layer validated**: HN insights confirm this is the right solution ✅
-- **Custom storage analyzed**: Documented for future, defer to post-0.1.0 ✅
+**✅ Phase 1 MVCC COMPLETE:**
+- **Snapshot isolation**: Production-ready, 85 tests (62 unit + 23 integration) ✅
+- **7% ahead of schedule**: 14 days vs planned 15 ✅
 
-**✅ Cache Layer Day 1-5 COMPLETE (Oct 21 Late Evening):** ⭐ NEW
-- **LRU cache implementation**: src/cache.rs (289 lines) ✅
-- **Table integration**: Optional cache, get/update/delete with invalidation ✅
-- **Hash/Eq for Value**: Required for LruCache keys ✅
-- **Tests**: 436/436 passing (429 lib + 7 cache integration) ✅
-- **Timeline**: Ahead of schedule (1 session vs planned 5 days) ✅
-- **Commit**: 8443e1c
-
-**🔧 CURRENT PRIORITY (Days 6-15):**
-- **RocksDB tuning**: Optimize compaction parameters
-- **Benchmark validation**: Measure cache effectiveness at 10M scale
-- **Target**: 2-3x speedup, RocksDB overhead 77% → <30%
-- **Timeline**: 10 days (Week 2-3 of cache plan)
+**🔒 CURRENT PRIORITY (Days 6-10):**
+- **Days 6-7**: SSL/TLS for PostgreSQL wire protocol - **NEXT**
+- **Day 8**: Security integration tests (target: 50+ total tests)
+- **Day 9**: Security documentation (SECURITY.md, deployment guides)
+- **Day 10**: Final validation & security audit
 
 **🔜 Next Steps (7 weeks to 0.1.0):**
-1. Cache validation + RocksDB tuning (2 weeks) - **IN PROGRESS**
-2. Phase 2: Security (2 weeks)
-3. Phase 3 Week 3-4: SQL features (2 weeks)
-4. Observability, Backup, Hardening (2-3 weeks)
+1. Phase 2 Security Days 6-10 (5 days) - **IN PROGRESS**
+2. Phase 3 Week 3-4: SQL features (aggregations, subqueries) - 2 weeks
+3. Observability, Backup, Hardening - 3-4 weeks
 
 ## Development Environment
 
@@ -187,31 +209,61 @@ cargo build --release            # Optimized build
 ./target/release/rest_server     # Port 8080
 ```
 
-## Documentation Navigation
+## Documentation Organization
 
-**Starting a session? Load in this order**:
-1. This file (quick context)
-2. For detailed status → `internal/STATUS_REPORT_OCT_2025.md`
-3. For architecture → `ARCHITECTURE.md`
-4. For universal patterns → `~/.claude/CLAUDE.md` (points to agent-contexts)
+**We follow the [agent-contexts](https://github.com/nijaru/agent-contexts) pattern:**
 
-**Task-specific documentation**:
-- **Rust development** → `~/.claude/CLAUDE.md` → agent-contexts Rust patterns
-- **Architecture changes** → `ARCHITECTURE.md`
-- **Performance work** → `internal/research/100M_SCALE_RESULTS.md`
-- **Code guidelines** → `CONTRIBUTING.md`
-- **Business strategy** → `internal/business/`
-- **Competitive analysis** → `internal/research/COMPETITIVE_ASSESSMENT_POST_ALEX.md`
-- **Deployment** → `docs/deployment.md`
+### ai/ - Agent Working Context (Start Here!)
+*Temporary working knowledge, edited in place*
 
-**Decision tree**:
-```
-IF writing Rust code → ~/.claude/CLAUDE.md → languages/rust/RUST_PATTERNS.md
-IF modifying architecture → ARCHITECTURE.md
-IF performance optimization → internal/research/ + Rust patterns
-IF error debugging → ~/.claude/CLAUDE.md → standards/ERROR_PATTERNS.md
-IF organizing docs → ~/.claude/CLAUDE.md → standards/DOC_PATTERNS.md
-```
+- **ai/TODO.md** - Current tasks and priorities (edit in place)
+- **ai/STATUS.md** - Current state, what worked/didn't (edit in place)
+- **ai/DECISIONS.md** - Architectural decisions with rationale (append-only)
+- **ai/RESEARCH.md** - Research index with key findings (hybrid: update summaries, append new)
+
+**Load order for new agents**:
+1. CLAUDE.md (this file) - Project overview
+2. ai/TODO.md - What to work on
+3. ai/STATUS.md - Current state
+4. ai/DECISIONS.md (if making architectural changes)
+
+### internal/ - Permanent Project Documentation
+*Reference material, not for daily agent use*
+
+- **internal/STATUS_REPORT.md** - Detailed status (reference only, use ai/STATUS.md instead)
+- **internal/research/** - Detailed research findings (26 docs, permanent reference)
+- **internal/business/** - Business strategy, customer acquisition
+- **internal/technical/** - Technical guides, MVCC design, roadmaps
+- **internal/phases/** - Phase planning documents
+- **internal/PHASE_*_COMPLETE.md** - Historical completion reports
+
+### docs/ - User-Facing Documentation
+*For end users and contributors*
+
+- **ARCHITECTURE.md** - System architecture
+- **CONTRIBUTING.md** - Code guidelines
+- **docs/deployment.md** - Deployment guides
+- **README.md** - Public project overview
+
+### Anti-Patterns to Avoid
+
+❌ **Don't duplicate project docs in ai/**
+- Project specs belong in `docs/` or `internal/`
+- AI working notes belong in `ai/`
+
+❌ **Don't treat internal/ as working context**
+- internal/ = permanent reference (like a library)
+- ai/ = temporary working knowledge (like a scratchpad)
+
+❌ **Don't append to ai/STATUS.md**
+- Edit it in place to reflect current truth
+- Old status goes in internal/STATUS_REPORT.md
+
+✅ **Do update ai/ files every session**
+- Mark tasks complete in ai/TODO.md
+- Update ai/STATUS.md with current state
+- Append new decisions to ai/DECISIONS.md
+- Add research findings to ai/RESEARCH.md
 
 ## Development Principles
 
@@ -222,4 +274,6 @@ IF organizing docs → ~/.claude/CLAUDE.md → standards/DOC_PATTERNS.md
 
 ---
 
-*Updated: October 11, 2025*
+*Last Updated: October 21, 2025*
+
+**Documentation reorganized following [agent-contexts](https://github.com/nijaru/agent-contexts) best practices**
