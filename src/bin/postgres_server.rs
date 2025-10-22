@@ -2,10 +2,11 @@
 //!
 //! Example usage:
 //!   cargo run --bin postgres_server
-//!   psql -h 127.0.0.1 -p 5432
+//!   psql -h 127.0.0.1 -p 5433
+//!   curl http://127.0.0.1:9090/metrics  # Prometheus metrics
 
 use datafusion::prelude::*;
-use omendb::postgres::PostgresServer;
+use omendb::postgres::{PostgresServer, serve_metrics};
 use tracing::info;
 
 #[tokio::main]
@@ -29,10 +30,20 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Sample data loaded");
 
-    // Create and start PostgreSQL server
-    let server = PostgresServer::new(ctx);
-    info!("Starting PostgreSQL server on 127.0.0.1:5432");
-    info!("Connect with: psql -h 127.0.0.1 -p 5432");
+    // Start metrics HTTP server in background
+    tokio::spawn(async {
+        info!("Starting metrics HTTP server on 127.0.0.1:9090");
+        info!("Metrics available at: http://127.0.0.1:9090/metrics");
+        info!("Health check at: http://127.0.0.1:9090/health");
+        if let Err(e) = serve_metrics("127.0.0.1:9090").await {
+            eprintln!("Metrics server error: {}", e);
+        }
+    });
+
+    // Create and start PostgreSQL server on port 5433 (to avoid conflict with system PostgreSQL)
+    let server = PostgresServer::with_addr("127.0.0.1:5433", ctx);
+    info!("Starting PostgreSQL server on 127.0.0.1:5433");
+    info!("Connect with: psql -h 127.0.0.1 -p 5433");
 
     server.serve().await?;
 

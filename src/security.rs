@@ -171,19 +171,12 @@ impl TlsConfig {
 
 /// Security context for request processing
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct SecurityContext {
     pub auth: AuthConfig,
     pub tls: TlsConfig,
 }
 
-impl Default for SecurityContext {
-    fn default() -> Self {
-        Self {
-            auth: AuthConfig::default(),
-            tls: TlsConfig::default(),
-        }
-    }
-}
 
 impl SecurityContext {
     /// Create from environment

@@ -13,11 +13,11 @@
 
 use anyhow::Result;
 use omendb::alex::MultiLevelAlexTree;
-use rand::distributions::{Distribution, Uniform};
+use rand::distributions::Distribution;
 use rand::prelude::*;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use tracing::{info, warn};
+use tracing::info;
 
 /// YCSB Workload configuration
 #[derive(Debug, Clone)]

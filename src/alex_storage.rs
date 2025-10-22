@@ -417,7 +417,7 @@ impl AlexStorage {
         }
 
         // Calculate new mapped size: round up to next MMAP_GROW_SIZE chunk
-        let new_mapped_size = ((self.file_size + MMAP_GROW_SIZE - 1) / MMAP_GROW_SIZE) * MMAP_GROW_SIZE;
+        let new_mapped_size = self.file_size.div_ceil(MMAP_GROW_SIZE) * MMAP_GROW_SIZE;
 
         // Grow file to new mapped size
         self.write_file.set_len(new_mapped_size)?;

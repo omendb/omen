@@ -14,7 +14,6 @@ use omendb::wal::{WalManager, WalOperation};
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::tempdir;

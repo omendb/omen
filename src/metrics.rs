@@ -316,11 +316,7 @@ pub fn record_learned_index_hit(predicted_pos: usize, actual_pos: usize) {
     LEARNED_INDEX_HITS.inc();
 
     // Calculate prediction error
-    let error = if predicted_pos > actual_pos {
-        predicted_pos - actual_pos
-    } else {
-        actual_pos - predicted_pos
-    };
+    let error = predicted_pos.abs_diff(actual_pos);
 
     LEARNED_INDEX_PREDICTION_ERROR.observe(error as f64);
 

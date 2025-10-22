@@ -16,7 +16,7 @@ use datafusion::prelude::*;
 use omendb::alex::MultiLevelAlexTree;
 use omendb::postgres::PostgresServer;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::info;
 
 /// Custom table provider backed by multi-level ALEX
 struct AlexTableProvider {

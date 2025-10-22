@@ -25,7 +25,7 @@ fn main() -> Result<()> {
 
     // Test each key
     println!("\nTesting queries:");
-    for key in vec![10, 20, 30, 40, 50, 60] {
+    for key in [10, 20, 30, 40, 50, 60] {
         match tree.get(key)? {
             Some(value) => println!("  Key {}: Found value {:?}", key, value),
             None => println!("  Key {}: NOT FOUND", key),

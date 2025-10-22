@@ -49,14 +49,49 @@ pub struct RocksStorage {
     /// ALEX learned index tracks key existence
     alex: AlexTree,
     row_count: u64,
-    /// LRU cache for hot values (capacity: 1000 entries)
+    /// LRU cache for hot values (capacity: 100K entries, ~10-50MB)
     value_cache: LruCache<i64, Vec<u8>>,
+    /// Cache hit counter for metrics
+    cache_hits: std::sync::atomic::AtomicU64,
+    /// Cache miss counter for metrics
+    cache_misses: std::sync::atomic::AtomicU64,
 }
 
 impl RocksStorage {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
+        use rocksdb::BlockBasedOptions;
+
         let mut opts = Options::default();
         opts.create_if_missing(true);
+
+        // ═════════════════════════════════════════════════════════════
+        // READ OPTIMIZATIONS (addresses 77% bottleneck in queries)
+        // ═════════════════════════════════════════════════════════════
+
+        // CRITICAL: Bloom filter reduces read amplification
+        // Skips SST files that don't contain the key (10 bits = 1% false positive)
+        let mut block_opts = BlockBasedOptions::default();
+        block_opts.set_bloom_filter(10.0, false); // 10 bits per key
+
+        // CRITICAL: Large block cache for hot data (512MB)
+        // Default is only 8MB - way too small for 10M+ rows
+        block_opts.set_block_cache(&rocksdb::Cache::new_lru_cache(512 * 1024 * 1024));
+
+        // Cache index and filter blocks (reduces read amplification)
+        block_opts.set_cache_index_and_filter_blocks(true);
+        block_opts.set_pin_l0_filter_and_index_blocks_in_cache(true);
+
+        // Larger block size for better compression and fewer index entries
+        block_opts.set_block_size(16 * 1024); // 16KB (default: 4KB)
+
+        opts.set_block_based_table_factory(&block_opts);
+
+        // TUNING: More bloom filter bits (faster negative lookups)
+        opts.set_bloom_locality(1);
+
+        // ═════════════════════════════════════════════════════════════
+        // WRITE OPTIMIZATIONS
+        // ═════════════════════════════════════════════════════════════
 
         // TUNING: Larger memtable to batch more writes in memory before flush
         // Reduces compaction overhead for random writes
@@ -81,13 +116,28 @@ impl RocksStorage {
         opts.set_level_compaction_dynamic_level_bytes(true);
         opts.set_bytes_per_sync(1024 * 1024); // 1MB
 
+        // Additional read optimizations
+        // Allow more open files for better read performance
+        opts.set_max_open_files(5000);
+
+        // Increase parallelism for background jobs
+        opts.set_max_background_jobs(4);
+
+        // Reduce read amplification by keeping more levels
+        opts.set_num_levels(7); // More levels = less compaction overhead
+
         let db = DB::open(&opts, path)?;
 
         let mut storage = Self {
             db: Arc::new(db),
             alex: AlexTree::new(),
             row_count: 0,
-            value_cache: LruCache::new(NonZeroUsize::new(1000).unwrap()),
+            // Large LRU cache for hot data (1M entries)
+            // Testing cache size impact on random query performance
+            // Memory cost: ~100-500MB depending on value sizes
+            value_cache: LruCache::new(NonZeroUsize::new(1_000_000).unwrap()),
+            cache_hits: std::sync::atomic::AtomicU64::new(0),
+            cache_misses: std::sync::atomic::AtomicU64::new(0),
         };
 
         storage.load_metadata()?;
@@ -161,7 +211,7 @@ impl RocksStorage {
 
         // Insert into RocksDB
         let key_bytes = key.to_be_bytes();
-        self.db.put(&key_bytes, value)?;
+        self.db.put(key_bytes, value)?;
 
         // Track key in ALEX (only if new)
         if self.alex.get(key)?.is_none() {
@@ -173,7 +223,7 @@ impl RocksStorage {
             metrics::set_learned_index_models(self.alex.num_leaves());
         }
 
-        if self.row_count % 1000 == 0 {
+        if self.row_count.is_multiple_of(1000) {
             self.save_metadata()?;
         }
 
@@ -199,7 +249,7 @@ impl RocksStorage {
         let mut batch = WriteBatch::default();
         for (key, value) in &entries {
             let key_bytes = key.to_be_bytes();
-            batch.put(&key_bytes, value);
+            batch.put(key_bytes, value);
         }
         self.db.write(batch)?;
 
@@ -253,6 +303,7 @@ impl RocksStorage {
 
         // Check LRU cache first
         if let Some(cached_value) = self.value_cache.get(&key) {
+            self.cache_hits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             metrics::record_query_path("cache_hit");
             metrics::record_search(start_time.elapsed().as_secs_f64());
             return Ok(Some(cached_value.clone()));
@@ -266,11 +317,14 @@ impl RocksStorage {
             return Ok(None);
         }
 
+        // Key exists but not in cache - this is a cache miss
+        self.cache_misses.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         // Key exists - look up value in RocksDB
         metrics::record_query_path("learned_index");
 
         let key_bytes = key.to_be_bytes();
-        let result = if let Some(value_bytes) = self.db.get(&key_bytes)? {
+        let result = if let Some(value_bytes) = self.db.get(key_bytes)? {
             let value = value_bytes.to_vec();
             self.value_cache.put(key, value.clone());
             Ok(Some(value))
@@ -303,7 +357,7 @@ impl RocksStorage {
             let mut results = Vec::with_capacity(keys_in_range.len());
             for (key, _) in keys_in_range {
                 let key_bytes = key.to_be_bytes();
-                if let Some(value_bytes) = self.db.get(&key_bytes)? {
+                if let Some(value_bytes) = self.db.get(key_bytes)? {
                     results.push((key, value_bytes.to_vec()));
                 }
             }
@@ -382,8 +436,8 @@ impl RocksStorage {
 
         // Delete from RocksDB
         let key_bytes = key.to_be_bytes();
-        let existed = self.db.get(&key_bytes)?.is_some();
-        self.db.delete(&key_bytes)?;
+        let existed = self.db.get(key_bytes)?.is_some();
+        self.db.delete(key_bytes)?;
 
         if existed {
             // Note: We don't remove from ALEX for simplicity
@@ -407,6 +461,19 @@ impl RocksStorage {
 
     pub fn learned_index_size(&self) -> usize {
         self.alex.len()
+    }
+
+    /// Get cache statistics (hits, misses, hit rate)
+    pub fn cache_stats(&self) -> (u64, u64, f64) {
+        let hits = self.cache_hits.load(std::sync::atomic::Ordering::Relaxed);
+        let misses = self.cache_misses.load(std::sync::atomic::Ordering::Relaxed);
+        let total = hits + misses;
+        let hit_rate = if total == 0 {
+            0.0
+        } else {
+            hits as f64 / total as f64
+        };
+        (hits, misses, hit_rate)
     }
 }
 

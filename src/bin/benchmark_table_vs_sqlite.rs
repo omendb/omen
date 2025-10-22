@@ -172,7 +172,7 @@ fn main() -> Result<()> {
     println!();
 
     if size >= 10_000_000 {
-        if overall_avg >= 5.0 && overall_avg <= 15.0 {
+        if (5.0..=15.0).contains(&overall_avg) {
             println!("✅ Validated: 5-15x faster at {}M scale", size / 1_000_000);
         } else if overall_avg > 15.0 {
             println!("✅ EXCEEDED: {:.2}x faster (projected 5-15x)", overall_avg);

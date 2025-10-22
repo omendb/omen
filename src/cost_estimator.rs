@@ -96,7 +96,7 @@ impl CostEstimator {
 
         match (start, end) {
             (Value::Int64(s), Value::Int64(e)) => {
-                let range = (e - s).abs() as usize;
+                let range = (e - s).unsigned_abs() as usize;
                 // Cap at table size
                 range.min(self.table_size)
             }

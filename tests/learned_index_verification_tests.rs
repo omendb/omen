@@ -56,7 +56,7 @@ fn create_zipfian_dataset(n: usize, name: &str) -> (RedbStorage, tempfile::TempD
 fn test_learned_index_sorted_keys_maintained() {
     println!("\n=== Verification Test: sorted_keys Maintained ===");
 
-    let (storage, _dir) = create_sequential_dataset(1000, "verify_sorted_keys");
+    let (mut storage, _dir) = create_sequential_dataset(1000, "verify_sorted_keys");
 
     // Verify internal state (we can't access sorted_keys directly, but we can verify behavior)
     // If sorted_keys is maintained, point queries should work correctly
@@ -74,7 +74,7 @@ fn test_learned_index_sorted_keys_maintained() {
 fn test_learned_index_provides_speedup_10k_rows() {
     println!("\n=== Verification Test: 10K Rows Speedup ===");
 
-    let (storage, _dir) = create_sequential_dataset(10_000, "verify_10k");
+    let (mut storage, _dir) = create_sequential_dataset(10_000, "verify_10k");
 
     // Warm up
     let _ = storage.point_query(5000).unwrap();
@@ -175,7 +175,7 @@ fn test_learned_index_batch_insert_performance() {
 fn test_learned_index_range_query_uses_predictions() {
     println!("\n=== Verification Test: Range Query Uses Learned Index ===");
 
-    let (storage, _dir) = create_sequential_dataset(10_000, "verify_range");
+    let (mut storage, _dir) = create_sequential_dataset(10_000, "verify_range");
 
     // Warm up
     let _ = storage.range_query(4000, 4100).unwrap();
@@ -210,7 +210,7 @@ fn test_learned_index_range_query_uses_predictions() {
 fn test_learned_index_works_on_zipfian_distribution() {
     println!("\n=== Verification Test: Zipfian Distribution ===");
 
-    let (storage, _dir) = create_zipfian_dataset(10_000, "verify_zipfian");
+    let (mut storage, _dir) = create_zipfian_dataset(10_000, "verify_zipfian");
 
     // Test queries on hot keys (small values)
     let hot_keys = [0, 1, 10, 100, 500];
@@ -235,7 +235,7 @@ fn test_learned_index_works_on_zipfian_distribution() {
 fn test_learned_index_correctness_edge_cases() {
     println!("\n=== Verification Test: Edge Cases ===");
 
-    let (storage, _dir) = create_sequential_dataset(1000, "verify_edges");
+    let (mut storage, _dir) = create_sequential_dataset(1000, "verify_edges");
 
     // Test first key
     let result = storage.point_query(0).unwrap();

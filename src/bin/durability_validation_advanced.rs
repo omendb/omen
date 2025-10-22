@@ -17,7 +17,7 @@
 use anyhow::{anyhow, Result};
 use omendb::wal::{WalManager, WalOperation};
 use rand::{thread_rng, Rng};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -163,7 +163,7 @@ impl ConcurrentTransactionTracker {
 
     fn commit_transaction(&self, txn_id: u64) -> Result<()> {
         let mut txns = self.active_txns.lock().unwrap();
-        if let Some(mut txn) = txns.get_mut(&txn_id) {
+        if let Some(txn) = txns.get_mut(&txn_id) {
             txn.committed = true;
 
             // Apply all operations to committed state
@@ -481,7 +481,7 @@ impl AdvancedDurabilityTester {
             // Continuous operations
             operations += 1;
 
-            if operations % 10000 == 0 {
+            if operations.is_multiple_of(10000) {
                 info!("    ⏳ {} operations, {:.1}h elapsed",
                     operations, start.elapsed().as_secs_f64() / 3600.0);
             }

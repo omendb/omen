@@ -45,7 +45,7 @@ impl OmenDbAuthSource {
     /// Add a user with plaintext password
     ///
     /// Password will be salted and hashed using SCRAM-SHA-256 PBKDF2.
-    pub async fn add_user(&self, username: impl Into<String>, password: &str) -> Result<()> {
+    pub fn add_user(&self, username: impl Into<String>, password: &str) -> Result<()> {
         let username = username.into();
 
         // Generate random salt
@@ -62,17 +62,17 @@ impl OmenDbAuthSource {
     }
 
     /// Remove a user
-    pub async fn remove_user(&self, username: &str) -> Result<bool> {
+    pub fn remove_user(&self, username: &str) -> Result<bool> {
         self.user_store.delete_user(username)
     }
 
     /// Check if a user exists
-    pub async fn user_exists(&self, username: &str) -> bool {
+    pub fn user_exists(&self, username: &str) -> bool {
         self.user_store.user_exists(username).unwrap_or(false)
     }
 
     /// Get number of registered users
-    pub async fn user_count(&self) -> usize {
+    pub fn user_count(&self) -> usize {
         self.user_store.user_count().unwrap_or(0)
     }
 }
@@ -120,9 +120,9 @@ mod tests {
         let auth = OmenDbAuthSource::new_in_memory().unwrap();
 
         // Add user
-        auth.add_user("alice", "secret123").await.unwrap();
-        assert!(auth.user_exists("alice").await);
-        assert_eq!(auth.user_count().await, 1);
+        auth.add_user("alice", "secret123").unwrap();
+        assert!(auth.user_exists("alice"));
+        assert_eq!(auth.user_count(), 1);
 
         // Check we can get password
         let login = LoginInfo::new(Some("alice"), Some("omendb"), "127.0.0.1".to_string());
@@ -135,13 +135,13 @@ mod tests {
     async fn test_remove_user() {
         let auth = OmenDbAuthSource::new_in_memory().unwrap();
 
-        auth.add_user("bob", "password456").await.unwrap();
-        assert!(auth.user_exists("bob").await);
+        auth.add_user("bob", "password456").unwrap();
+        assert!(auth.user_exists("bob"));
 
-        let removed = auth.remove_user("bob").await.unwrap();
+        let removed = auth.remove_user("bob").unwrap();
         assert!(removed);
-        assert!(!auth.user_exists("bob").await);
-        assert_eq!(auth.user_count().await, 0);
+        assert!(!auth.user_exists("bob"));
+        assert_eq!(auth.user_count(), 0);
     }
 
     #[tokio::test]
@@ -170,15 +170,15 @@ mod tests {
         // Create user in first instance
         {
             let auth = OmenDbAuthSource::new(data_dir).unwrap();
-            auth.add_user("alice", "secret123").await.unwrap();
-            assert!(auth.user_exists("alice").await);
+            auth.add_user("alice", "secret123").unwrap();
+            assert!(auth.user_exists("alice"));
         }
 
         // Reopen and verify user persisted
         {
             let auth = OmenDbAuthSource::new(data_dir).unwrap();
-            assert!(auth.user_exists("alice").await);
-            assert_eq!(auth.user_count().await, 1);
+            assert!(auth.user_exists("alice"));
+            assert_eq!(auth.user_count(), 1);
 
             // Verify password works
             let login = LoginInfo::new(Some("alice"), Some("omendb"), "127.0.0.1".to_string());

@@ -89,6 +89,7 @@ pub struct ConnectionPool {
 
 /// Pool statistics
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct PoolStats {
     /// Total connections created
     pub total_created: u64,
@@ -118,19 +119,10 @@ pub struct PoolStats {
     pub idle_timeouts: u64,
 }
 
-impl Default for PoolStats {
+
+impl Default for ConnectionPool {
     fn default() -> Self {
-        Self {
-            total_created: 0,
-            total_closed: 0,
-            active_connections: 0,
-            idle_connections: 0,
-            total_acquisitions: 0,
-            total_releases: 0,
-            total_wait_time_ms: 0,
-            max_connections_reached: 0,
-            idle_timeouts: 0,
-        }
+        Self::new()
     }
 }
 

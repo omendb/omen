@@ -52,6 +52,12 @@ const MAX_FANOUT: usize = 256;     // Maximum children per inner node
 #[allow(dead_code)]
 const BULK_BUILD_FANOUT: usize = 64; // Default fanout for bulk building
 
+impl Default for MultiLevelAlexTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MultiLevelAlexTree {
     /// Create an empty tree
     pub fn new() -> Self {
@@ -362,7 +368,7 @@ impl InnerNode {
     #[allow(dead_code)]
     fn partition_leaves(leaves: &[(i64, usize)], fanout: usize) -> Vec<Vec<(i64, usize)>> {
         let mut groups = Vec::new();
-        let chunk_size = (leaves.len() + fanout - 1) / fanout;
+        let chunk_size = leaves.len().div_ceil(fanout);
 
         for chunk in leaves.chunks(chunk_size) {
             groups.push(chunk.to_vec());

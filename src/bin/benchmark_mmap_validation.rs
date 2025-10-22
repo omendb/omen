@@ -10,7 +10,7 @@
 //!
 //! Run with: cargo run --release --bin benchmark_mmap_validation
 
-use memmap2::{Mmap, MmapMut, MmapOptions};
+use memmap2::Mmap;
 use rand::{Rng, SeedableRng};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -133,7 +133,7 @@ fn benchmark_random_reads(n: usize, value_size: usize) {
 
     // Generate random read order
     let num_reads = 10_000;
-    let mut read_indices: Vec<usize> = (0..num_reads)
+    let read_indices: Vec<usize> = (0..num_reads)
         .map(|_| rng.gen_range(0..n))
         .collect();
 

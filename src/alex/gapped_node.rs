@@ -355,7 +355,7 @@ impl GappedNode {
                 }
             } else {
                 // Found gap at correct position
-                if i == 0 || self.keys[i - 1].map_or(true, |k| k < key) {
+                if i == 0 || self.keys[i - 1].is_none_or(|k| k < key) {
                     return i;
                 }
             }
@@ -568,7 +568,7 @@ impl GappedNode {
         let mut pairs: Vec<(i64, Vec<u8>)> = self
             .keys
             .into_iter()
-            .zip(self.values.into_iter())
+            .zip(self.values)
             .filter_map(|(k, v)| {
                 if let (Some(key), Some(value)) = (k, v) {
                     Some((key, value))
@@ -677,8 +677,8 @@ mod tests {
     fn test_density_threshold() {
         let mut node = GappedNode::new(10, 0.0); // No expansion - fills quickly
 
-        // Fill to max density
-        for i in 0..8 {
+        // Fill to max density (MAX_DENSITY = 0.95, so need 10 keys in capacity 10)
+        for i in 0..10 {
             assert!(node.insert(i, vec![i as u8]).unwrap());
         }
 
@@ -761,35 +761,37 @@ mod tests {
     fn test_node_split() {
         let mut node = GappedNode::new(10, 0.0); // No expansion - fills quickly
 
-        // Fill to max density
-        for i in 0..8 {
+        // Fill to max density (MAX_DENSITY = 0.95, so need 10 keys in capacity 10)
+        for i in 0..10 {
             node.insert(i * 10, vec![i as u8]).unwrap();
         }
 
         assert!(node.should_split());
-        assert_eq!(node.num_keys(), 8);
+        assert_eq!(node.num_keys(), 10);
 
         // Split the node
         let (split_key, right) = node.split().unwrap();
 
         // Check split key is median
-        assert_eq!(split_key, 40);
+        assert_eq!(split_key, 50);
 
-        // Check left node (keys < 40)
-        assert_eq!(node.num_keys(), 4);
+        // Check left node (keys < 50)
+        assert_eq!(node.num_keys(), 5);
         assert!(node.get(0).unwrap().is_some());
         assert!(node.get(10).unwrap().is_some());
         assert!(node.get(20).unwrap().is_some());
         assert!(node.get(30).unwrap().is_some());
-        assert!(node.get(40).unwrap().is_none());
+        assert!(node.get(40).unwrap().is_some());
+        assert!(node.get(50).unwrap().is_none());
 
-        // Check right node (keys >= 40)
-        assert_eq!(right.num_keys(), 4);
-        assert!(right.get(40).unwrap().is_some());
+        // Check right node (keys >= 50)
+        assert_eq!(right.num_keys(), 5);
         assert!(right.get(50).unwrap().is_some());
         assert!(right.get(60).unwrap().is_some());
         assert!(right.get(70).unwrap().is_some());
-        assert!(right.get(30).unwrap().is_none());
+        assert!(right.get(80).unwrap().is_some());
+        assert!(right.get(90).unwrap().is_some());
+        assert!(right.get(40).unwrap().is_none());
 
         // Both nodes should have lower density now
         assert!(node.density() < 0.6);

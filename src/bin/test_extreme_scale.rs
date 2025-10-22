@@ -407,7 +407,7 @@ impl ExtremeScaleTest {
             }
 
             // Log progress every 10 seconds
-            if start_time.elapsed().as_secs() % 10 == 0 && start_time.elapsed().as_millis() % 10000 < 100 {
+            if start_time.elapsed().as_secs().is_multiple_of(10) && start_time.elapsed().as_millis() % 10000 < 100 {
                 let current_throughput = operations as f64 / start_time.elapsed().as_secs_f64();
                 info!("    📈 {}s: {} ops, {:.0} ops/sec",
                        start_time.elapsed().as_secs(), operations, current_throughput);

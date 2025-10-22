@@ -324,7 +324,8 @@ fn append_value_to_builder(builder: &mut Box<dyn ArrayBuilder>, value: &Value) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arrow::datatypes::{DataType, Field};
+    use arrow::datatypes::{DataType, Field, Schema};
+    use std::sync::Arc;
 
     #[test]
     fn test_row_creation() {

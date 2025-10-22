@@ -31,7 +31,7 @@ fn benchmark_index_building() {
         println!("  Scale: {} keys", format_number(scale));
 
         // Generate sorted data (typical ALEX use case)
-        let data: Vec<(i64, usize)> = (0..scale).map(|i| (i as i64, i as usize)).collect();
+        let data: Vec<(i64, usize)> = (0..scale).map(|i| (i as i64, i)).collect();
 
         // Run multiple iterations for stable measurements
         let iterations = if scale >= 1_000_000 { 10 } else if scale >= 100_000 { 100 } else { 1000 };

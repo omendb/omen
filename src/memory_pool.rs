@@ -17,6 +17,12 @@ pub struct ByteBufferPool {
     size_classes: Vec<usize>,
 }
 
+impl Default for ByteBufferPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ByteBufferPool {
     /// Create new buffer pool
     pub fn new() -> Self {
@@ -75,6 +81,12 @@ impl ByteBufferPool {
 pub struct PooledVec<T> {
     data: Vec<T>,
     pool: Option<Arc<VecPool<T>>>,
+}
+
+impl<T> Default for PooledVec<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> PooledVec<T> {

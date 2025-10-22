@@ -3,6 +3,7 @@
 
 use crate::catalog::Catalog;
 use crate::metrics::{record_sql_query, record_sql_query_error};
+use crate::postgres::OmenDbAuthSource;
 use crate::row::Row;
 use crate::value::Value;
 use crate::wal::{Transaction, TransactionManager, WalManager};
@@ -47,6 +48,7 @@ pub struct SqlEngine {
     config: QueryConfig,
     transaction_manager: Option<Arc<TransactionManager>>,
     current_transaction: Arc<Mutex<Option<Transaction>>>,
+    auth_source: Option<Arc<OmenDbAuthSource>>,
 }
 
 impl SqlEngine {
@@ -62,6 +64,7 @@ impl SqlEngine {
             config,
             transaction_manager: None,
             current_transaction: Arc::new(Mutex::new(None)),
+            auth_source: None,
         }
     }
 
@@ -73,7 +76,14 @@ impl SqlEngine {
             config,
             transaction_manager: Some(tx_manager),
             current_transaction: Arc::new(Mutex::new(None)),
+            auth_source: None,
         }
+    }
+
+    /// Set authentication source for user management
+    pub fn with_auth(mut self, auth_source: Arc<OmenDbAuthSource>) -> Self {
+        self.auth_source = Some(auth_source);
+        self
     }
 
     /// Execute a SQL statement with timeout and resource limits
@@ -88,6 +98,26 @@ impl SqlEngine {
             error!(query_size = sql.len(), "Query size exceeds limit");
             record_sql_query_error("query_too_large");
             return Err(anyhow!("Query size exceeds limit (10MB)"));
+        }
+
+        // Try to execute user management commands first (CREATE USER, DROP USER, ALTER USER)
+        // These are handled separately as sqlparser doesn't support them natively
+        if let Some(result) = self.try_execute_user_command(sql)? {
+            let duration = start_time.elapsed().as_secs_f64();
+            let (query_type, username) = match &result {
+                ExecutionResult::UserCreated { username } => ("CREATE_USER", username.clone()),
+                ExecutionResult::UserDropped { username } => ("DROP_USER", username.clone()),
+                ExecutionResult::UserAltered { username } => ("ALTER_USER", username.clone()),
+                _ => unreachable!(),
+            };
+            info!(
+                query_type = query_type,
+                username = username,
+                duration_ms = duration * 1000.0,
+                "User management command executed successfully"
+            );
+            record_sql_query(query_type, duration, 1);
+            return Ok(result);
         }
 
         let dialect = GenericDialect {};
@@ -189,6 +219,9 @@ impl SqlEngine {
                     ExecutionResult::TransactionStarted { .. } => ("BEGIN", 0),
                     ExecutionResult::TransactionCommitted { .. } => ("COMMIT", 0),
                     ExecutionResult::TransactionRolledBack { .. } => ("ROLLBACK", 0),
+                    ExecutionResult::UserCreated { .. } => ("CREATE_USER", 1),
+                    ExecutionResult::UserDropped { .. } => ("DROP_USER", 1),
+                    ExecutionResult::UserAltered { .. } => ("ALTER_USER", 1),
                 };
                 info!(
                     query_type = query_type,
@@ -1777,6 +1810,198 @@ impl SqlEngine {
     pub fn catalog_mut(&mut self) -> &mut Catalog {
         &mut self.catalog
     }
+
+    /// Try to parse and execute user management SQL commands
+    /// Returns None if not a user management command
+    fn try_execute_user_command(&self, sql: &str) -> Result<Option<ExecutionResult>> {
+        let sql_upper = sql.trim().to_uppercase();
+
+        // CREATE USER username WITH PASSWORD 'password' [ROLE role]
+        if sql_upper.starts_with("CREATE USER") {
+            return Ok(Some(self.execute_create_user(sql)?));
+        }
+
+        // DROP USER username
+        if sql_upper.starts_with("DROP USER") {
+            return Ok(Some(self.execute_drop_user(sql)?));
+        }
+
+        // ALTER USER username PASSWORD 'newpassword' [ROLE role]
+        if sql_upper.starts_with("ALTER USER") {
+            return Ok(Some(self.execute_alter_user(sql)?));
+        }
+
+        Ok(None)
+    }
+
+    /// Execute CREATE USER command
+    /// Syntax: CREATE USER username WITH PASSWORD 'password' [ROLE role]
+    fn execute_create_user(&self, sql: &str) -> Result<ExecutionResult> {
+        let auth = self.auth_source.as_ref()
+            .ok_or_else(|| anyhow!("Authentication not configured"))?;
+
+        // Parse CREATE USER alice WITH PASSWORD 'secret123' [ROLE admin]
+        let sql = sql.trim();
+        let parts: Vec<&str> = sql.split_whitespace().collect();
+
+        if parts.len() < 6 {
+            return Err(anyhow!("Invalid CREATE USER syntax. Expected: CREATE USER username WITH PASSWORD 'password' [ROLE role]"));
+        }
+
+        if parts[0].to_uppercase() != "CREATE" || parts[1].to_uppercase() != "USER" {
+            return Err(anyhow!("Invalid CREATE USER syntax"));
+        }
+
+        let username = parts[2];
+
+        // Find WITH PASSWORD
+        let with_idx = parts.iter().position(|&p| p.to_uppercase() == "WITH")
+            .ok_or_else(|| anyhow!("WITH keyword not found"))?;
+        let password_idx = parts.iter().position(|&p| p.to_uppercase() == "PASSWORD")
+            .ok_or_else(|| anyhow!("PASSWORD keyword not found"))?;
+
+        if password_idx != with_idx + 1 {
+            return Err(anyhow!("WITH must be followed by PASSWORD"));
+        }
+
+        // Extract password (handle quoted strings)
+        let password_part = parts.get(password_idx + 1)
+            .ok_or_else(|| anyhow!("Password value not found"))?;
+
+        let password = if password_part.starts_with('\'') || password_part.starts_with('"') {
+            // Find the end quote in the original SQL
+            let start_quote_pos = sql.find(password_part).unwrap();
+            let quote_char = &sql[start_quote_pos..start_quote_pos+1];
+            let after_quote = &sql[start_quote_pos+1..];
+            let end_quote_pos = after_quote.find(quote_char)
+                .ok_or_else(|| anyhow!("Unclosed quote in password"))?;
+            &after_quote[..end_quote_pos]
+        } else {
+            return Err(anyhow!("Password must be quoted"));
+        };
+
+        // Validate password
+        if password.is_empty() {
+            return Err(anyhow!("Password cannot be empty"));
+        }
+        if password.len() < 8 {
+            return Err(anyhow!("Password must be at least 8 characters"));
+        }
+
+        // Validate username (PostgreSQL-compatible rules)
+        crate::user_store::User::validate_username(username)?;
+
+        // Create user
+        auth.add_user(username, password)?;
+
+        info!(username = username, "User created successfully");
+
+        Ok(ExecutionResult::UserCreated {
+            username: username.to_string(),
+        })
+    }
+
+    /// Execute DROP USER command
+    /// Syntax: DROP USER username
+    fn execute_drop_user(&self, sql: &str) -> Result<ExecutionResult> {
+        let auth = self.auth_source.as_ref()
+            .ok_or_else(|| anyhow!("Authentication not configured"))?;
+
+        // Parse DROP USER alice
+        let parts: Vec<&str> = sql.trim().split_whitespace().collect();
+
+        if parts.len() != 3 {
+            return Err(anyhow!("Invalid DROP USER syntax. Expected: DROP USER username"));
+        }
+
+        if parts[0].to_uppercase() != "DROP" || parts[1].to_uppercase() != "USER" {
+            return Err(anyhow!("Invalid DROP USER syntax"));
+        }
+
+        let username = parts[2];
+
+        // Prevent deleting admin user
+        if username == "admin" {
+            return Err(anyhow!("Cannot delete admin user"));
+        }
+
+        // Delete user
+        let deleted = auth.remove_user(username)?;
+
+        if !deleted {
+            return Err(anyhow!("User '{}' does not exist", username));
+        }
+
+        info!(username = username, "User dropped successfully");
+
+        Ok(ExecutionResult::UserDropped {
+            username: username.to_string(),
+        })
+    }
+
+    /// Execute ALTER USER command
+    /// Syntax: ALTER USER username PASSWORD 'newpassword'
+    fn execute_alter_user(&self, sql: &str) -> Result<ExecutionResult> {
+        let auth = self.auth_source.as_ref()
+            .ok_or_else(|| anyhow!("Authentication not configured"))?;
+
+        // Parse ALTER USER alice PASSWORD 'newsecret'
+        let sql = sql.trim();
+        let parts: Vec<&str> = sql.split_whitespace().collect();
+
+        if parts.len() < 4 {
+            return Err(anyhow!("Invalid ALTER USER syntax. Expected: ALTER USER username PASSWORD 'newpassword'"));
+        }
+
+        if parts[0].to_uppercase() != "ALTER" || parts[1].to_uppercase() != "USER" {
+            return Err(anyhow!("Invalid ALTER USER syntax"));
+        }
+
+        let username = parts[2];
+
+        // Find PASSWORD keyword
+        let password_idx = parts.iter().position(|&p| p.to_uppercase() == "PASSWORD")
+            .ok_or_else(|| anyhow!("PASSWORD keyword not found"))?;
+
+        // Extract password (handle quoted strings)
+        let password_part = parts.get(password_idx + 1)
+            .ok_or_else(|| anyhow!("Password value not found"))?;
+
+        let password = if password_part.starts_with('\'') || password_part.starts_with('"') {
+            // Find the end quote in the original SQL
+            let start_quote_pos = sql.find(password_part).unwrap();
+            let quote_char = &sql[start_quote_pos..start_quote_pos+1];
+            let after_quote = &sql[start_quote_pos+1..];
+            let end_quote_pos = after_quote.find(quote_char)
+                .ok_or_else(|| anyhow!("Unclosed quote in password"))?;
+            &after_quote[..end_quote_pos]
+        } else {
+            return Err(anyhow!("Password must be quoted"));
+        };
+
+        // Validate password
+        if password.is_empty() {
+            return Err(anyhow!("Password cannot be empty"));
+        }
+        if password.len() < 8 {
+            return Err(anyhow!("Password must be at least 8 characters"));
+        }
+
+        // Check if user exists
+        if !auth.user_exists(username) {
+            return Err(anyhow!("User '{}' does not exist", username));
+        }
+
+        // Update password by removing and re-adding user
+        auth.remove_user(username)?;
+        auth.add_user(username, password)?;
+
+        info!(username = username, "User password updated successfully");
+
+        Ok(ExecutionResult::UserAltered {
+            username: username.to_string(),
+        })
+    }
 }
 
 /// Result of SQL execution
@@ -1809,6 +2034,15 @@ pub enum ExecutionResult {
 
     /// Transaction rolled back
     TransactionRolledBack { txn_id: u64 },
+
+    /// User created
+    UserCreated { username: String },
+
+    /// User dropped
+    UserDropped { username: String },
+
+    /// User altered
+    UserAltered { username: String },
 }
 
 #[cfg(test)]

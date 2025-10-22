@@ -189,8 +189,9 @@ impl TableProvider for ArrowTableProvider {
         };
 
         // Create memory table and get execution plan
+        // Note: Don't pass projection to mem_table.scan() - we already applied it above
         let mem_table = MemTable::try_new(projected_schema.clone(), vec![projected_batches])?;
-        let plan = mem_table.scan(_state, projection, filters, _limit).await?;
+        let plan = mem_table.scan(_state, None, filters, _limit).await?;
 
         Ok(plan)
     }
@@ -237,6 +238,7 @@ fn is_pk_filter(expr: &Expr, pk_name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::row::Row;
     use crate::table::Table;
     use arrow::datatypes::{DataType, Field, Schema};
     use datafusion::prelude::*;

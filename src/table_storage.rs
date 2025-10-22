@@ -203,6 +203,7 @@ mod tests {
     use super::*;
     use crate::value::Value;
     use arrow::datatypes::{DataType, Field, Schema};
+    use std::sync::Arc;
     use tempfile::TempDir;
 
     #[test]

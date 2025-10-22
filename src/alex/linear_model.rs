@@ -211,7 +211,7 @@ impl LinearModel {
         data.iter()
             .map(|(key, pos)| {
                 let predicted = self.predict(*key);
-                (predicted as i64 - *pos as i64).abs() as usize
+                (predicted as i64 - *pos as i64).unsigned_abs() as usize
             })
             .max()
             .unwrap_or(0)
@@ -231,7 +231,7 @@ impl LinearModel {
             .iter()
             .map(|(key, pos)| {
                 let predicted = self.predict(*key);
-                (predicted as i64 - *pos as i64).abs() as usize
+                (predicted as i64 - *pos as i64).unsigned_abs() as usize
             })
             .sum();
 

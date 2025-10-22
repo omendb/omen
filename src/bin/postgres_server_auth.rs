@@ -28,13 +28,13 @@ async fn main() -> anyhow::Result<()> {
     let auth_source = Arc::new(OmenDbAuthSource::new(data_dir)?);
 
     info!("Setting up authentication with SCRAM-SHA-256");
-    auth_source.add_user("alice", "secret123").await?;
-    auth_source.add_user("bob", "password456").await?;
-    auth_source.add_user("postgres", "postgres").await?;
+    auth_source.add_user("alice", "secret123")?;
+    auth_source.add_user("bob", "password456")?;
+    auth_source.add_user("postgres", "postgres")?;
 
     info!(
         "Added {} users: alice (secret123), bob (password456), postgres (postgres)",
-        auth_source.user_count().await
+        auth_source.user_count()
     );
 
     // Create DataFusion session context

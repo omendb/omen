@@ -61,7 +61,7 @@ impl ZipfianGenerator {
             return (self.base + 1.0) as i64;
         }
 
-        let ret = self.base + (self.num_items as f64 * ((self.eta * u - self.eta + 1.0).powf(self.alpha))) as f64;
+        let ret = self.base + (self.num_items as f64 * ((self.eta * u - self.eta + 1.0).powf(self.alpha)));
         ret.min(self.base + self.num_items as f64 - 1.0) as i64
     }
 }

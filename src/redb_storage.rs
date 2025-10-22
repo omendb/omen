@@ -157,7 +157,7 @@ impl RedbStorage {
             metrics::set_learned_index_models(self.alex.num_leaves());
         }
 
-        if self.row_count % 1000 == 0 {
+        if self.row_count.is_multiple_of(1000) {
             self.save_metadata()?;
         }
 

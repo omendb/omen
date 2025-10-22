@@ -61,7 +61,7 @@ impl RecursiveModelIndex {
         self.data.push((key, pos));
 
         // Retrain periodically
-        if self.data.len() % 10000 == 0 {
+        if self.data.len().is_multiple_of(10000) {
             info!(
                 total_keys = self.data.len(),
                 "Periodic retrain triggered (every 10,000 keys)"
@@ -130,7 +130,7 @@ impl RecursiveModelIndex {
 
         // Train second layer models
         self.second_layer.clear();
-        let segment_size = (n + self.num_second_models - 1) / self.num_second_models;
+        let segment_size = n.div_ceil(self.num_second_models);
 
         for model_idx in 0..self.num_second_models {
             let start = model_idx * segment_size;
@@ -231,7 +231,7 @@ impl RecursiveModelIndex {
         // Sample first 50
         for (i, (key, _)) in segment.iter().take(50.min(seg_len)).enumerate() {
             let predicted = (slope * (*key as f64) + intercept).round() as i64;
-            let error = (predicted - i as i64).abs() as usize;
+            let error = (predicted - i as i64).unsigned_abs() as usize;
             errors.push(error);
         }
 
@@ -241,7 +241,7 @@ impl RecursiveModelIndex {
             for (i, (key, _)) in segment.iter().skip(mid_start).take(50).enumerate() {
                 let actual_i = mid_start + i;
                 let predicted = (slope * (*key as f64) + intercept).round() as i64;
-                let error = (predicted - actual_i as i64).abs() as usize;
+                let error = (predicted - actual_i as i64).unsigned_abs() as usize;
                 errors.push(error);
             }
         }
@@ -252,7 +252,7 @@ impl RecursiveModelIndex {
             for (i, (key, _)) in segment.iter().skip(last_start).enumerate() {
                 let actual_i = last_start + i;
                 let predicted = (slope * (*key as f64) + intercept).round() as i64;
-                let error = (predicted - actual_i as i64).abs() as usize;
+                let error = (predicted - actual_i as i64).unsigned_abs() as usize;
                 errors.push(error);
             }
         }

@@ -110,7 +110,7 @@ impl RecursiveModelIndex {
 
         // Train second layer models
         self.second_layer.clear();
-        let segment_size = (n + self.num_second_models - 1) / self.num_second_models;
+        let segment_size = n.div_ceil(self.num_second_models);
 
         for model_idx in 0..self.num_second_models {
             let start = model_idx * segment_size;
@@ -181,7 +181,7 @@ impl RecursiveModelIndex {
         let sample_size = segment.len().min(100); // Sample only first 100 elements
         for (i, (key, _)) in segment.iter().take(sample_size).enumerate() {
             let predicted = (slope * (*key as f64) + intercept).round() as i64;
-            let error = (predicted - i as i64).abs() as usize;
+            let error = (predicted - i as i64).unsigned_abs() as usize;
             max_error = max_error.max(error);
         }
 
@@ -341,7 +341,7 @@ impl OptimizedLearnedIndex {
             let mut max_error = 0;
             for (i, (key, _)) in segment.iter().enumerate() {
                 let predicted = (slope * (*key as f64) + intercept).round() as i64;
-                let error = (predicted - i as i64).abs() as usize;
+                let error = (predicted - i as i64).unsigned_abs() as usize;
                 max_error = max_error.max(error);
             }
 
@@ -504,7 +504,7 @@ impl FastSegmentedIndex {
         .max(100)
         .min(10000);
 
-        let num_segments = (n + self.segment_size - 1) / self.segment_size;
+        let num_segments = n.div_ceil(self.segment_size);
         self.segments.clear();
 
         // Train one model per segment
@@ -548,7 +548,7 @@ impl FastSegmentedIndex {
             let mut max_err = 0;
             for (i, (key, _)) in segment.iter().enumerate() {
                 let predicted = (slope * (*key as f64) + intercept).round() as i64;
-                let error = (predicted - i as i64).abs() as usize;
+                let error = (predicted - i as i64).unsigned_abs() as usize;
                 max_err = max_err.max(error);
             }
 
@@ -691,7 +691,7 @@ impl CDFLearnedIndex {
         let mut max_err = 0;
         for (i, (key, _)) in self.data.iter().enumerate() {
             let predicted = (self.slope * (*key as f64) + self.intercept).round() as i64;
-            let error = (predicted - i as i64).abs() as usize;
+            let error = (predicted - i as i64).unsigned_abs() as usize;
             max_err = max_err.max(error);
         }
 
@@ -789,7 +789,7 @@ impl LinearLearnedIndex {
         let mut max_err = 0;
         for (i, (key, _)) in self.data.iter().enumerate() {
             let predicted = (self.slope * (*key as f64) + self.intercept) as i64;
-            let error = (predicted - i as i64).abs() as usize;
+            let error = (predicted - i as i64).unsigned_abs() as usize;
             max_err = max_err.max(error);
         }
         self.max_error = (max_err + 10).min(self.data.len() / 10).max(10);

@@ -21,10 +21,9 @@ use omendb::rocks_storage::RocksStorage;
 use rusqlite::{Connection, params};
 use std::time::Instant;
 use tempfile::TempDir;
-use tracing_subscriber;
 use tracing_subscriber::EnvFilter;
 
-const SIZES: &[usize] = &[10_000, 100_000, 1_000_000];
+const SIZES: &[usize] = &[10_000, 100_000, 1_000_000, 10_000_000];
 
 #[derive(Clone, Copy)]
 enum DataDistribution {
@@ -281,6 +280,13 @@ fn benchmark_omendb_point_query(keys: &[i64], temp_dir: &TempDir) -> Result<f64>
 
     let elapsed = start.elapsed();
     let us_per_query = (elapsed.as_secs_f64() * 1_000_000.0) / num_queries as f64;
+
+    // Print cache statistics
+    let (cache_hits, cache_misses, hit_rate) = storage.cache_stats();
+    if cache_hits + cache_misses > 0 {
+        println!("   📊 Cache Stats: {:.1}% hit rate ({} hits, {} misses)",
+            hit_rate * 100.0, format_number(cache_hits as usize), format_number(cache_misses as usize));
+    }
 
     Ok(us_per_query)
 }

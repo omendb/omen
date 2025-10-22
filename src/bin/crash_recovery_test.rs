@@ -20,8 +20,7 @@ use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use base64;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use tempfile::tempdir;
 use tracing::{info, warn, error};
@@ -102,7 +101,7 @@ impl RecoveryTestResults {
 pub struct CrashRecoveryTester {
     config: CrashRecoveryConfig,
     test_dir: PathBuf,
-    table: Option<Arc<Table>>,
+    table: Option<Arc<RwLock<Table>>>,
     wal_manager: Option<Arc<Mutex<WalManager>>>,
     operation_log: Vec<TestOperation>,
     current_data_state: HashMap<i64, Vec<u8>>,
@@ -152,12 +151,12 @@ impl CrashRecoveryTester {
             Field::new("operation_id", DataType::Int64, false),
         ]));
 
-        let table = Arc::new(Table::new(
+        let table = Arc::new(RwLock::new(Table::new(
             "crash_test_table".to_string(),
             schema,
             "id".to_string(),
             self.test_dir.join("table_data"),
-        )?);
+        )?));
 
         // Initialize WAL
         let wal_dir = self.test_dir.join("wal");
@@ -291,9 +290,9 @@ impl CrashRecoveryTester {
                 },
             };
 
-            let wal_entry = WalEntry {
+            let _wal_entry = WalEntry {
                 sequence: operation_id,
-                operation: wal_operation,
+                operation: wal_operation.clone(),
                 timestamp: chrono::Utc::now(),
                 checksum: operation_id as u32, // Simple checksum
             };
@@ -315,13 +314,13 @@ impl CrashRecoveryTester {
                             Value::Int64(checksum),
                             Value::Int64(operation_id as i64),
                         ]);
-                        table.insert(row)?;
+                        table.write().unwrap().insert(row)?;
                         self.current_data_state.insert(key, data.clone());
                     }
                 }
                 OperationType::Delete => {
                     let key_value = Value::Int64(key);
-                    let _ = table.delete(&key_value); // Ignore not found errors
+                    let _ = table.write().unwrap().delete(&key_value); // Ignore not found errors
                     self.current_data_state.remove(&key);
                 }
                 _ => {}
@@ -400,12 +399,12 @@ impl CrashRecoveryTester {
             Field::new("operation_id", DataType::Int64, false),
         ]));
 
-        let table = Arc::new(Table::new(
+        let table = Arc::new(RwLock::new(Table::new(
             "crash_test_table".to_string(),
             schema,
             "id".to_string(),
             self.test_dir.join("table_data"),
-        )?);
+        )?));
 
         // Replay WAL
         if let Some(wal_manager) = &self.wal_manager {
@@ -425,7 +424,7 @@ impl CrashRecoveryTester {
     }
 
     /// Replay a single WAL operation
-    fn replay_wal_operation(&self, table: &Arc<Table>, operation: &WalOperation) -> Result<()> {
+    fn replay_wal_operation(&self, table: &Arc<RwLock<Table>>, operation: &WalOperation) -> Result<()> {
         match operation {
             WalOperation::Insert { timestamp, value, series_id } => {
                 let operation_id = *value as u64;
@@ -438,11 +437,11 @@ impl CrashRecoveryTester {
                     Value::Int64(checksum),
                     Value::Int64(operation_id as i64),
                 ]);
-                table.insert(row)?;
+                table.write().unwrap().insert(row)?;
             }
             WalOperation::Delete { timestamp } => {
                 let key_value = Value::Int64(*timestamp);
-                let _ = table.delete(&key_value); // Ignore not found
+                let _ = table.write().unwrap().delete(&key_value); // Ignore not found
             }
             _ => {
                 warn!("Unsupported WAL operation type for replay");
@@ -461,7 +460,7 @@ impl CrashRecoveryTester {
             for (key, expected_data) in expected_state {
                 let key_value = Value::Int64(*key);
 
-                match table.get(&key_value) {
+                match table.read().unwrap().get(&key_value) {
                     Ok(Some(row)) => {
                         // Verify data matches expected
                         if let Some(Value::Text(encoded_data)) = row.values().get(1) {

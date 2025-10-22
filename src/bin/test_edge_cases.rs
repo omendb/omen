@@ -173,15 +173,13 @@ fn main() -> Result<()> {
         let table = catalog.get_table_mut("boundary_test")?;
 
         // Test extreme values
-        let boundaries = vec![
-            i64::MIN,
+        let boundaries = [i64::MIN,
             i64::MIN + 1,
             -1,
             0,
             1,
             i64::MAX - 1,
-            i64::MAX,
-        ];
+            i64::MAX];
 
         let mut rows = Vec::new();
         for (i, &key) in boundaries.iter().enumerate() {

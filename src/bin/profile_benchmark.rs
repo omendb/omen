@@ -45,7 +45,7 @@ fn profile_sequential(n: usize) {
         for i in 0..n {
             let key = (i as i64).to_be_bytes();
             let value = format!("value_{}", i).into_bytes();
-            batch.put(&key, &value);
+            batch.put(key, &value);
         }
         db.write(batch).unwrap();
     }
@@ -114,7 +114,7 @@ fn profile_random(n: usize) {
         for &key in &random_keys {
             let key_bytes = key.to_be_bytes();
             let value = format!("value_{}", key).into_bytes();
-            batch.put(&key_bytes, &value);
+            batch.put(key_bytes, &value);
         }
         db.write(batch).unwrap();
     }

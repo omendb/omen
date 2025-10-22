@@ -87,7 +87,7 @@ fn main() -> Result<()> {
     println!("  Leaf routing (binary search): ~{:.1} comparisons", leaf_routing_cost);
 
     // Exponential search + linear scan within leaf
-    let within_leaf_cost = (avg_keys_per_leaf as f64).log2() * 2.0; // Exponential iterations
+    let within_leaf_cost = avg_keys_per_leaf.log2() * 2.0; // Exponential iterations
     let linear_scan_cost = avg_keys_per_leaf / 2.0; // Average half-node scan
 
     println!("  Exponential search: ~{:.1} iterations", within_leaf_cost);

@@ -52,28 +52,28 @@ impl ConcurrentOmenDB {
     }
 
     /// Get read access to index
-    pub fn read_index(&self) -> Result<RwLockReadGuard<RecursiveModelIndex>> {
+    pub fn read_index(&self) -> Result<RwLockReadGuard<'_, RecursiveModelIndex>> {
         self.index
             .read()
             .map_err(|e| anyhow::anyhow!("Failed to acquire read lock: {}", e))
     }
 
     /// Get write access to index
-    pub fn write_index(&self) -> Result<RwLockWriteGuard<RecursiveModelIndex>> {
+    pub fn write_index(&self) -> Result<RwLockWriteGuard<'_, RecursiveModelIndex>> {
         self.index
             .write()
             .map_err(|e| anyhow::anyhow!("Failed to acquire write lock: {}", e))
     }
 
     /// Get read access to storage
-    pub fn read_storage(&self) -> Result<RwLockReadGuard<ArrowStorage>> {
+    pub fn read_storage(&self) -> Result<RwLockReadGuard<'_, ArrowStorage>> {
         self.storage
             .read()
             .map_err(|e| anyhow::anyhow!("Failed to acquire storage read lock: {}", e))
     }
 
     /// Get write access to storage
-    pub fn write_storage(&self) -> Result<RwLockWriteGuard<ArrowStorage>> {
+    pub fn write_storage(&self) -> Result<RwLockWriteGuard<'_, ArrowStorage>> {
         self.storage
             .write()
             .map_err(|e| anyhow::anyhow!("Failed to acquire storage write lock: {}", e))
@@ -130,7 +130,7 @@ impl ConcurrentOmenDB {
     }
 
     /// Register new connection
-    pub fn connect(&self) -> ConnectionGuard {
+    pub fn connect(&self) -> ConnectionGuard<'_> {
         self.active_connections.fetch_add(1, Ordering::Relaxed);
         ConnectionGuard { db: self }
     }
@@ -215,6 +215,12 @@ pub struct MetricsCollector {
     pub failed_queries: AtomicUsize,
     pub failed_inserts: AtomicUsize,
     pub avg_query_time_ns: AtomicUsize,
+}
+
+impl Default for MetricsCollector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MetricsCollector {
