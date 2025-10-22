@@ -12,6 +12,12 @@
 
 **→ Continuing work?** Check `ai/TODO.md` and `ai/STATUS.md` first
 
+**→ Need organization guidance?** Reference [agent-contexts/PRACTICES.md](https://github.com/nijaru/agent-contexts/blob/main/PRACTICES.md) for:
+- File update patterns (edit vs append)
+- Context management strategies
+- Multi-session handoff protocols
+- Anti-patterns to avoid
+
 ## Current Status
 
 **Product**: PostgreSQL-compatible HTAP database with multi-level learned indexes
@@ -211,13 +217,13 @@ cargo build --release            # Optimized build
 
 ## Documentation Organization
 
-**We follow the [agent-contexts](https://github.com/nijaru/agent-contexts) pattern:**
+**We follow the [agent-contexts](https://github.com/nijaru/agent-contexts) pattern with existing structure respected:**
 
 ### ai/ - Agent Working Context (Start Here!)
-*Temporary working knowledge, edited in place*
+*Evolving, AI-optimized working context - load this first!*
 
 - **ai/TODO.md** - Current tasks and priorities (edit in place)
-- **ai/STATUS.md** - Current state, what worked/didn't (edit in place)
+- **ai/STATUS.md** - Current state, what worked/didn't (edit in place, distilled from STATUS_REPORT)
 - **ai/DECISIONS.md** - Architectural decisions with rationale (append-only)
 - **ai/RESEARCH.md** - Research index with key findings (hybrid: update summaries, append new)
 
@@ -227,10 +233,18 @@ cargo build --release            # Optimized build
 3. ai/STATUS.md - Current state
 4. ai/DECISIONS.md (if making architectural changes)
 
-### internal/ - Permanent Project Documentation
-*Reference material, not for daily agent use*
+**Update every session**:
+- ✅ Mark tasks complete in ai/TODO.md
+- ✅ Update ai/STATUS.md with current state (edit in place, not append)
+- ✅ Append new decisions to ai/DECISIONS.md
+- ✅ Add research findings to ai/RESEARCH.md
 
-- **internal/STATUS_REPORT.md** - Detailed status (reference only, use ai/STATUS.md instead)
+### internal/ - Permanent Project Documentation (Existing Structure)
+*Reference material - permanent, detailed, not for daily agent use*
+
+**Note**: New projects would use `docs/` instead. We're respecting OmenDB's existing `internal/` structure.
+
+- **internal/STATUS_REPORT.md** - Detailed status (reference only, use ai/STATUS.md for daily work)
 - **internal/research/** - Detailed research findings (26 docs, permanent reference)
 - **internal/business/** - Business strategy, customer acquisition
 - **internal/technical/** - Technical guides, MVCC design, roadmaps
@@ -242,28 +256,48 @@ cargo build --release            # Optimized build
 
 - **ARCHITECTURE.md** - System architecture
 - **CONTRIBUTING.md** - Code guidelines
-- **docs/deployment.md** - Deployment guides
 - **README.md** - Public project overview
+
+### Knowledge Graduation Flow
+
+```
+Active work → ai/TODO.md
+           ↓ (completed)
+         ai/STATUS.md (what worked/didn't, edit in place)
+           ↓ (important decision)
+         ai/DECISIONS.md (working decision log)
+           ↓ (if significant milestone)
+         internal/PHASE_*_COMPLETE.md (historical record)
+           ↓ (if permanent reference)
+         internal/STATUS_REPORT.md (detailed, permanent)
+
+Research → ai/research/{topic}.md
+        ↓ (if valuable/permanent)
+      internal/research/{topic}.md
+        ↓ (if outdated)
+      ai/research/archive/
+```
 
 ### Anti-Patterns to Avoid
 
-❌ **Don't duplicate project docs in ai/**
-- Project specs belong in `docs/` or `internal/`
-- AI working notes belong in `ai/`
+❌ **Don't duplicate between ai/ and internal/**
+- Permanent findings → `internal/`
+- Working context → `ai/`
+- Don't copy the same content to both
 
 ❌ **Don't treat internal/ as working context**
-- internal/ = permanent reference (like a library)
-- ai/ = temporary working knowledge (like a scratchpad)
+- internal/ = permanent reference library
+- ai/ = evolving scratchpad
+- Load ai/ first, reference internal/ as needed
 
 ❌ **Don't append to ai/STATUS.md**
-- Edit it in place to reflect current truth
-- Old status goes in internal/STATUS_REPORT.md
+- Edit in place to reflect current truth
+- Historical details stay in internal/STATUS_REPORT.md
 
-✅ **Do update ai/ files every session**
-- Mark tasks complete in ai/TODO.md
-- Update ai/STATUS.md with current state
-- Append new decisions to ai/DECISIONS.md
-- Add research findings to ai/RESEARCH.md
+❌ **Don't bloat ai/ files**
+- Keep concise and current (optimize for tokens)
+- Move old research to ai/research/archive/
+- Archive completed work to internal/
 
 ## Development Principles
 
