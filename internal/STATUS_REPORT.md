@@ -52,8 +52,8 @@
 - ✅ **Phase 3 Week 1 (UPDATE/DELETE)**: COMPLETE
 - ✅ **Phase 3 Week 2 (JOIN)**: COMPLETE
 - ✅ **Cache Layer Days 1-10**: COMPLETE (LRU cache + validation)
-- 🔨 **Phase 2 Security Days 1-4**: COMPLETE (Auth + User Management, 32 tests) ⭐ NEW
-- ⏭️ Phase 2 Days 5-10: IN PROGRESS (Catalog integration + SSL/TLS, 6 days)
+- ✅ **Phase 2 Security Days 1-5**: COMPLETE (Auth + User Management, 40 tests) ⭐ NEW
+- 🔨 **Phase 2 Days 6-10**: IN PROGRESS (SSL/TLS + testing + docs, 5 days)
 - ⏭️ Phase 3 Week 3-4 (Aggregations, Subqueries): PENDING (2 weeks)
 - ⏭️ Phase 4-6 (Observability, Backup, Hardening): PENDING (4 weeks)
 
@@ -220,14 +220,14 @@ Days 1-10 cache implementation and validation complete. Next steps (Days 11-15) 
 
 ## Phase 2 Security Implementation (Oct 21, 2025) ⭐ IN PROGRESS
 
-**Status**: Days 1-4 COMPLETE (4/10 days)
+**Status**: Days 1-5 COMPLETE (5/10 days)
 **Timeline**: Started Oct 21 night, on track
-**Tests**: 32/32 security tests passing (100%)
-**Next**: Day 5 - Catalog integration (table-level permissions)
+**Tests**: 40/40 security tests passing (100%)
+**Next**: Days 6-7 - SSL/TLS for PostgreSQL wire protocol
 
-### What We Built (Days 1-4)
+### What We Built (Days 1-5)
 
-**Day 1: Persistent User Storage** (`src/user_store.rs` - 550 lines) ✅
+**Day 1: Persistent User Storage** (`src/user_store.rs` - 570 lines) ✅
 - RocksDB-backed user credential storage
 - PostgreSQL-compatible username validation (alphanumeric + underscore)
 - Password strength requirements (8+ characters)
@@ -248,6 +248,14 @@ Days 1-10 cache implementation and validation complete. Next steps (Days 11-15) 
 - Manual SQL parsing (sqlparser doesn't support user management)
 - SQL injection prevention via input validation
 - **15/15 tests passing**: CRUD, errors, security, edge cases
+
+**Day 5: Catalog Integration** (`src/catalog.rs`) ✅
+- Added user_store field to Catalog (unified management)
+- User management methods: create_user, drop_user, list_users
+- Default admin user creation (username: admin, password: changeme)
+- User persistence across catalog restarts
+- User::new_with_password() convenience constructor
+- **8/8 tests passing**: CRUD, persistence, isolation, concurrency
 
 ### Security Features Implemented
 
@@ -270,7 +278,7 @@ Days 1-10 cache implementation and validation complete. Next steps (Days 11-15) 
 - Authentication required for user commands
 - Validation before database operations
 
-### Test Coverage (32 tests)
+### Test Coverage (40 tests)
 
 **User Store Tests (11)**:
 - Basic CRUD operations
@@ -295,10 +303,19 @@ Days 1-10 cache implementation and validation complete. Next steps (Days 11-15) 
 - Security: SQL injection, special chars, Unicode, case sensitivity
 - Error handling: no auth configured
 
-### Remaining Work (Days 5-10)
+**Catalog Integration Tests (8)**: ⭐ NEW
+- User management via Catalog
+- Default admin user creation
+- User persistence across catalog restarts
+- User isolation per catalog instance
+- Concurrent catalog user operations
+- Username validation
+- Duplicate user prevention
+- Non-existent user handling
 
-**Day 5**: Catalog integration (user → table permissions) - NEXT
-**Day 6-7**: SSL/TLS encryption for PostgreSQL wire protocol
+### Remaining Work (Days 6-10)
+
+**Days 6-7**: SSL/TLS encryption for PostgreSQL wire protocol - NEXT
 **Day 8**: Security integration tests (auth + permissions + SSL)
 **Day 9**: Security documentation (SECURITY.md, deployment guides)
 **Day 10**: Final validation, security audit, cleanup
@@ -308,6 +325,7 @@ Days 1-10 cache implementation and validation complete. Next steps (Days 11-15) 
 - `3b849d1` - Day 1: UserStore with RocksDB persistence
 - `537104e` - Day 2: OmenDbAuthSource integration
 - `8e8670d` - Day 3-4: SQL user management commands
+- `8806dd9` - Day 5: Catalog integration
 
 ---
 
