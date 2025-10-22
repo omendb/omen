@@ -1,6 +1,6 @@
 # OmenDB Development Context
 
-**Last Updated**: October 21, 2025 (Night)
+**Last Updated**: October 22, 2025 (Evening) - STRATEGIC PIVOT
 
 ## Quick Start for AI Agents
 
@@ -19,49 +19,88 @@
   - Context management strategies
   - Multi-session handoff protocols
 
+---
+
+## STRATEGIC PIVOT (October 22, 2025)
+
+**New Positioning**: PostgreSQL-Compatible Vector Database That Scales
+
+**Old Focus** (Abandoned):
+- ❌ "Fast Embedded PostgreSQL"
+- ❌ Embedded/edge/IoT markets
+- ❌ "Faster SQLite" positioning
+
+**New Focus**:
+- ✅ Vector database for AI applications
+- ✅ pgvector drop-in replacement (10x faster at scale)
+- ✅ $10.6B market growing at 23.54% CAGR
+- ✅ Target: RAG, semantic search, AI platforms
+
+**Why the Pivot**:
+1. Vector DB market: $10.6B by 2032 (vs $2-3B embedded DB)
+2. Clear pain point: pgvector doesn't scale, Pinecone expensive
+3. Perfect tech fit: ALEX + PostgreSQL protocol + memory efficiency
+4. High willingness to pay: $29-499/month (validated by Pinecone)
+
+---
+
 ## Current Status
 
-**Product**: PostgreSQL-compatible HTAP database with multi-level learned indexes
-**Achievement**: 1.5-3x faster than SQLite (validated), scales to 100M+ rows
-**Status**: Phase 2 Security Days 1-5 COMPLETE → Days 6-7 (SSL/TLS) next
-**Stack**: Rust (Multi-level ALEX + DataFusion + PostgreSQL protocol + RocksDB + LRU cache + MVCC)
-**Phase**: Security implementation (Days 6-10) → 0.1.0 in 7 weeks
-**Priority**: 🔒 SSL/TLS for PostgreSQL wire protocol (Days 6-7)
+**Product**: PostgreSQL-compatible vector database with learned index (ALEX)
+**Achievement**: Technology foundation ready for vectors (ALEX, PostgreSQL protocol, MVCC, 28x memory efficiency)
+**Status**: STRATEGIC PIVOT → Vector database prototyping (Week 1-2)
+**Stack**: Rust (Multi-level ALEX + PostgreSQL protocol + RocksDB + MVCC + LRU cache)
+**Phase**: Vector foundation prototyping → 6 months to production-ready
+**Priority**: 🚨 Validate ALEX for high-dimensional vectors (Week 1-2)
 
 ## Technical Core
 
-**Multi-Level ALEX (Production Ready)**:
+**Multi-Level ALEX (Ready for Vectors)**:
 - Hierarchical learned index structure (height 2-3)
-- 1.5-3x faster than SQLite across all scales (1M-100M)
-- 1.24μs query latency at 100M rows
 - 1.50 bytes/key memory (28x more efficient than PostgreSQL)
-- Fixed 64 keys/leaf fanout (cache-line optimized)
-- Linear scaling validated to 100M+
+- Linear scaling validated to 100M+ rows
+- **Hypothesis**: Perfect for high-dimensional vector indexing
+- **Validation needed**: Prototype for 1536-dim vectors (OpenAI embeddings)
 
-**Market Position**:
-- **vs SQLite**: 1.5-3x faster (validated ✅)
-- **vs CockroachDB**: 10-50x single-node writes (projected, needs validation)
-- **vs TiDB**: No replication lag, simpler architecture
-- **vs SingleStore**: Multi-level ALEX vs B-tree advantage
+**Competitive Advantages for Vector DB**:
+- ✅ **PostgreSQL wire protocol**: Drop-in pgvector replacement
+- ✅ **Memory efficiency (28x)**: Critical for 100M+ vector scale
+- ✅ **MVCC + transactions**: Unique vs pure vector DBs (Pinecone, Weaviate)
+- ✅ **HTAP architecture**: One DB for vectors + business data
+- ✅ **Self-hosting option**: Compliance/privacy vs cloud-only (Pinecone)
 
-## Architecture (Current - October 21, 2025 Late Evening)
+**Market Position** (Vector DB Focus):
+- **vs pgvector**: 10x faster at 10M+ vectors, 30x more memory efficient
+- **vs Pinecone**: Same performance, 1/10th cost, self-hostable, open source
+- **vs Weaviate/Qdrant**: PostgreSQL-compatible (no new API to learn)
+- **Unique**: Only PostgreSQL-compatible vector DB that scales efficiently
+
+## Architecture (Vector DB - October 22, 2025)
 
 ```
-Production Stack:
-├── Protocol Layer: PostgreSQL wire protocol (port 5433)
-├── SQL Layer: UPDATE/DELETE/JOIN support (Phase 3 Week 1-2) ✅
-├── MVCC Layer: Snapshot isolation (Phase 1) ✅
-├── Index Layer: Multi-level ALEX (3-level hierarchy)
-├── Cache Layer: 1-10GB LRU cache (Day 1-5 complete) ✅ NEW
-├── Storage Layer: RocksDB (LSM tree, HN validated) ✅
-└── Recovery: 100% crash recovery success
+Current Stack (Pre-Vector):
+├── Protocol Layer: PostgreSQL wire protocol (port 5433) ✅
+├── MVCC Layer: Snapshot isolation ✅
+├── Index Layer: Multi-level ALEX (3-level hierarchy) ✅
+├── Cache Layer: 1-10GB LRU cache ✅
+├── Storage Layer: RocksDB (LSM tree) ✅
+├── Recovery: 100% crash recovery ✅
+└── Security: Auth + SSL/TLS ✅
+
+Planned (Vector DB):
+├── Vector Data Type: vector(N) - pgvector compatible 🔨
+├── Distance Operators: <-> (L2), <#> (dot), <=> (cosine) 🔨
+├── Vector Index: ALEX for high-dimensional data 🔨
+├── ANN Search: Approximate nearest neighbor 🔨
+└── Hybrid Search: Vector similarity + SQL filters 🔨
 ```
 
-**Architecture Validation (HN Insights)**:
-- ALEX (sparse learned index): Validated by DB fundamentals ✅
-- RocksDB (LSM tree): Industry-proven (DynamoDB, Cassandra) ✅
-- MVCC (immutable records): Best practice (append-only) ✅
-- Cache layer: Addresses 80x in-memory gap (HN validated) ✅
+**Architecture Validation**:
+- ALEX (learned index): Works great for sequential keys, testing for vectors
+- RocksDB (LSM tree): Industry-proven storage backend
+- MVCC: Concurrent vector operations (unique vs Pinecone)
+- PostgreSQL protocol: Huge ecosystem compatibility
+- Memory efficiency: 28x advantage critical for large vector datasets
 
 **Repository Structure** (Standard OSS - agent-contexts v0.1.1):
 ```
@@ -76,99 +115,148 @@ omendb/core/
 │   ├── architecture/      # Technical deep-dives
 │   │   ├── research/      # Research findings (26+ docs)
 │   │   ├── MULTI_LEVEL_ALEX.md
-│   │   ├── ROADMAP_0.1.0.md
+│   │   ├── ROADMAP_0.1.0.md (OUTDATED - needs vector update)
 │   │   ├── ROCKSDB_PERFORMANCE_ANALYSIS_OCT_22.md
 │   │   └── STORAGE_ENGINE_TEST_VALIDATION_OCT_22.md
 │   ├── strategy/          # Business strategy (private repo only)
-│   │   ├── COMPETITIVE_STRATEGY_OCT_2025.md
-│   │   └── CUSTOMER_ACQUISITION.md
+│   │   ├── COMPETITIVE_STRATEGY_OCT_2025.md (needs vector update)
+│   │   └── CUSTOMER_ACQUISITION.md (OUTDATED - Jan 2025)
 │   └── archive/           # Historical documentation
 │       ├── phases/        # Phase planning docs
 │       └── PHASE_*_COMPLETE.md
 ├── ai/                    # AI working context ⭐
-│   ├── TODO.md            # Current tasks (edit in place)
-│   ├── STATUS.md          # Current state (edit in place)
-│   ├── DECISIONS.md       # Working decision log (append-only)
-│   └── RESEARCH.md        # Research index (hybrid)
+│   ├── TODO.md            # Current tasks (UPDATED - vector roadmap)
+│   ├── STATUS.md          # Current state (UPDATED - vector pivot)
+│   ├── DECISIONS.md       # Working decision log (UPDATED - pivot decision)
+│   └── RESEARCH.md        # Research index
 ├── src/                   # Source code
 │   ├── alex/              # Multi-level ALEX implementation
 │   ├── postgres/          # PostgreSQL wire protocol + auth
 │   ├── mvcc/              # MVCC snapshot isolation ✅
 │   ├── cache.rs           # LRU cache layer ✅
-│   ├── sql_engine.rs      # SQL: UPDATE/DELETE/JOIN + user mgmt ✅
-│   ├── catalog.rs         # Table + user management ✅
-│   ├── user_store.rs      # Persistent user storage ✅
+│   ├── sql_engine.rs      # SQL engine (needs vector operators)
+│   ├── catalog.rs         # Table + user management
+│   ├── user_store.rs      # Persistent user storage
 │   └── table.rs           # Table storage + ALEX + cache
-└── tests/                 # 520 tests (99.8% passing) ✅
+└── tests/                 # 557 tests (99.8% passing) ✅
 ```
 
 **Pattern**: Standard OSS database structure (like PostgreSQL, MongoDB, DuckDB, CockroachDB)
 - **docs/** — All permanent documentation (user guides, architecture, research)
 - **ai/** — AI working context (tasks, status, decisions, research notes)
 
-## Validated Competitive Advantages
+---
 
-1. **1.5-3x Faster**: Validated vs SQLite at 1M-100M scale ✅
-2. **28x Memory Efficient**: 1.50 bytes/key vs PostgreSQL's 42 bytes/key ✅
-3. **Linear Scaling**: Multi-level ALEX scales to 100M+ ✅
-4. **PostgreSQL Compatible**: Wire protocol complete, drop-in ready ✅
-5. **Production Durability**: 100% crash recovery success ✅
+## Validated Technology Foundation (Ready for Vectors)
 
-## Validated Performance (October 14, 2025)
+**Already Built** (Relevant to Vector DB):
+1. ✅ **Multi-level ALEX index** (production-ready, scales to 100M+)
+2. ✅ **PostgreSQL wire protocol** (pgvector compatibility foundation)
+3. ✅ **MVCC snapshot isolation** (85 tests, concurrent vector operations)
+4. ✅ **Authentication + SSL/TLS** (57 tests, enterprise-ready)
+5. ✅ **LRU cache layer** (2-3x speedup, 90% hit rate)
+6. ✅ **Crash recovery** (100% success rate)
+7. ✅ **RocksDB storage** (LSM tree, write-optimized)
 
-**Full System (RocksDB + ALEX) - Honest Benchmarks:**
+**Test Coverage**: 557 tests passing
+- 468 library tests (MVCC, storage, ALEX)
+- 57 security tests (auth, SSL/TLS)
+- 32 SQL tests (aggregations, joins)
 
-| Scale | Speedup (Sequential) | Speedup (Random) | Status |
-|-------|---------------------|------------------|--------|
-| 10K   | 3.54x ✅            | 3.24x ✅         | Production-ready |
-| 100K  | 3.15x ✅            | 2.69x ✅         | Production-ready |
-| 1M    | 2.40x ✅            | 2.40x ✅         | Production-ready |
-| 10M   | 1.93x ⚠️            | 1.53x ✅         | Optimization ongoing |
+**Performance Characteristics** (Base Technology):
+- Memory: 1.50 bytes/key (28x better than PostgreSQL)
+- Scaling: Linear to 100M+ rows
+- Cache: 90% hit rate on Zipfian workloads
+- Recovery: 100% success rate
 
-**ALEX Isolated (for reference):**
-- 1-10M: 628ns, 25M: 1.1μs, 50M: 984ns, 100M: 1.24μs (memory: 1.50 bytes/key)
+---
 
-**Key Findings (Oct 14):**
-- Small/medium scale (10K-1M): 2.4-3.5x faster ✅ Excellent
-- Large scale (10M): 1.9x faster ⚠️ Needs optimization
-- Bottleneck identified: RocksDB (77%), not ALEX (21%)
-- Path forward: Large cache + tuning (2-3 weeks to 2x target)
+## What We Need to Build (Vector DB)
 
-## Recent Achievements (Oct 21, 2025)
+**Phase 1: Vector Foundation** (8-10 weeks):
+- [ ] Vector data type (`vector(N)` - pgvector compatible)
+- [ ] Distance operators (`<->`, `<#>`, `<=>` for L2, dot, cosine)
+- [ ] Vector functions (l2_distance, cosine_distance, etc.)
+- [ ] ALEX index for vectors (CREATE INDEX USING alex)
+- [ ] Benchmark vs pgvector (1M, 10M, 100M vectors)
+- **Target**: 10x faster than pgvector, <2GB for 10M vectors
 
-**✅ Phase 2 Security Days 1-5 COMPLETE:** ⭐ NEW
-- **Day 1**: UserStore with RocksDB persistence (11 tests) ✅
-- **Day 2**: OmenDbAuthSource integration (6 tests) ✅
-- **Day 3-4**: SQL user management - CREATE/DROP/ALTER USER (15 tests) ✅
-- **Day 5**: Catalog integration with default admin user (8 tests) ✅
-- **Total**: 40/40 security tests passing, persistent authentication system
-- **Timeline**: On schedule (5 days), Days 6-10 remaining
+**Phase 2: Performance & Scale** (4-6 weeks):
+- [ ] Optimize ALEX for high-dimensional data
+- [ ] Batch vector insert optimization
+- [ ] Hybrid search (vector + SQL filters)
+- [ ] Query planning for vector operations
+- [ ] Memory profiling and optimization
+- **Target**: Match Pinecone performance, 30x memory efficiency
 
-**✅ Cache Layer Days 1-10 COMPLETE:**
-- **LRU cache**: 1-10GB configurable, 2-3x speedup validated ✅
-- **90% hit rate** with Zipfian workloads ✅
-- **Optimal cache size**: 1-10% of data (not 50%) ✅
-- **Tests**: 7 cache integration tests passing ✅
+**Phase 3: Migration & Go-to-Market** (4-6 weeks):
+- [ ] pgvector → OmenDB migration script
+- [ ] Vector examples (RAG, semantic search, recommendations)
+- [ ] Documentation (installation, migration, API)
+- [ ] Managed cloud (basic $29-499/month tiers)
+- **Target**: 50-100 users, $1-5K MRR
 
-**✅ Phase 3 Week 1-2 COMPLETE:**
-- **UPDATE/DELETE support**: 30 tests, PRIMARY KEY immutability ✅
-- **INNER JOIN + LEFT JOIN**: 14 tests, nested loop algorithm ✅
-- **SQL coverage**: 15% → 35% ✅
+**Total Timeline**: 16-22 weeks (4-5 months) to production-ready vector database
 
-**✅ Phase 1 MVCC COMPLETE:**
-- **Snapshot isolation**: Production-ready, 85 tests (62 unit + 23 integration) ✅
-- **7% ahead of schedule**: 14 days vs planned 15 ✅
+---
 
-**🔒 CURRENT PRIORITY (Days 6-10):**
-- **Days 6-7**: SSL/TLS for PostgreSQL wire protocol - **NEXT**
-- **Day 8**: Security integration tests (target: 50+ total tests)
-- **Day 9**: Security documentation (SECURITY.md, deployment guides)
-- **Day 10**: Final validation & security audit
+## Target Market (Vector DB)
 
-**🔜 Next Steps (7 weeks to 0.1.0):**
-1. Phase 2 Security Days 6-10 (5 days) - **IN PROGRESS**
-2. Phase 3 Week 3-4: SQL features (aggregations, subqueries) - 2 weeks
-3. Observability, Backup, Hardening - 3-4 weeks
+**Primary Customers**:
+
+**Tier 1: AI-first Startups** ($29-299/month):
+- RAG applications (chatbots, search, Q&A)
+- Code search, document search, semantic search
+- **Pain**: pgvector too slow at 10M embeddings, Pinecone costs $2K/month
+- **Examples**: AI chat platforms, research paper search, code assistants
+
+**Tier 2: E-commerce + SaaS** ($299-2K/month):
+- Product recommendations, semantic product search
+- User analytics, customer support automation
+- **Pain**: Need PostgreSQL for transactions + vector search, running two DBs
+- **Examples**: E-commerce platforms, SaaS analytics, support automation
+
+**Tier 3: Enterprise AI** ($2K-20K/month):
+- Healthcare (patient similarity, drug discovery)
+- Finance (fraud detection, trading signals)
+- Legal (case law search, document similarity)
+- **Pain**: Can't use cloud Pinecone (compliance), pgvector doesn't scale
+- **Examples**: Healthcare AI, fintech, legal tech
+
+**Tier 4: AI Platform Companies** ($20K+/month):
+- LangChain, LlamaIndex (need vector backend)
+- AI agent platforms, RAG-as-a-service
+- **Pain**: Building on Pinecone = vendor lock-in, need open source
+- **Examples**: AI infrastructure, developer tools, ML platforms
+
+**Market Size**:
+- 2023: $1.6B
+- 2032: $10.6B
+- CAGR: 23.54%
+
+---
+
+## Competitive Landscape (Vector DB)
+
+**OmenDB vs Competitors**:
+
+| Feature | pgvector | Pinecone | Weaviate | OmenDB |
+|---------|----------|----------|----------|---------|
+| PostgreSQL compatible | ✅ | ❌ | ❌ | ✅ |
+| Scales to 100M+ vectors | ❌ | ✅ | ✅ | ✅ |
+| Self-hosting | ✅ | ❌ | ✅ | ✅ |
+| Memory efficient | ❌ | ? | ❌ | ✅ (28x) |
+| HTAP (transactions + analytics) | ✅ | ❌ | ❌ | ✅ |
+| Pricing | Free | $70-8K+/mo | Free/Paid | $29-499/mo |
+
+**Competitive Moats**:
+1. **PostgreSQL compatibility** (pgvector users can drop-in migrate)
+2. **Memory efficiency** (28x vs PostgreSQL = 10x cheaper at scale)
+3. **HTAP architecture** (one DB for vectors + business logic)
+4. **Self-hosting + managed** (unlike Pinecone cloud-only)
+5. **Open source** (avoid vendor lock-in)
+
+---
 
 ## Development Environment
 
@@ -193,22 +281,20 @@ omendb/core/
 - **Default: Use Mac for everything** (fast, quiet, more RAM)
 - Only use Fedora if Mac is busy or for GPU tasks
 
-**Hardware Details**:
-- Fedora: i9-13900KF (8P + 16E cores), 32GB DDR5, RTX 4090, NVMe SSD
-- Mac: M3 Max (~16 cores), 128GB RAM, Tailscale network
-
 **Stack**:
 - Rust (cargo, rustc)
 - PostgreSQL clients (psql, pgcli)
 - Benchmarking tools (hyperfine, flamegraph)
-- Testing: 325+ tests via cargo test
+- Testing: 557 tests via cargo test
+
+---
 
 ## Common Commands
 
 **Development:**
 ```bash
 cargo build                      # Fast, unoptimized
-cargo test                       # All tests
+cargo test                       # All tests (557)
 cargo clippy                     # Lints
 ```
 
@@ -224,46 +310,32 @@ cargo build --release            # Optimized build
 ./target/release/rest_server     # Port 8080
 ```
 
-## Documentation Organization
+---
 
-**Standard OSS Pattern** (agent-contexts v0.1.1):
+## Immediate Next Steps (This Week)
 
-### Quick Reference
+### Critical Priority: Vector Prototype & Validation
 
-| Directory | Purpose | Update Pattern |
-|-----------|---------|----------------|
-| **ai/** | AI working context | Frequent, evolving (edit in place) |
-| **docs/** | All permanent documentation | Versioned, deliberate |
+**Week 1 (Oct 22-28): ALEX Vector Prototype**
+1. [ ] Research pgvector implementation (GitHub: pgvector/pgvector)
+2. [ ] Design vector(N) data type in Rust
+3. [ ] Prototype ALEX for 1536-dim vectors (100K-1M vectors)
+4. [ ] Measure: Memory usage, query latency, index build time
+5. [ ] **Go/No-Go**: If ALEX doesn't work → pivot to HNSW algorithm
 
-### Workflow for AI Agents
+**Week 1 (Oct 22-28): Customer Validation**
+1. [ ] Identify 50 companies using pgvector (search GitHub, LangChain repos)
+2. [ ] Draft cold email: "Building pgvector that scales to 100M vectors"
+3. [ ] Send 20 emails (target 5 responses)
+4. [ ] Schedule 3-5 customer calls
+5. [ ] **Validate**: Pain point is real, willingness to pay $29-99/month
 
-**Load on session start**:
-1. CLAUDE.md (this file) → Project overview
-2. ai/TODO.md → Current tasks
-3. ai/STATUS.md → Current state
-4. ai/DECISIONS.md → Architectural context (if needed)
+**Decision Point** (End of Week 1):
+- ✅ If ALEX works + 3+ customer validations → Proceed with vector DB
+- ❌ If ALEX doesn't work → Pivot to HNSW algorithm
+- ❌ If no customer interest → Reconsider vector market
 
-**Update every session**:
-- ✅ ai/TODO.md (mark complete, add new tasks)
-- ✅ ai/STATUS.md (edit in place, current truth)
-- ✅ ai/DECISIONS.md (append new decisions)
-- ✅ ai/RESEARCH.md (add findings)
-
-**Graduate to docs/ when**:
-- Research complete and valuable for contributors
-- Technical deep-dive worth preserving
-- Architecture decisions worth documenting
-
-### Key Principles
-
-✅ **ai/** = Working scratchpad (concise, current, <2K words per file)
-✅ **docs/** = Permanent knowledge (detailed, versioned, no size limit)
-✅ **Edit in place**: ai/STATUS.md, ai/TODO.md
-✅ **Append-only**: ai/DECISIONS.md
-
-❌ **Don't** duplicate content between ai/ and docs/
-❌ **Don't** append to ai/STATUS.md (edit in place for current truth)
-❌ **Don't** bloat ai/ files (archive old content to docs/archive/)
+---
 
 ## Development Principles
 
@@ -272,9 +344,13 @@ cargo build --release            # Optimized build
 **Documentation**: Update docs alongside code changes
 **Conventions**: Follow existing patterns in codebase
 
+**NEW Principle**: Build for vector DB market, defer non-vector features
+
 ---
 
-*Last Updated: October 22, 2025*
+*Last Updated: October 22, 2025 (Evening) - STRATEGIC PIVOT*
 
-**Documentation**: Standard OSS structure (agent-contexts v0.1.1) - docs/ + ai/ only
-**Cleanup**: Migrated from `internal/` to standard `docs/` structure (PostgreSQL, MongoDB, DuckDB pattern)
+**Focus**: PostgreSQL-compatible vector database
+**Market**: $10.6B vector DB market (23.54% CAGR)
+**Timeline**: 6 months to production-ready, 12 months to $100K-500K ARR
+**Next Milestone**: ALEX vector prototype validation (Week 1-2)

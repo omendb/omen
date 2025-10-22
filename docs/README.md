@@ -2,6 +2,10 @@
 
 **Standard OSS Structure** (agent-contexts v0.1.1)
 
+**Status**: Strategic pivot to vector database market (October 22, 2025)
+
+**Positioning**: PostgreSQL-Compatible Vector Database That Scales
+
 ---
 
 ## Directory Organization
