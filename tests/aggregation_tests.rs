@@ -519,3 +519,86 @@ fn test_having_without_group_by() {
         panic!("Expected Selected result");
     }
 }
+
+// CROSS JOIN tests (Cartesian product)
+
+#[test]
+fn test_cross_join_basic() {
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_str().unwrap()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    // Create two small tables
+    engine.execute("CREATE TABLE colors (id INT, color TEXT)").unwrap();
+    engine.execute("INSERT INTO colors VALUES (1, 'Red')").unwrap();
+    engine.execute("INSERT INTO colors VALUES (2, 'Blue')").unwrap();
+
+    engine.execute("CREATE TABLE sizes (id INT, size TEXT)").unwrap();
+    engine.execute("INSERT INTO sizes VALUES (1, 'Small')").unwrap();
+    engine.execute("INSERT INTO sizes VALUES (2, 'Large')").unwrap();
+
+    // CROSS JOIN should produce 2x2 = 4 rows
+    let result = engine
+        .execute("SELECT * FROM colors CROSS JOIN sizes")
+        .unwrap();
+
+    if let omendb::sql_engine::ExecutionResult::Selected { rows, .. } = result {
+        assert_eq!(rows, 4, "CROSS JOIN should produce Cartesian product (2x2=4)");
+    } else {
+        panic!("Expected Selected result");
+    }
+}
+
+#[test]
+fn test_cross_join_different_sizes() {
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_str().unwrap()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine.execute("CREATE TABLE table1 (id INT)").unwrap();
+    engine.execute("INSERT INTO table1 VALUES (1)").unwrap();
+    engine.execute("INSERT INTO table1 VALUES (2)").unwrap();
+    engine.execute("INSERT INTO table1 VALUES (3)").unwrap();
+
+    engine.execute("CREATE TABLE table2 (letter TEXT)").unwrap();
+    engine.execute("INSERT INTO table2 VALUES ('A')").unwrap();
+    engine.execute("INSERT INTO table2 VALUES ('B')").unwrap();
+
+    // CROSS JOIN: 3x2 = 6 rows
+    let result = engine
+        .execute("SELECT * FROM table1 CROSS JOIN table2")
+        .unwrap();
+
+    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+        assert_eq!(rows, 6, "CROSS JOIN 3x2 should produce 6 rows");
+        
+        // All combinations should exist
+        // (1,A), (1,B), (2,A), (2,B), (3,A), (3,B)
+        assert_eq!(data.len(), 6);
+    } else {
+        panic!("Expected Selected result");
+    }
+}
+
+#[test]
+fn test_cross_join_with_empty_table() {
+    let temp_dir = TempDir::new().unwrap();
+    let catalog = Catalog::new(temp_dir.path().to_str().unwrap()).unwrap();
+    let mut engine = SqlEngine::new(catalog);
+
+    engine.execute("CREATE TABLE table1 (id INT)").unwrap();
+    engine.execute("INSERT INTO table1 VALUES (1)").unwrap();
+
+    engine.execute("CREATE TABLE empty_table (val INT)").unwrap();
+
+    // CROSS JOIN with empty table should produce 0 rows
+    let result = engine
+        .execute("SELECT * FROM table1 CROSS JOIN empty_table")
+        .unwrap();
+
+    if let omendb::sql_engine::ExecutionResult::Selected { rows, .. } = result {
+        assert_eq!(rows, 0, "CROSS JOIN with empty table should produce 0 rows");
+    } else {
+        panic!("Expected Selected result");
+    }
+}

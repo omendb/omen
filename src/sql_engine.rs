@@ -764,70 +764,77 @@ impl SqlEngine {
         let right_table = self.catalog.get_table(&right_table_name)?;
 
         // Parse join condition
-        let (left_col, right_col, is_left_join) = match &join.join_operator {
+        let (left_col, right_col, is_left_join, is_cross_join) = match &join.join_operator {
             JoinOperator::Inner(constraint) => {
                 let (l, r) = Self::parse_join_condition(constraint)?;
-                (l, r, false)
+                (l, r, false, false)
             }
             JoinOperator::LeftOuter(constraint) => {
                 let (l, r) = Self::parse_join_condition(constraint)?;
-                (l, r, true)
+                (l, r, true, false)
             }
-            _ => return Err(anyhow!("Only INNER JOIN and LEFT JOIN supported")),
+            JoinOperator::CrossJoin => {
+                // CROSS JOIN has no condition - Cartesian product
+                (String::new(), String::new(), false, true)
+            }
+            _ => return Err(anyhow!("Only INNER JOIN, LEFT JOIN, and CROSS JOIN supported")),
         };
 
         // Get all rows from both tables
         let left_rows = left_table.scan_all()?;
         let right_rows = right_table.scan_all()?;
 
-        // Find column indices for join
-        let left_col_idx = left_table
-            .schema()
-            .index_of(&left_col)
-            .map_err(|_| anyhow!("Column '{}' not found in table '{}'", left_col, left_table_name))?;
-
-        let right_col_idx = right_table
-            .schema()
-            .index_of(&right_col)
-            .map_err(|_| anyhow!("Column '{}' not found in table '{}'", right_col, right_table_name))?;
-
-        // Perform join (nested loop)
+        // Perform join based on type
         let mut result_rows = Vec::new();
 
-        for left_row in &left_rows {
-            let left_join_val = left_row.get(left_col_idx)?;
-            let mut found_match = false;
-
-            for right_row in &right_rows {
-                let right_join_val = right_row.get(right_col_idx)?;
-
-                // Check if join condition matches
-                if left_join_val == right_join_val {
-                    // Combine rows
-                    let mut combined_values = Vec::new();
-                    for i in 0..left_row.len() {
-                        combined_values.push(left_row.get(i)?.clone());
-                    }
-                    for i in 0..right_row.len() {
-                        combined_values.push(right_row.get(i)?.clone());
-                    }
+        if is_cross_join {
+            // CROSS JOIN: Cartesian product (no join condition)
+            for left_row in &left_rows {
+                for right_row in &right_rows {
+                    let mut combined_values = left_row.values().to_vec();
+                    combined_values.extend_from_slice(right_row.values());
                     result_rows.push(Row::new(combined_values));
-                    found_match = true;
                 }
             }
+        } else {
+            // INNER JOIN or LEFT JOIN with condition
+            // Find column indices for join
+            let left_col_idx = left_table
+                .schema()
+                .index_of(&left_col)
+                .map_err(|_| anyhow!("Column '{}' not found in table '{}'", left_col, left_table_name))?;
 
-            // LEFT JOIN: emit row with NULLs if no match
-            if is_left_join && !found_match {
-                let mut combined_values = Vec::new();
-                for i in 0..left_row.len() {
-                    combined_values.push(left_row.get(i)?.clone());
+            let right_col_idx = right_table
+                .schema()
+                .index_of(&right_col)
+                .map_err(|_| anyhow!("Column '{}' not found in table '{}'", right_col, right_table_name))?;
+
+            // Perform join (nested loop)
+            for left_row in &left_rows {
+                let left_join_val = left_row.get(left_col_idx)?;
+                let mut found_match = false;
+
+                for right_row in &right_rows {
+                    let right_join_val = right_row.get(right_col_idx)?;
+
+                    // Check if join condition matches
+                    if Self::compare_values(left_join_val, right_join_val)? == 0 {
+                        found_match = true;
+                        let mut combined_values = left_row.values().to_vec();
+                        combined_values.extend_from_slice(right_row.values());
+                        result_rows.push(Row::new(combined_values));
+                    }
                 }
-                // Add NULLs for right table columns
-                let right_table_col_count = right_table.schema().fields().len();
-                for _ in 0..right_table_col_count {
-                    combined_values.push(Value::Null);
+
+                // For LEFT JOIN, if no match found, add row with NULLs
+                if is_left_join && !found_match {
+                    let mut combined_values = left_row.values().to_vec();
+                    // Add NULL values for right table columns
+                    for _ in 0..right_table.schema().fields().len() {
+                        combined_values.push(Value::Null);
+                    }
+                    result_rows.push(Row::new(combined_values));
                 }
-                result_rows.push(Row::new(combined_values));
             }
         }
 
