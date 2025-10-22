@@ -5,7 +5,8 @@
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose, Engine as _};
 use hyper::{HeaderMap, StatusCode};
-use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::ServerConfig;
 use rustls_pemfile;
 use std::collections::HashMap;
 use std::fs::File;
@@ -144,23 +145,22 @@ impl TlsConfig {
         let mut cert_reader = BufReader::new(cert_file);
         let mut key_reader = BufReader::new(key_file);
 
-        let certs = rustls_pemfile::certs(&mut cert_reader)
-            .map_err(|e| anyhow!("Failed to parse certificates: {}", e))?
-            .into_iter()
-            .map(Certificate)
-            .collect();
+        // Load certificates
+        let certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut cert_reader)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| anyhow!("Failed to parse certificates: {}", e))?;
 
-        let mut keys = rustls_pemfile::pkcs8_private_keys(&mut key_reader)
-            .map_err(|e| anyhow!("Failed to parse private key: {}", e))?;
-
-        if keys.is_empty() {
-            return Err(anyhow!("No private key found"));
+        if certs.is_empty() {
+            return Err(anyhow!("No certificates found in {}", self.cert_file));
         }
 
-        let key = PrivateKey(keys.remove(0));
+        // Load private key
+        let key = rustls_pemfile::private_key(&mut key_reader)
+            .map_err(|e| anyhow!("Failed to parse private key: {}", e))?
+            .ok_or_else(|| anyhow!("No private key found in {}", self.key_file))?;
 
+        // Build TLS config
         let config = ServerConfig::builder()
-            .with_safe_defaults()
             .with_no_client_auth()
             .with_single_cert(certs, key)
             .map_err(|e| anyhow!("Failed to create TLS config: {}", e))?;

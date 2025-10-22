@@ -233,9 +233,9 @@ tracing-appender = "0.2"
 
 # Security
 base64 = "0.21"
-rustls = "0.21"
-tokio-rustls = "0.24"
-rustls-pemfile = "1.0"
+rustls = "0.23"
+tokio-rustls = "0.26"
+rustls-pemfile = "2.1"
 
 # Backup and compression
 flate2 = "1.0"

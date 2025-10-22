@@ -6,6 +6,11 @@ use crate::connection_pool::{ConnectionPool, PoolConfig};
 use crate::metrics;
 use datafusion::prelude::*;
 use pgwire::tokio::process_socket;
+use rustls::pki_types::CertificateDer;
+use rustls::ServerConfig as RustlsServerConfig;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
@@ -21,6 +26,9 @@ pub struct PostgresServer {
 
     /// Connection pool for managing concurrent connections
     pool: Arc<ConnectionPool>,
+
+    /// Optional TLS configuration
+    tls_config: Option<Arc<RustlsServerConfig>>,
 }
 
 impl PostgresServer {
@@ -33,6 +41,7 @@ impl PostgresServer {
             addr: "127.0.0.1:5432".to_string(),
             factory,
             pool,
+            tls_config: None,
         }
     }
 
@@ -45,6 +54,7 @@ impl PostgresServer {
             addr: addr.into(),
             factory,
             pool,
+            tls_config: None,
         }
     }
 
@@ -60,6 +70,7 @@ impl PostgresServer {
             addr: addr.into(),
             factory,
             pool,
+            tls_config: None,
         }
     }
 
@@ -76,7 +87,57 @@ impl PostgresServer {
             addr: addr.into(),
             factory,
             pool,
+            tls_config: None,
         }
+    }
+
+    /// Enable TLS/SSL for this server
+    ///
+    /// Loads certificate and private key from PEM files.
+    /// Fails if files don't exist or are invalid.
+    pub fn with_tls(
+        mut self,
+        cert_path: impl AsRef<Path>,
+        key_path: impl AsRef<Path>,
+    ) -> anyhow::Result<Self> {
+        let tls_config = Self::load_tls_config(cert_path, key_path)?;
+        self.tls_config = Some(Arc::new(tls_config));
+        Ok(self)
+    }
+
+    /// Load TLS configuration from certificate and key files
+    fn load_tls_config(
+        cert_path: impl AsRef<Path>,
+        key_path: impl AsRef<Path>,
+    ) -> anyhow::Result<RustlsServerConfig> {
+        // Load certificates
+        let cert_file = File::open(cert_path.as_ref())?;
+        let mut cert_reader = BufReader::new(cert_file);
+        let certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut cert_reader)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if certs.is_empty() {
+            anyhow::bail!("No certificates found in {:?}", cert_path.as_ref());
+        }
+
+        // Load private key
+        let key_file = File::open(key_path.as_ref())?;
+        let mut key_reader = BufReader::new(key_file);
+
+        let key = rustls_pemfile::private_key(&mut key_reader)?
+            .ok_or_else(|| anyhow::anyhow!("No private key found in {:?}", key_path.as_ref()))?;
+
+        // Build TLS config
+        let config = RustlsServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)?;
+
+        Ok(config)
+    }
+
+    /// Check if TLS is enabled
+    pub fn is_tls_enabled(&self) -> bool {
+        self.tls_config.is_some()
     }
 
     /// Get connection pool statistics
@@ -90,12 +151,27 @@ impl PostgresServer {
     }
 
     /// Start serving PostgreSQL wire protocol connections
+    ///
+    /// Note: Direct TLS support requires handling PostgreSQL's SSLRequest negotiation,
+    /// which is not yet implemented with the current pgwire version. For production
+    /// TLS support, use a reverse proxy (pgbouncer, HAProxy, nginx) or connection pooler.
     pub async fn serve(self) -> anyhow::Result<()> {
         info!("Starting PostgreSQL server on {}", self.addr);
         info!(
             "Connection pool configured: max_connections={}",
             self.pool.max_connections()
         );
+
+        if self.is_tls_enabled() {
+            warn!(
+                "TLS certificates loaded but direct TLS not yet supported. \
+                For TLS connections, use a reverse proxy (pgbouncer, HAProxy, nginx) \
+                for TLS termination."
+            );
+        } else {
+            warn!("TLS/SSL not enabled - connections will be unencrypted");
+            info!("For production, use a reverse proxy with TLS termination");
+        }
 
         let listener = TcpListener::bind(&self.addr).await?;
         info!("PostgreSQL server listening on {}", self.addr);
@@ -145,7 +221,9 @@ impl PostgresServer {
 
                             tokio::spawn(async move {
                                 // Connection is held for the duration of this task
-                                if let Err(e) = process_socket(socket, None, factory_ref).await {
+                                let result = process_socket(socket, None, factory_ref).await;
+
+                                if let Err(e) = result {
                                     error!(
                                         connection_id = conn_id,
                                         client_addr = %client_addr,
