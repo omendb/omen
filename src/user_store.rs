@@ -40,6 +40,34 @@ impl User {
         }
     }
 
+    /// Create a new user from plaintext password (convenience method)
+    pub fn new_with_password(
+        username: impl Into<String>,
+        password: &str,
+        iterations: usize,
+    ) -> Result<Self> {
+        use pgwire::api::auth::scram::gen_salted_password;
+
+        let username_str = username.into();
+
+        // Validate username
+        Self::validate_username(&username_str)?;
+
+        // Generate random salt
+        let salt: [u8; 16] = rand::random();
+
+        // Hash password with salt using PBKDF2
+        let salted_password = gen_salted_password(password, &salt, iterations);
+
+        Ok(Self {
+            username: username_str,
+            salted_password,
+            salt: salt.to_vec(),
+            created_at: chrono::Utc::now().timestamp(),
+            roles: vec![],
+        })
+    }
+
     /// Create a new user with roles
     pub fn with_roles(
         username: impl Into<String>,
