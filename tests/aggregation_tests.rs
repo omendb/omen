@@ -389,3 +389,133 @@ fn test_null_values_in_aggregates() {
         assert_eq!(data[0].get(0).unwrap(), &Value::Float64(20.0)); // 60/3
     }
 }
+
+// HAVING clause tests
+
+#[test]
+fn test_having_count() {
+    let (mut engine, _temp_dir) = setup_test_data();
+
+    let result = engine
+        .execute("SELECT category, COUNT(*) FROM sales GROUP BY category HAVING COUNT(*) > 1")
+        .unwrap();
+
+    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+        // Both Electronics (4) and Furniture (2) have count > 1
+        assert_eq!(rows, 2);
+        
+        for row in data {
+            if let Value::Int64(count) = row.get(1).unwrap() {
+                assert!(*count > 1, "HAVING COUNT(*) > 1 should filter correctly");
+            }
+        }
+    } else {
+        panic!("Expected Selected result");
+    }
+}
+
+#[test]
+fn test_having_sum() {
+    let (mut engine, _temp_dir) = setup_test_data();
+
+    let result = engine
+        .execute("SELECT category, SUM(quantity) FROM sales GROUP BY category HAVING SUM(quantity) >= 50")
+        .unwrap();
+
+    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+        // Only Electronics has SUM(quantity) >= 50 (10+50+15+30 = 105)
+        assert_eq!(rows, 1);
+        
+        if let Value::Text(category) = data[0].get(0).unwrap() {
+            assert_eq!(category, "Electronics");
+        }
+        
+        if let Value::Float64(sum) = data[0].get(1).unwrap() {
+            assert!(*sum >= 50.0);
+        }
+    } else {
+        panic!("Expected Selected result");
+    }
+}
+
+#[test]
+fn test_having_avg() {
+    let (mut engine, _temp_dir) = setup_test_data();
+
+    let result = engine
+        .execute("SELECT category, AVG(price) FROM sales GROUP BY category HAVING AVG(price) > 300")
+        .unwrap();
+
+    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+        // Only Electronics should pass (avg price > 300)
+        assert_eq!(rows, 1);
+        
+        if let Value::Text(category) = data[0].get(0).unwrap() {
+            assert_eq!(category, "Electronics");
+        }
+    } else {
+        panic!("Expected Selected result");
+    }
+}
+
+#[test]
+fn test_having_with_multiple_conditions() {
+    let (mut engine, _temp_dir) = setup_test_data();
+
+    // Test HAVING with AND condition
+    let result = engine
+        .execute("SELECT category, COUNT(*), SUM(quantity) FROM sales GROUP BY category HAVING COUNT(*) > 1 AND SUM(quantity) > 30")
+        .unwrap();
+
+    if let omendb::sql_engine::ExecutionResult::Selected { rows, .. } = result {
+        // Electronics: count=4, sum=105 ✓
+        // Furniture: count=2, sum=25 ✗ (sum not > 30)
+        assert_eq!(rows, 1);
+    } else {
+        panic!("Expected Selected result");
+    }
+}
+
+#[test]
+fn test_having_all_filtered_out() {
+    let (mut engine, _temp_dir) = setup_test_data();
+
+    // Test HAVING that filters out everything
+    let result = engine
+        .execute("SELECT category, COUNT(*) FROM sales GROUP BY category HAVING COUNT(*) > 100")
+        .unwrap();
+
+    if let omendb::sql_engine::ExecutionResult::Selected { rows, .. } = result {
+        assert_eq!(rows, 0, "HAVING should filter out all rows");
+    } else {
+        panic!("Expected Selected result");
+    }
+}
+
+#[test]
+fn test_having_without_group_by() {
+    let (mut engine, _temp_dir) = setup_test_data();
+
+    // HAVING with aggregates but no GROUP BY (single group)
+    let result = engine
+        .execute("SELECT COUNT(*) FROM sales HAVING COUNT(*) > 5")
+        .unwrap();
+
+    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+        assert_eq!(rows, 1);
+        assert_eq!(data[0].get(0).unwrap(), &Value::Int64(6));
+    } else {
+        panic!("Expected Selected result");
+    }
+
+    // Test HAVING that filters out the single group
+    let result = engine
+        .execute("SELECT COUNT(*) FROM sales HAVING COUNT(*) > 100")
+        .unwrap();
+
+    if let omendb::sql_engine::ExecutionResult::Selected { rows, .. } = result {
+        assert_eq!(rows, 0, "HAVING should filter out single group");
+    } else {
+        panic!("Expected Selected result");
+    }
+}

@@ -47,9 +47,9 @@ _Last Updated: 2025-10-22 Early Morning_
 
 ### Active Work
 🔨 **Phase 3: SQL Features** (in progress):
-- ✅ Aggregations validated: COUNT, SUM, AVG, MIN, MAX, GROUP BY working
-- 🔨 HAVING clause (next)
-- Subqueries (WHERE EXISTS, scalar subqueries)
+- ✅ Aggregations: COUNT, SUM, AVG, MIN, MAX, GROUP BY (22 tests)
+- ✅ HAVING clause implemented (7 tests, pending rebuild)
+- 🔨 Subqueries (WHERE EXISTS, scalar) - next
 - Window functions (ROW_NUMBER, RANK)
 - Advanced JOIN types (FULL OUTER, CROSS)
 

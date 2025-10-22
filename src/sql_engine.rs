@@ -704,7 +704,7 @@ impl SqlEngine {
 
         if has_aggregates {
             // Handle aggregate query
-            return self.execute_aggregate_query(&select.projection, rows, &select.group_by, table);
+            return self.execute_aggregate_query(&select.projection, rows, &select.group_by, &select.having, table);
         }
 
         // Apply ORDER BY if present (non-aggregate queries)
@@ -1191,6 +1191,11 @@ impl SqlEngine {
             result_rows.push(Row::new(result_values));
         }
 
+        // Apply HAVING clause if present
+        if let Some(having_expr) = having {
+            result_rows = self.filter_having_results(result_rows, having_expr, &column_names)?;
+        }
+
         Ok(ExecutionResult::Selected {
             columns: column_names,
             rows: result_rows.len(),
@@ -1331,6 +1336,133 @@ impl SqlEngine {
                 Ok(max_val.unwrap_or(Value::Null))
             }
             _ => Err(anyhow!("Unsupported aggregate function: {}", func_name)),
+        }
+    }
+
+    /// Filter aggregated results using HAVING clause
+    fn filter_having_results(
+        &self,
+        rows: Vec<Row>,
+        having_expr: &Expr,
+        column_names: &[String],
+    ) -> Result<Vec<Row>> {
+        let mut filtered_rows = Vec::new();
+
+        for row in rows {
+            if self.evaluate_having_condition(&row, having_expr, column_names)? {
+                filtered_rows.push(row);
+            }
+        }
+
+        Ok(filtered_rows)
+    }
+
+    /// Evaluate HAVING condition for an aggregated row
+    fn evaluate_having_condition(
+        &self,
+        row: &Row,
+        expr: &Expr,
+        column_names: &[String],
+    ) -> Result<bool> {
+        match expr {
+            // Binary comparison: COUNT(*) > 2, SUM(price) >= 100, etc.
+            Expr::BinaryOp { left, op, right } => {
+                let left_val = self.evaluate_having_expr(left, row, column_names)?;
+                let right_val = self.evaluate_having_expr(right, row, column_names)?;
+
+                use sqlparser::ast::BinaryOperator;
+                match op {
+                    BinaryOperator::Gt => Ok(Self::compare_values(&left_val, &right_val)? > 0),
+                    BinaryOperator::GtEq => Ok(Self::compare_values(&left_val, &right_val)? >= 0),
+                    BinaryOperator::Lt => Ok(Self::compare_values(&left_val, &right_val)? < 0),
+                    BinaryOperator::LtEq => Ok(Self::compare_values(&left_val, &right_val)? <= 0),
+                    BinaryOperator::Eq => Ok(Self::compare_values(&left_val, &right_val)? == 0),
+                    BinaryOperator::NotEq => Ok(Self::compare_values(&left_val, &right_val)? != 0),
+                    BinaryOperator::And => {
+                        let left_bool = self.value_to_bool(&left_val)?;
+                        let right_bool = self.value_to_bool(&right_val)?;
+                        Ok(left_bool && right_bool)
+                    }
+                    BinaryOperator::Or => {
+                        let left_bool = self.value_to_bool(&left_val)?;
+                        let right_bool = self.value_to_bool(&right_val)?;
+                        Ok(left_bool || right_bool)
+                    }
+                    _ => Err(anyhow!("Unsupported operator in HAVING: {:?}", op)),
+                }
+            }
+            _ => Err(anyhow!("Unsupported HAVING expression: {:?}", expr)),
+        }
+    }
+
+    /// Evaluate HAVING expression (aggregate function or identifier) to a value
+    fn evaluate_having_expr(
+        &self,
+        expr: &Expr,
+        row: &Row,
+        column_names: &[String],
+    ) -> Result<Value> {
+        match expr {
+            // Literal value: HAVING COUNT(*) > 2 (the "2" part)
+            Expr::Value(sqlparser::ast::Value::Number(n, _)) => {
+                if let Ok(i) = n.parse::<i64>() {
+                    Ok(Value::Int64(i))
+                } else if let Ok(f) = n.parse::<f64>() {
+                    Ok(Value::Float64(f))
+                } else {
+                    Err(anyhow!("Invalid number: {}", n))
+                }
+            }
+            // Aggregate function reference: COUNT(*), SUM(quantity), etc.
+            Expr::Function(func) => {
+                // Match function name with column name
+                let func_name = func.name.0[0].value.to_uppercase();
+
+                // Extract argument description to match column name
+                let arg_desc = match &func.args {
+                    sqlparser::ast::FunctionArguments::List(list) => {
+                        if list.args.is_empty() {
+                            "*"
+                        } else {
+                            "column"
+                        }
+                    }
+                    _ => "column",
+                };
+
+                let target_col = format!("{}({})", func_name, arg_desc);
+
+                // Find column index
+                for (idx, col_name) in column_names.iter().enumerate() {
+                    if col_name == &target_col {
+                        return Ok(row.get(idx)?.clone());
+                    }
+                }
+
+                Err(anyhow!("Aggregate function {} not found in SELECT", target_col))
+            }
+            // Column reference (for GROUP BY columns)
+            Expr::Identifier(ident) => {
+                let col_name = &ident.value;
+                for (idx, name) in column_names.iter().enumerate() {
+                    if name == col_name {
+                        return Ok(row.get(idx)?.clone());
+                    }
+                }
+                Err(anyhow!("Column {} not found in HAVING", col_name))
+            }
+            _ => Err(anyhow!("Unsupported HAVING expression: {:?}", expr)),
+        }
+    }
+
+    /// Convert Value to boolean for logical operations
+    fn value_to_bool(&self, val: &Value) -> Result<bool> {
+        match val {
+            Value::Int64(n) => Ok(*n != 0),
+            Value::Float64(f) => Ok(*f != 0.0),
+            Value::Bool(b) => Ok(*b),
+            Value::Null => Ok(false),
+            _ => Err(anyhow!("Cannot convert {:?} to boolean", val)),
         }
     }
 
