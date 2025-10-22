@@ -1,8 +1,8 @@
 # OmenDB Status Report
 
-**Date**: October 21, 2025 (Late Evening Update)
+**Date**: October 21, 2025 (Night Update)
 **Version**: 0.1.0-dev
-**Phase**: Phase 1 COMPLETE, Phase 3 Week 1-2 COMPLETE, Cache Layer Day 1-5 COMPLETE → RocksDB Tuning next
+**Phase**: Phase 1 COMPLETE, Phase 3 Week 1-2 COMPLETE, Cache Layer COMPLETE, Phase 2 Security Days 1-4 COMPLETE → Day 5 Catalog integration next
 **Focus**: Enterprise-grade SOTA database (technical excellence first)
 
 ---
@@ -18,7 +18,9 @@
 - ✅ **INNER JOIN + LEFT JOIN**: 14 tests passing, nested loop algorithm
 - ✅ **Large LRU cache layer**: 1-10GB configurable, addresses 80x disk gap ⭐ NEW
 - ✅ Crash recovery: 100% success rate at 1M scale
-- ✅ **436/436 tests passing** (100%, 429 lib + 7 cache integration) ⭐ NEW
+- ✅ **468/468 tests passing** (100%, 436 lib + 32 security) ⭐ NEW
+- ✅ **PostgreSQL authentication**: SCRAM-SHA-256, persistent users ⭐ NEW
+- ✅ **SQL user management**: CREATE/DROP/ALTER USER commands ⭐ NEW
 - ✅ RocksDB storage: Proven LSM-tree backend (HN validated ✅)
 - ✅ Connection pooling: Basic implementation
 - ✅ Benchmarks: TPC-H, TPC-C, YCSB validated
@@ -34,12 +36,13 @@
 - ✅ Zero regressions
 - ✅ Completed 7% ahead of schedule (14 days vs planned 15)
 
-**Critical Gaps for 0.1.0** (Updated Oct 21 Late Evening):
+**Critical Gaps for 0.1.0** (Updated Oct 21 Night):
 - ~~❌ No MVCC~~ → ✅ **COMPLETE** (Phase 1)
 - ~~❌ ~15% SQL coverage~~ → ✅ **~35% SQL coverage** (Phase 3 Week 1-2: UPDATE/DELETE/JOIN complete)
-- ~~❌ No large cache layer~~ → ✅ **LRU cache IMPLEMENTED** (Day 1-5 complete, 436/436 tests) ⭐ NEW
+- ~~❌ No large cache layer~~ → ✅ **LRU cache IMPLEMENTED** (Day 1-10 complete, 436/436 tests)
+- ~~❌ No authentication~~ → ⚠️ **PARTIAL** (Auth complete, SSL pending - Phase 2 Days 1-4/10) ⭐ NEW
 - ⚠️ **Performance validation pending**: Need to benchmark cache + tune RocksDB (Days 6-15)
-- ❌ **No authentication/SSL**: Cannot deploy securely
+- ❌ **No SSL/TLS**: Cannot deploy securely (Phase 2 Days 6-7)
 - ❌ **No observability**: No EXPLAIN, limited logging
 - ❌ **No backup/restore**: Data safety incomplete
 
@@ -48,8 +51,9 @@
 - ✅ **Phase 1 (MVCC)**: COMPLETE
 - ✅ **Phase 3 Week 1 (UPDATE/DELETE)**: COMPLETE
 - ✅ **Phase 3 Week 2 (JOIN)**: COMPLETE
-- ✅ **Cache Layer Days 1-10**: COMPLETE (LRU cache + validation) ⭐ NEW
-- ⏭️ Phase 2 (Security): PENDING (auth + SSL, 2 weeks)
+- ✅ **Cache Layer Days 1-10**: COMPLETE (LRU cache + validation)
+- 🔨 **Phase 2 Security Days 1-4**: COMPLETE (Auth + User Management, 32 tests) ⭐ NEW
+- ⏭️ Phase 2 Days 5-10: IN PROGRESS (Catalog integration + SSL/TLS, 6 days)
 - ⏭️ Phase 3 Week 3-4 (Aggregations, Subqueries): PENDING (2 weeks)
 - ⏭️ Phase 4-6 (Observability, Backup, Hardening): PENDING (4 weeks)
 
@@ -211,6 +215,99 @@ Days 1-10 cache implementation and validation complete. Next steps (Days 11-15) 
 - [ ] Cache warming strategies (if needed)
 - [ ] Adaptive cache sizing (deferred)
 - [ ] Prometheus metrics integration (deferred)
+
+---
+
+## Phase 2 Security Implementation (Oct 21, 2025) ⭐ IN PROGRESS
+
+**Status**: Days 1-4 COMPLETE (4/10 days)
+**Timeline**: Started Oct 21 night, on track
+**Tests**: 32/32 security tests passing (100%)
+**Next**: Day 5 - Catalog integration (table-level permissions)
+
+### What We Built (Days 1-4)
+
+**Day 1: Persistent User Storage** (`src/user_store.rs` - 550 lines) ✅
+- RocksDB-backed user credential storage
+- PostgreSQL-compatible username validation (alphanumeric + underscore)
+- Password strength requirements (8+ characters)
+- Serialized user records with bincode
+- **11/11 tests passing**: CRUD ops, validation, persistence, concurrency
+
+**Day 2: Authentication Integration** (`src/postgres/auth.rs`) ✅
+- Replaced in-memory HashMap with persistent UserStore
+- SCRAM-SHA-256 password hashing (PBKDF2, 4096 iterations)
+- Random salt generation (16 bytes)
+- pgwire AuthSource trait implementation
+- **6/6 tests passing**: auth flow, persistence across restarts
+
+**Day 3-4: SQL User Management** (`src/sql_engine.rs`) ✅
+- CREATE USER command with password validation
+- DROP USER command with admin protection
+- ALTER USER command for password changes
+- Manual SQL parsing (sqlparser doesn't support user management)
+- SQL injection prevention via input validation
+- **15/15 tests passing**: CRUD, errors, security, edge cases
+
+### Security Features Implemented
+
+✅ **Authentication**:
+- SCRAM-SHA-256 password hashing (PostgreSQL-compatible)
+- Persistent user storage (survives restarts)
+- Secure random salt generation
+
+✅ **User Management**:
+- CREATE USER username WITH PASSWORD 'password'
+- DROP USER username (with admin protection)
+- ALTER USER username PASSWORD 'newpassword'
+- Case-sensitive usernames
+- Special characters in passwords supported
+
+✅ **Security Hardening**:
+- SQL injection prevention (username validation)
+- Password strength enforcement (8+ chars)
+- Admin user protection (cannot delete 'admin')
+- Authentication required for user commands
+- Validation before database operations
+
+### Test Coverage (32 tests)
+
+**User Store Tests (11)**:
+- Basic CRUD operations
+- Duplicate prevention
+- Username validation
+- Password validation
+- Persistence verification
+- Concurrent access safety
+
+**Auth Tests (6)**:
+- User creation and authentication
+- Password retrieval for login
+- Nonexistent user handling
+- Persistence across restarts
+- Multiple user management
+
+**SQL User Management Tests (15)**:
+- CREATE USER: basic, duplicate, invalid name, weak password
+- DROP USER: basic, nonexistent, admin protection
+- ALTER USER: basic, nonexistent
+- Integration: multiple users, mixed operations
+- Security: SQL injection, special chars, Unicode, case sensitivity
+- Error handling: no auth configured
+
+### Remaining Work (Days 5-10)
+
+**Day 5**: Catalog integration (user → table permissions) - NEXT
+**Day 6-7**: SSL/TLS encryption for PostgreSQL wire protocol
+**Day 8**: Security integration tests (auth + permissions + SSL)
+**Day 9**: Security documentation (SECURITY.md, deployment guides)
+**Day 10**: Final validation, security audit, cleanup
+
+### Commits
+
+- `3b849d1` - Day 1: UserStore with RocksDB persistence
+- `537104e` - Day 2: OmenDbAuthSource integration
+- `8e8670d` - Day 3-4: SQL user management commands
 
 ---
 
