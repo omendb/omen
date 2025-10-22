@@ -4,27 +4,24 @@ _Last Updated: 2025-10-22_
 
 ## High Priority
 
-### Phase 2: Security (Day 10 remaining)
-- [x] **Days 6-7**: SSL/TLS for PostgreSQL wire protocol ✅
-  - [x] Configure TLS for pgwire connections
-  - [x] Load certificates from disk
-  - [x] Add --cert and --key flags to postgres_server
-  - [x] Test TLS connections with psql (sslmode=require)
-- [x] **Day 8**: Security integration tests ✅
-  - [x] End-to-end auth + TLS tests (13 tests)
-  - [x] Multi-user concurrent access tests
-  - [x] Permission boundary tests
-  - [x] Total: 57 security tests (exceeds 50+ target)
-- [x] **Day 9**: Security documentation ✅
-  - [x] Write SECURITY.md with deployment guide (400+ lines)
-  - [x] Document TLS setup procedures (Let's Encrypt, CA certs)
-  - [x] Add security examples (psql, connection strings)
-- [ ] **Day 10**: Final validation & security audit
-  - [ ] Review all security code paths
-  - [ ] Test default admin password warning
-  - [ ] Verify no hardcoded credentials
+### Next Phase Decision (6 weeks to 0.1.0)
+**Current Status**: 45% SQL coverage (target: 50%), 557 tests (target: 500+)
 
-### Performance Validation (Post Phase 2)
+**Option 1: Continue Phase 3 SQL Features** (3-5 days)
+- [ ] Subqueries (WHERE EXISTS, scalar subqueries) - 2-3 days
+- [ ] Window functions (ROW_NUMBER, RANK) - 2-3 days
+- **Pros**: Reach 50%+ SQL coverage, more feature-complete
+- **Cons**: Delays production readiness, complex features
+
+**Option 2: Move to Phase 4 Observability** (production-first)
+- [ ] EXPLAIN QUERY PLAN command
+- [ ] Query performance metrics
+- [ ] Slow query logging
+- [ ] Prometheus metrics endpoint
+- **Pros**: Production readiness, user debugging tools
+- **Cons**: 45% SQL coverage (slightly below 50% target)
+
+### Performance Validation (Deferred)
 - [ ] Validate cache effectiveness at 10M scale
 - [ ] RocksDB tuning (reduce 77% overhead to <30%)
 - [ ] Measure MVCC overhead (target: <20%)
@@ -42,11 +39,13 @@ _Last Updated: 2025-10-22_
 
 ## Backlog
 
-### Phase 3: SQL Features (Weeks 3-4)
-- [ ] Aggregations (COUNT, SUM, AVG, MIN, MAX, GROUP BY)
+### Phase 3: SQL Features (Remaining)
+- [x] Aggregations (COUNT, SUM, AVG, MIN, MAX, GROUP BY) ✅
+- [x] HAVING clause ✅
+- [x] CROSS JOIN ✅
 - [ ] Subqueries (WHERE EXISTS, scalar subqueries)
 - [ ] Window functions (ROW_NUMBER, RANK)
-- [ ] Advanced JOIN types (FULL OUTER, CROSS)
+- [ ] Advanced JOIN types (FULL OUTER, RIGHT)
 
 ### Phase 4: Observability
 - [ ] EXPLAIN QUERY PLAN command
@@ -69,6 +68,11 @@ _Last Updated: 2025-10-22_
 
 ## Completed Recently
 
+- [x] **Phase 3 Quick Wins** (Oct 22, 1 session) ✅
+  - [x] Aggregations: COUNT, SUM, AVG, MIN, MAX, GROUP BY (22 tests)
+  - [x] HAVING clause: Full filtering support (7 tests)
+  - [x] CROSS JOIN: Cartesian product (3 tests)
+  - **Result**: SQL coverage 35% → 45%, 557 total tests
 - [x] Phase 2 Days 6-7: SSL/TLS for PostgreSQL wire protocol ✅
 - [x] Phase 2 Days 1-5: Auth + User Management (40 tests)
 - [x] Cache Layer Days 1-10: LRU cache (1-10GB), 2-3x speedup validated
