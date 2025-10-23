@@ -28,6 +28,9 @@ pub use connection_pool::{Connection, ConnectionPool, PoolConfig};
 pub use logging::{init_from_env, init_logging, LogConfig};
 pub use sql_engine::QueryConfig;
 
+// Vector database module (NEW - Week 1 prototype)
+pub mod vector;
+
 // Existing modules (will be refactored)
 pub mod alex; // ALEX adaptive learned index (replacement for RMI)
 pub mod alex_storage; // Custom mmap-based storage with ALEX (10x faster queries)

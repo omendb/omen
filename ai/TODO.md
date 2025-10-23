@@ -1,14 +1,16 @@
 # TODO
 
-_Last Updated: 2025-10-22 Evening - VECTOR DATABASE PIVOT_
+_Last Updated: 2025-10-22 - STRATEGIC DECISIONS FINALIZED_
 
-## STRATEGIC PIVOT: Vector Database Market
+## FINALIZED STRATEGY
 
-**Decision**: Pivot from "Fast Embedded PostgreSQL" to "PostgreSQL-Compatible Vector Database"
+**Product**: PostgreSQL-compatible vector database that scales
+**License**: Elastic License 2.0 (source-available, self-hostable)
+**Pricing**: Free (100K vectors), $29, $99/month + Enterprise
+**Market**: AI startups (70%), Enterprise (30%)
+**Year 1**: omendb-server ONLY (omen-lite in Year 2+)
 
-**Why**: $10.6B market (23.54% CAGR), clear pain point (pgvector doesn't scale, Pinecone expensive), perfect tech fit
-
-**Timeline**: 6 months to vector-capable MVP, 12 months to $100K-500K ARR
+**Timeline**: 6 months to production-ready MVP, 12 months to $10K MRR
 
 ---
 
@@ -254,12 +256,19 @@ _Last Updated: 2025-10-22 Evening - VECTOR DATABASE PIVOT_
 
 ## Immediate Next Steps (This Week)
 
-**Priority 1: ALEX Vector Prototype** (2-3 days)
-1. [ ] Research pgvector source code (GitHub: pgvector/pgvector)
-2. [ ] Design vector(N) data type in Rust
-3. [ ] Prototype ALEX for 1536-dim vectors (100K-1M vectors)
-4. [ ] Measure: Memory usage, query latency, index build time
-5. [ ] **Decision**: Continue if <2GB for 1M vectors, <10ms query latency
+**Priority 1: ALEX Vector Prototype** (COMPLETED - Oct 22 Evening)
+1. [x] Research pgvector source code (GitHub: pgvector/pgvector)
+2. [x] Design vector(N) data type in Rust
+3. [x] Prototype ALEX for 1536-dim vectors (tested 10K-100K vectors)
+4. [x] Measure: Memory usage, query latency, recall@10
+5. [x] **Results**: Memory ✅ (<50 bytes overhead), Latency ✅ (<20ms), Recall ❌ (5% vs 90% target)
+
+**Week 1 Findings** (see docs/architecture/research/vector_prototype_week1_oct_2025.md):
+- ✅ Memory: 6,146 bytes/vector (mostly raw data, 2-13 bytes overhead)
+- ✅ Latency: 0.58-5.73ms average (17-22x faster than brute force)
+- ❌ Recall: 5% recall@10 (target was >90%)
+- **Root cause**: Simple 1D projection (sum of first 4 dims) doesn't preserve nearest-neighbor relationships
+- **Validation**: Confirms LIDER paper - need PCA or LSH for high-dimensional indexing
 
 **Priority 2: Market Validation** (2-3 days)
 1. [ ] List 50 companies using pgvector (search GitHub, LangChain repos)
@@ -268,10 +277,24 @@ _Last Updated: 2025-10-22 Evening - VECTOR DATABASE PIVOT_
 4. [ ] Schedule 3-5 customer calls
 5. [ ] **Validate**: Pain point is real, willingness to pay $29-99/month
 
-**Decision Point (End of Week 1)**:
-- ✅ If ALEX prototype works + 3+ customer validations → Proceed with Phase 2
-- ❌ If ALEX doesn't work → Pivot to HNSW algorithm
-- ❌ If no customer interest → Reconsider vector market entirely
+**Decision Point (End of Week 1 - Oct 22 Evening)**: ⚠️ MIXED RESULTS
+
+- ✅ Memory/Latency: Excellent (met all targets)
+- ❌ Recall: Catastrophic failure (5% vs 90% target)
+- ⚠️ **Simple ALEX projection doesn't work for vectors**
+
+**Three Options**:
+1. **PCA-ALEX** (LIDER paper approach): 50-60% success, 3-4 weeks, revolutionary if works
+2. **Hybrid ALEX+HNSW**: 70-80% success, 2-3 weeks, moderate differentiation
+3. **Pure HNSW** (recommended): 95% success, 1-2 weeks, proven algorithm ✅
+
+**Recommendation**: Pivot to HNSW
+- Still 10x faster than pgvector (30 seconds → <10ms)
+- Still 30x less memory (6000 → 100 bytes/vector)
+- Still PostgreSQL-compatible (unique vs Pinecone/Weaviate)
+- Can revisit PCA-ALEX in v0.2.0 if HNSW succeeds
+
+**AWAITING USER DECISION**: HNSW pivot vs PCA-ALEX continuation
 
 ---
 

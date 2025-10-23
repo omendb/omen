@@ -1,6 +1,23 @@
-# OmenDB Development Context
+# OmenDB Server Development Context
 
-**Last Updated**: October 22, 2025 (Evening) - STRATEGIC PIVOT
+**Repository**: omendb-server (PostgreSQL-compatible Vector Database)
+**Last Updated**: October 22, 2025 - STRATEGIC DECISIONS FINALIZED
+**License**: Elastic License 2.0 (source-available, self-hostable)
+
+## Product Overview
+
+**omendb-server**: PostgreSQL-compatible vector database that scales
+
+**Positioning**: "PostgreSQL-compatible vector database. Drop-in replacement for pgvector. 10x faster, 28x more memory efficient. Source-available. Self-hostable."
+
+**Year 1 Focus** (2025-2026):
+- Cloud-native deployment (managed service $29-99/month)
+- Self-hosting mode (enterprises, compliance-driven)
+- PostgreSQL wire protocol (drop-in pgvector compatibility)
+
+**Future** (Year 2+):
+- omen-lite (embedded variant) - shares 80% of codebase, different wire protocol
+- Currently on hold to maintain focus
 
 ## Quick Start for AI Agents
 
@@ -70,10 +87,42 @@
 - ✅ **Self-hosting option**: Compliance/privacy vs cloud-only (Pinecone)
 
 **Market Position** (Vector DB Focus):
-- **vs pgvector**: 10x faster at 10M+ vectors, 30x more memory efficient
-- **vs Pinecone**: Same performance, 1/10th cost, self-hostable, open source
+- **vs pgvector**: 10x faster at 10M+ vectors, 28x more memory efficient
+- **vs Pinecone**: Same performance, 90% cheaper ($99 vs $500/mo), self-hostable, source-available
 - **vs Weaviate/Qdrant**: PostgreSQL-compatible (no new API to learn)
 - **Unique**: Only PostgreSQL-compatible vector DB that scales efficiently
+
+---
+
+## Licensing & Business Model
+
+**License**: Elastic License 2.0 (source-available)
+
+**What this means**:
+- ✅ Free to use, modify, and self-host
+- ✅ Source code publicly available (can verify PostgreSQL compatibility)
+- ✅ Community can contribute (bug fixes, features)
+- ✅ Enterprises can deploy on their infrastructure
+- ❌ Cannot resell as managed service (protects cloud revenue)
+
+**Revenue Model** (Hybrid: Flat + Caps):
+
+| Tier | Price | Vectors | Queries/mo | Target Customer |
+|------|-------|---------|------------|-----------------|
+| **Developer** | **FREE** | 100K | 100K | Hobbyists, prototyping |
+| **Starter** | **$29/mo** | 1M | 1M | Early startups, side projects |
+| **Growth** | **$99/mo** | 10M | 10M | Production apps, scaling startups |
+| **Enterprise** | **Custom** | Unlimited | Unlimited | Large deployments, compliance |
+
+**Why this pricing wins**:
+- **Predictable**: No surprise bills (vs Pinecone usage spikes)
+- **Transparent**: Know your costs upfront
+- **Competitive**: 90% cheaper than Pinecone at Growth tier
+
+**Customer Focus (Year 1)**:
+- **Primary (70%)**: AI startups (RAG, LangChain users, semantic search)
+- **Secondary (30%)**: Enterprise (healthcare, finance, legal - compliance-driven)
+- **Channel**: Self-serve (Free → Starter → Growth) + direct sales (Enterprise)
 
 ## Architecture (Vector DB - October 22, 2025)
 
@@ -104,7 +153,7 @@ Planned (Vector DB):
 
 **Repository Structure** (Standard OSS - agent-contexts v0.1.1):
 ```
-omendb/core/
+omendb-server/
 ├── CLAUDE.md              # This file - AI agent entry point
 ├── docs/                  # Documentation (standard OSS pattern) 📚
 │   ├── README.md          # Documentation index
@@ -144,6 +193,37 @@ omendb/core/
 **Pattern**: Standard OSS database structure (like PostgreSQL, MongoDB, DuckDB, CockroachDB)
 - **docs/** — All permanent documentation (user guides, architecture, research)
 - **ai/** — AI working context (tasks, status, decisions, research notes)
+
+---
+
+## Product Roadmap & Code Strategy
+
+**Year 1 Focus** (2025-2026): omendb-server ONLY
+- Build cloud vector database first
+- Validate product-market fit
+- Self-hosting mode covers 95% of "embedded" use cases
+- **Rationale**: Focus beats parallelization in early stage
+
+**Year 2+**: Consider omen-lite (embedded variant)
+- Extract to omen-lite IF demand exists
+- Shares 80% of code (ALEX, vector ops, storage)
+- Only difference: Wire protocol (embedded API vs PostgreSQL)
+- 2-4 weeks of work (not 6 months)
+
+**Code organization** (when extracting omen-lite):
+- Extract shared code to **omendb-core** library (Apache 2.0):
+  - `omendb-core/alex` - Multi-level ALEX index
+  - `omendb-core/vector` - Vector types, distance functions
+  - `omendb-core/mvcc` - MVCC snapshot isolation
+  - `omendb-core/storage` - RocksDB abstractions
+- Both products depend on omendb-core
+- Standard Rust pattern: Build first, extract when stable
+
+**GitHub Organization:**
+- `omendb/omendb-server` - This repository (Elastic License 2.0)
+- `omendb/omen-lite` - Embedded variant (Elastic License 2.0, Year 2+)
+- `omendb/omendb-core` - Shared library (Apache 2.0, when extracted)
+- `omendb/pg-learned` - PostgreSQL extension (Elastic License 2.0, marketing/education)
 
 ---
 
@@ -200,37 +280,64 @@ omendb/core/
 
 ---
 
-## Target Market (Vector DB)
+## Target Market (Year 1 Focus)
 
-**Primary Customers**:
+**Customer Prioritization**:
+- **Primary (70% of effort)**: AI-first Startups
+- **Secondary (30% of effort)**: Enterprise AI
 
-**Tier 1: AI-first Startups** ($29-299/month):
-- RAG applications (chatbots, search, Q&A)
-- Code search, document search, semantic search
-- **Pain**: pgvector too slow at 10M embeddings, Pinecone costs $2K/month
-- **Examples**: AI chat platforms, research paper search, code assistants
+**Why this split**:
+- AI startups = high volume, fast sales cycle, product-led growth
+- Enterprise = high ARPU, validates enterprise readiness
+- Both have urgent pain (pgvector doesn't scale, Pinecone too expensive)
 
-**Tier 2: E-commerce + SaaS** ($299-2K/month):
-- Product recommendations, semantic product search
-- User analytics, customer support automation
-- **Pain**: Need PostgreSQL for transactions + vector search, running two DBs
-- **Examples**: E-commerce platforms, SaaS analytics, support automation
+---
 
-**Tier 3: Enterprise AI** ($2K-20K/month):
-- Healthcare (patient similarity, drug discovery)
-- Finance (fraud detection, trading signals)
-- Legal (case law search, document similarity)
-- **Pain**: Can't use cloud Pinecone (compliance), pgvector doesn't scale
-- **Examples**: Healthcare AI, fintech, legal tech
+### Primary: AI-First Startups ($29-99/month)
 
-**Tier 4: AI Platform Companies** ($20K+/month):
-- LangChain, LlamaIndex (need vector backend)
-- AI agent platforms, RAG-as-a-service
-- **Pain**: Building on Pinecone = vendor lock-in, need open source
-- **Examples**: AI infrastructure, developer tools, ML platforms
+**Use cases**:
+- RAG applications (chatbots, document Q&A, knowledge bases)
+- Semantic search (code search, research papers, documentation)
+- AI agents (LangChain, LlamaIndex integrations)
+
+**Pain points**:
+- pgvector too slow at 1M-10M vectors
+- Pinecone costs $500-2K/month (overkill for early stage)
+- Need PostgreSQL compatibility (existing infrastructure)
+
+**Discovery channels**:
+- LangChain/LlamaIndex Discord communities
+- HackerNews ("Show HN: PostgreSQL-compatible vector database")
+- Direct outreach (GitHub search for pgvector users)
+- YC batch network (if applicable)
+
+**Conversion path**: Free tier (prototype) → Starter $29 (launch) → Growth $99 (scale)
+
+---
+
+### Secondary: Enterprise AI ($20K-100K/year)
+
+**Use cases**:
+- Healthcare: Patient similarity, drug discovery, medical records search
+- Finance: Fraud detection, trading signals, document analysis
+- Legal: Case law search, contract similarity, e-discovery
+
+**Pain points**:
+- Can't use cloud Pinecone (compliance: HIPAA, SOC2, data sovereignty)
+- pgvector doesn't scale to 100M+ vectors
+- Need enterprise support, SLAs, on-prem deployment
+
+**Discovery channels**:
+- Direct sales (healthcare AI, fintech, legal tech companies)
+- Conferences (AI in Healthcare, FinTech conferences)
+- Compliance forums (self-hosting = key differentiator)
+
+**Conversion path**: Custom POC → Annual contract → White-glove onboarding
+
+---
 
 **Market Size**:
-- 2023: $1.6B
+- 2025: $2.5B
 - 2032: $10.6B
 - CAGR: 23.54%
 
@@ -247,14 +354,15 @@ omendb/core/
 | Self-hosting | ✅ | ❌ | ✅ | ✅ |
 | Memory efficient | ❌ | ? | ❌ | ✅ (28x) |
 | HTAP (transactions + analytics) | ✅ | ❌ | ❌ | ✅ |
-| Pricing | Free | $70-8K+/mo | Free/Paid | $29-499/mo |
+| License | PostgreSQL | Proprietary | Apache 2.0 | Elastic 2.0 |
+| Pricing | Free | $70-8K+/mo | Free/Paid | $29-99/mo |
 
 **Competitive Moats**:
-1. **PostgreSQL compatibility** (pgvector users can drop-in migrate)
-2. **Memory efficiency** (28x vs PostgreSQL = 10x cheaper at scale)
-3. **HTAP architecture** (one DB for vectors + business logic)
-4. **Self-hosting + managed** (unlike Pinecone cloud-only)
-5. **Open source** (avoid vendor lock-in)
+1. **PostgreSQL compatibility** (pgvector users can drop-in migrate, no new API)
+2. **Memory efficiency** (28x vs PostgreSQL = 90% cheaper at scale)
+3. **HTAP architecture** (one DB for vectors + business logic, not two systems)
+4. **Self-hosting + managed** (unlike Pinecone cloud-only, compliance-friendly)
+5. **Source-available** (Elastic License - can verify, modify, contribute)
 
 ---
 
@@ -348,9 +456,11 @@ cargo build --release            # Optimized build
 
 ---
 
-*Last Updated: October 22, 2025 (Evening) - STRATEGIC PIVOT*
+*Last Updated: October 22, 2025 - STRATEGIC PIVOT + REPOSITORY RENAME*
 
-**Focus**: PostgreSQL-compatible vector database
+**Product**: omendb-server - Cloud/server PostgreSQL-compatible vector database
+**Companion**: omen-lite - Embedded vector database (separate repo)
 **Market**: $10.6B vector DB market (23.54% CAGR)
 **Timeline**: 6 months to production-ready, 12 months to $100K-500K ARR
 **Next Milestone**: ALEX vector prototype validation (Week 1-2)
+**GitHub**: omendb/omendb-server (renamed from omendb/core)

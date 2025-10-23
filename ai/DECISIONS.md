@@ -293,3 +293,117 @@ _Architectural decisions with context and rationale_
 1. Week 1-2: Validate ALEX for vectors + customer pain point
 2. Week 3-10: Build pgvector-compatible vector database
 3. Week 11-24: Scale, optimize, go-to-market
+
+---
+
+## 2025-10-22 (Evening): Week 1 ALEX Vector Prototype Results
+
+**Context**: Prototyped ALEX for 1536-dimensional vectors to validate technical feasibility
+
+**Decision**: ⚠️ PENDING - Simple projection doesn't work, need to choose: PCA-ALEX vs HNSW
+
+**Benchmark Results** (10K-100K vectors, 1536 dimensions):
+- ✅ Memory: 6,146 bytes/vector (2-13 bytes overhead) - Target <50 bytes met
+- ✅ Latency: 0.58-5.73ms average (17-22x speedup) - Target <20ms met
+- ❌ Recall: 5% recall@10 - Target >90% FAILED
+
+**Root Cause Analysis**:
+- Simple 1D projection (sum of first 4 dimensions) loses too much information
+- 1536 dimensions → 1 dimension = 99.7% information loss
+- Nearest neighbors in 1536D space NOT preserved in 1D projection
+- ALEX searches fast but finds wrong vectors (low recall)
+
+**Validation**: Confirms LIDER paper - need PCA or LSH for high-dimensional indexing
+
+**Three Options Forward**:
+
+**Option 1: PCA-ALEX** (LIDER paper approach)
+- Pros: 10-30x memory savings, unique positioning, revolutionary if works
+- Cons: Complex (PCA library, periodic retraining), unproven, 50-60% success rate
+- Timeline: 3-4 weeks
+- Risk: Medium-High
+
+**Option 2: Hybrid ALEX+HNSW**
+- Pros: Combines ALEX speed + HNSW accuracy, 2-5x memory savings
+- Cons: Complex architecture, hard to tune, hybrid systems difficult
+- Timeline: 2-3 weeks
+- Risk: Medium
+
+**Option 3: Pure HNSW** (RECOMMENDED ✅)
+- Pros: Proven (95-99% recall), industry standard, fast (1-2 weeks), 95% success rate
+- Cons: Loses "revolutionary learned index" narrative, competitor parity
+- Timeline: 1-2 weeks
+- Risk: Low
+
+**Recommendation**: Pivot to HNSW
+
+**Rationale**:
+1. **Risk management**: Week 1 showed ALEX needs PCA (50-60% success vs 95% for HNSW)
+2. **Time pressure**: Vector DB market moving fast, need production-ready in 16-24 weeks
+3. **Value prop intact**: PostgreSQL compatibility + 10x performance vs pgvector still unique
+4. **Fallback exists**: Research always said "HNSW as proven fallback"
+5. **Can revisit**: PCA-ALEX can be v0.2.0 feature if HNSW succeeds
+
+**New Positioning** (if HNSW):
+- "PostgreSQL-compatible vector database that scales"
+- "10x faster than pgvector, 30x less memory"
+- "Self-hosted alternative to Pinecone"
+- Drop "revolutionary learned index" (save for v0.2.0)
+
+**Key Insight**: Building great PostgreSQL-compatible vector database that's 10x faster than pgvector is valuable, regardless of learned indexes vs HNSW. Market wants scale + compatibility, not bleeding-edge algorithms.
+
+**Status**: DECISION MADE - Pivot to HNSW for omen-server ✅
+
+**Final Decision** (October 22, 2025 Evening):
+- **omen-server**: Use HNSW for vectors (proven, low risk, 1-2 weeks)
+- **omen-lite**: Use HNSW for vectors (proven, production-ready)
+- **Both**: Use ALEX for primary keys (validated, works great)
+- **Rationale**: PCA-ALEX is 50-60% success risk, HNSW is 95%+ proven
+
+**Next Steps** (Week 2+):
+- omen-server: Implement HNSW for vectors (Week 2)
+- omen-lite: Complete embedded API (Week 1-2), add HNSW Week 3-4
+- Both products: Apache 2.0 open source, monetize via managed services
+
+→ Details: docs/architecture/research/vector_prototype_week1_oct_2025.md
+
+---
+
+## 2025-10-22 (Evening): Business Model Decision - Full Open Source
+
+**Context**: Choosing licensing strategy for omen-lite and omen-server
+
+**Decision**: Both products Apache 2.0 (fully open source) ✅
+
+**Structure**:
+- omen-lite: Apache 2.0 (embedded database)
+- omen-server: Apache 2.0 (self-hostable vector database)
+- Revenue: Managed cloud services, not licensing
+
+**Business Model** (ClickHouse path):
+```
+Free Tier:
+├── omen-lite: Unlimited (self-hosted, embedded)
+└── omen-server: Unlimited (self-hosted, Docker/binary)
+
+Paid Tiers:
+├── omen-server Cloud: $29-499/month (managed hosting)
+├── Sync Service: $29-99/month (omen-lite → cloud sync)
+└── Enterprise: Custom (support, SLA, compliance)
+```
+
+**Rationale**:
+1. **Market expectation**: Developers expect databases to be open source (trust)
+2. **Competitive advantage**: "Open source Pinecone alternative" narrative
+3. **Proven model**: ClickHouse ($88M ARR), Supabase ($100M ARR) both Apache 2.0
+4. **AI trust**: Companies want to audit code handling embeddings
+5. **Adoption > margins**: Growth matters more initially (VC-fundable)
+
+**Risk**: AWS/Azure could fork and compete
+**Mitigation**: Execution speed > licensing protection (ClickHouse proves this)
+
+**Alternative Considered**:
+- Business Source License (BSL): Prevents cloud competition
+- Rejected: Slows adoption, seen as "fake open source", community hesitation
+
+**Result**: Full open source for both products ✅

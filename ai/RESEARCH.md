@@ -1,170 +1,200 @@
-# Research
+# Vector Index Algorithm Research
 
-_Index of research findings with key takeaways_
-
----
-
-## Multi-Level ALEX Performance (researched 2025-10-14)
-
-**Sources**:
-- internal/research/MULTI_LEVEL_RESULTS.md
-- internal/research/100M_SCALE_RESULTS.md
-- internal/research/ALEX_PERFORMANCE_VALIDATION.md
-
-**Key Findings**:
-- Linear scaling validated to 100M+ rows
-- 1.24μs query latency at 100M scale (memory: 1.50 bytes/key)
-- 28x memory efficient vs PostgreSQL (42 bytes/key)
-- Fixed fanout (64 keys/leaf) optimal for cache locality
-
-**Relevance**: Core index structure proven scalable
-**Decision**: Adopted multi-level ALEX over DiskANN → ai/DECISIONS.md
+**Status**: 🚨 **RESEARCH IN PROGRESS**
+**Created**: October 22, 2025
+**Goal**: Determine optimal vector indexing algorithm before Week 2 implementation
 
 ---
 
-## Cache Effectiveness Validation (researched 2025-10-21)
+## Research Objectives
 
-**Sources**:
-- internal/CACHE_DAY_1-5_VALIDATION.md
-- internal/CACHE_TUNING_GUIDE.md
+**Primary Question**: What vector indexing algorithm should we use for omendb-server and omen-lite?
 
-**Key Findings**:
-- Zipfian workload (80% queries hit 10% data): 90% hit rate
-- Optimal cache size: 1-10% of dataset (not 50%)
-- 2-3x speedup at 100K-1M scale
-- Larger cache paradox: 50% cache slower than 1% (memory pressure)
-
-**Applied**:
-- LRU cache implementation (1-10GB configurable)
-- Default 100K entries ≈ 1GB for 10KB rows
-- Cache invalidation on UPDATE/DELETE
-
-→ Details: internal/CACHE_IMPLEMENTATION_PLAN.md
+**Secondary Questions**:
+1. What's SOTA (state-of-the-art) in 2025?
+2. Why is pgvector slow despite using HNSW?
+3. Can learned indexes work for high-dimensional vectors?
+4. What's our competitive differentiation?
 
 ---
 
-## HN Database Architecture Insights (researched 2025-10-21)
+## Research Documents (TO CREATE)
 
-**Sources**:
-- internal/research/HN_DATABASE_INSIGHTS_ANALYSIS.md
-- HN #45657827
-- "Designing Data-Intensive Applications" Ch. 3
+### 1. vector_index_algorithms_2025.md
 
-**Key Findings**:
-- **80x gap**: In-memory vs disk access speed
-- **LSM trees**: Power DynamoDB (80M req/s), Cassandra, RocksDB
-- **Sparse indices**: ALEX approach validated by DB fundamentals
-- **Immutable records**: MVCC append-only pattern is best practice
+**Comprehensive survey of SOTA algorithms**
 
-**Validation**: OmenDB architecture aligns with industry best practices
-**Impact**: Confirms RocksDB + ALEX + MVCC + Cache stack
+**Cover**:
+- HNSW (Hierarchical Navigable Small World)
+- DiskANN (Microsoft Research)
+- ScaNN (Google)
+- Faiss (Facebook/Meta)
+- Learned indexes (LIDER paper, etc.)
+- Emerging algorithms (2024-2025 papers)
 
-→ Details: internal/research/HN_DATABASE_INSIGHTS_ANALYSIS.md
+**For each algorithm**:
+- Description and how it works
+- Performance characteristics (recall@K, latency, memory, index build time)
+- Production usage (which companies use it?)
+- Pros and cons
+- Rust library availability
+- Implementation complexity (1-2 weeks? 3-4 weeks? Build from scratch?)
 
----
+**Benchmark data**:
+- Find published benchmarks comparing algorithms
+- Note dataset size, dimensionality, hardware
+- Be skeptical of claims without data
 
-## Honest Benchmarking Methodology (researched 2025-10-14)
-
-**Sources**:
-- internal/research/10M_SCALE_VALIDATION.md
-- internal/technical/BENCHMARK_VARIANCE_ANALYSIS_OCT_21.md
-
-**Key Findings**:
-- 3-run minimum with variance reporting
-- Outliers investigated (not dismissed)
-- Same features: ACID, durability, persistence
-- Same workload: sequential vs random distribution
-- Worst-case documented (10M sequential: 1.93x vs target 2x)
-
-**Applied**:
-- Claim "1.5-3x faster" (validated small-medium scale)
-- Report "1.2x faster at 10M" (honest, needs optimization)
-- Never claim unvalidated projections as facts
-
-→ Details: internal/research/ALEX_SQLITE_BENCHMARK_RESULTS.md
+**Output**: Comprehensive comparison table
 
 ---
 
-## MVCC Implementation Patterns (researched 2025-10-20)
+### 2. pgvector_performance_analysis.md
 
-**Sources**:
-- ToyDB: Timestamp-based MVCC in Rust
-- TiKV: Percolator model
-- PostgreSQL: xmin/xmax visibility
-- Mini-LSM: Snapshot read implementation
+**Why is pgvector slow?**
 
-**Key Findings**:
-- Inverted txn_id (u64::MAX - txn_id) for newest-first sorting
-- First-committer-wins prevents write conflicts
-- Read-your-own-writes essential for usability
-- Garbage collection via watermark (oldest active txn)
+**Key fact to explore**: pgvector uses HNSW (since v0.5.0 in 2023)
 
-**Applied**:
-- 6 MVCC components (oracle, storage, visibility, conflict, transaction, GC)
-- 85 tests (62 unit + 23 integration)
-- Production-ready snapshot isolation
+**Questions**:
+- If pgvector has HNSW, why 13-hour index builds? (from GitHub issues)
+- Is it PostgreSQL overhead? (WAL, TOAST, VACUUM, row-based storage)
+- Is it HNSW implementation quality?
+- Is it configuration? (HNSW parameters: M, ef_construction, ef_search)
 
-→ Details: internal/technical/MVCC_DESIGN.md
+**Research**:
+- Read pgvector source code (GitHub: pgvector/pgvector)
+- Find standalone HNSW benchmarks (hnswlib, instant-distance, etc.)
+- Compare: standalone HNSW vs pgvector HNSW
+- Isolate: PostgreSQL overhead vs algorithm
 
----
+**Thesis to validate**: "RocksDB + HNSW will be 10x faster than PostgreSQL + HNSW"
 
-## Custom Storage Analysis (researched 2025-10-21)
-
-**Sources**:
-- internal/research/CUSTOM_STORAGE_ANALYSIS.md
-- SlateDB, SurrealDB, TiKV architecture reviews
-
-**Key Findings**:
-- Custom storage = 6-12 months engineering effort
-- RocksDB already optimized (10+ years, production-proven)
-- Performance gains: 2-3x possible, not 10x
-- Complexity/risk trade-off not worth it for 0.1.0
-
-**Decision**: Defer custom storage to post-0.1.0
-**Mitigation**: Large cache layer addresses RocksDB overhead
-
-→ Details: internal/research/CUSTOM_STORAGE_ANALYSIS.md
+**Output**:
+- Root cause analysis (is it PostgreSQL? algorithm? both?)
+- Data to support "10x faster" claim
+- Confidence level in our approach
 
 ---
 
-## Competitive Landscape (researched 2025-10-08)
+### 3. vector_index_decision.md
 
-**Sources**:
-- internal/research/COMPETITIVE_ASSESSMENT_POST_ALEX.md
-- internal/COMPETITIVE_ANALYSIS.md
+**Final algorithm choice with full justification**
 
-**Key Findings**:
-- **vs SQLite**: 1.5-3x faster (validated) ✅
-- **vs PostgreSQL**: 28x memory efficient (ALEX vs B-tree)
-- **vs CockroachDB**: 10-50x single-node writes (projected, needs validation)
-- **vs TiDB**: No replication lag, simpler architecture
-- **vs SingleStore**: Multi-level ALEX advantage over B-tree
+**Cover**:
+- Chosen algorithm (HNSW? DiskANN? PCA-ALEX? Something else?)
+- Full rationale (why this over alternatives?)
+- Risk assessment:
+  - Technical risk (implementation complexity, unknowns)
+  - Market risk (differentiation, competitive advantage)
+  - Timeline risk (can we ship in time?)
+- Implementation plan:
+  - Library choice (specific Rust crate) OR build from scratch?
+  - Timeline (realistic: 1 week? 2 weeks? 3-4 weeks?)
+  - Milestones (what to deliver by when?)
+  - Tests needed (recall@K, latency, memory)
+- Fallback plan:
+  - If chosen algorithm fails after 1-2 weeks, what next?
+  - Secondary choice ready to implement
+- Confidence level: **MUST be >80% to proceed**
 
-**Market Position**: High-performance single-node HTAP database
-**Target**: Developers who outgrow SQLite, need PostgreSQL compatibility
-
-→ Details: internal/research/COMPETITIVE_ASSESSMENT_POST_ALEX.md
-
----
-
-## Open Questions
-
-- [ ] MVCC overhead measurement (target: <20%)
-- [ ] RocksDB tuning parameters (reduce 77% overhead to <30%)
-- [ ] Optimal compaction strategy for our workload
-- [ ] CockroachDB single-node benchmark validation
-- [ ] Window functions implementation approach
+**Output**:
+- Clear decision with justification
+- Implementation roadmap
+- Risk mitigation plan
 
 ---
 
-## Research Archive
+## Research Process
 
-Completed research moved to internal/research/ for permanent reference:
-- 100M_SCALE_RESULTS.md
-- ALEX_PERFORMANCE_VALIDATION.md
-- HN_DATABASE_INSIGHTS_ANALYSIS.md
-- CUSTOM_STORAGE_ANALYSIS.md
-- MVCC implementation references (ToyDB, TiKV, PostgreSQL)
-- Competitive analysis (SQLite, PostgreSQL, CockroachDB, TiDB)
+**Step 1: Survey SOTA (4-6 hours)**
+- Read latest papers (arXiv, Google Scholar)
+- Read production system docs (Pinecone, Weaviate, Qdrant, Milvus)
+- Find benchmark comparisons
+- List all viable algorithms
 
-_For detailed technical analysis, see internal/research/ directory_
+**Step 2: Deep dive on top 3-4 algorithms (4-6 hours)**
+- How do they work technically?
+- Performance data (recall, latency, memory)
+- Implementation complexity
+- Rust library availability
+- Production track record
+
+**Step 3: Analyze pgvector (2-4 hours)**
+- Read pgvector source code
+- Find HNSW implementation details
+- Compare standalone HNSW benchmarks
+- Understand PostgreSQL overhead
+
+**Step 4: Make decision (2-3 hours)**
+- Weigh tradeoffs
+- Assess risk
+- Choose algorithm
+- Write implementation plan
+- Identify fallback
+
+**Total time**: 1-2 days (don't rush this!)
+
+---
+
+## Research Guidelines
+
+**Be thorough**:
+- Don't pick an algorithm based on a single blog post
+- Find multiple sources, verify claims
+- Look for actual benchmark data, not marketing
+
+**Be skeptical**:
+- "Revolutionary new algorithm" = probably research-stage
+- "10x faster" = prove it with data
+- Academic papers = may not work in production
+
+**Be practical**:
+- Can we implement in 1-2 weeks? (if not, is it worth it?)
+- Is there a mature Rust library? (if not, do we build from scratch?)
+- Do we have fallback if it fails?
+
+**Be honest**:
+- If HNSW is the boring but correct choice, that's OK
+- If we need differentiation, be clear about the tradeoffs
+- Don't pick an algorithm just because it's "novel"
+
+---
+
+## Success Criteria
+
+**Research is complete when**:
+- ✅ All 3 documents written (comprehensive, not rushed)
+- ✅ Algorithm chosen with >80% confidence
+- ✅ Implementation plan clear (library, timeline, milestones)
+- ✅ Fallback plan identified
+- ✅ Updated `omendb-server/ai/DECISIONS.md` and `omen-lite/ai/DECISIONS.md`
+
+**Then**: Proceed to Week 2 implementation with confidence
+
+---
+
+## Notes
+
+**History context** (why we're doing this research):
+- Tried Mojo paper algorithm → didn't work (paper was only reference)
+- Pivoted: DiskANN → HNSW+ → Rust learned DB → current state
+- ALEX prototype: 5% recall (simple projection doesn't work for high-dim vectors)
+- Lesson: Stop pivoting, do research first
+
+**Key insights from Week 1**:
+- pgvector IS slow (13-hour index builds, 60GB memory, 30s queries)
+- pgvector USES HNSW (since v0.5.0, 2023)
+- ALEX works great for 1D (primary keys), fails for high-dim vectors
+- Market wants: PostgreSQL compatibility + scale
+
+**What we're optimizing for**:
+1. **Correctness**: >95% recall@10 (production-ready)
+2. **Performance**: <10ms p95 latency, <2GB for 10M 1536-dim vectors
+3. **Time-to-market**: 1-2 weeks implementation (not 6 months)
+4. **Risk**: >80% confidence it will work
+
+---
+
+*Created: October 22, 2025*
+*Start research: Next session*
+*Complete by: October 24, 2025 (1-2 days, thorough)*
