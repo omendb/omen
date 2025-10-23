@@ -7,6 +7,8 @@
 
 pub mod quantized_vector;
 pub mod quantization_model;
+pub mod quantized_store;
 
 pub use quantized_vector::QuantizedVector;
 pub use quantization_model::QuantizationModel;
+pub use quantized_store::{HammingDistance, MemoryUsage, QuantizedVectorStore};
