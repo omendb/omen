@@ -173,6 +173,10 @@ impl SqlEngine {
                 info!(table = %stmt.name, "Creating table");
                 self.execute_create_table(&stmt.name, &stmt.columns)
             }
+            Statement::CreateIndex { .. } => {
+                warn!("CREATE INDEX not yet implemented");
+                Err(anyhow!("CREATE INDEX support coming soon"))
+            }
             Statement::Insert(stmt) => {
                 debug!(table = %stmt.table_name, "Inserting data");
                 self.execute_insert(&stmt.table_name, &stmt.source)
@@ -222,6 +226,7 @@ impl SqlEngine {
                     ExecutionResult::UserCreated { .. } => ("CREATE_USER", 1),
                     ExecutionResult::UserDropped { .. } => ("DROP_USER", 1),
                     ExecutionResult::UserAltered { .. } => ("ALTER_USER", 1),
+                    ExecutionResult::IndexCreated { .. } => ("CREATE_INDEX", 0),
                 };
                 info!(
                     query_type = query_type,
@@ -2183,6 +2188,12 @@ pub enum ExecutionResult {
 
     /// User altered
     UserAltered { username: String },
+
+    /// Index created
+    IndexCreated {
+        index_name: String,
+        table_name: String,
+    },
 }
 
 #[cfg(test)]
