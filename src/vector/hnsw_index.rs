@@ -143,6 +143,10 @@ impl<'a> HNSWIndex<'a> {
             dimensions: self.dimensions,
         }
     }
+
+    // TODO: Serialization methods (defer to Day 3 after basic integration works)
+    // pub fn to_bytes(&self) -> Result<Vec<u8>>
+    // pub fn from_bytes(bytes: &[u8], dimensions: usize) -> Result<Self>
 }
 
 /// HNSW index parameters

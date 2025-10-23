@@ -386,3 +386,7 @@ path = "src/bin/test_cache_simple.rs"
 name = "benchmark_cache_scale"
 path = "src/bin/benchmark_cache_scale.rs"
 
+[[bin]]
+name = "benchmark_hnsw"
+path = "src/bin/benchmark_hnsw.rs"
+

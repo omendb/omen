@@ -3,23 +3,28 @@
 //! VectorStore manages a collection of vectors and provides k-NN search
 //! using HNSW (Hierarchical Navigable Small World) algorithm.
 
+use super::hnsw_index::HNSWIndex;
 use super::types::Vector;
 use anyhow::Result;
 
 /// Vector store with HNSW indexing
-pub struct VectorStore {
+pub struct VectorStore<'a> {
     /// All vectors stored in memory
     vectors: Vec<Vector>,
+
+    /// HNSW index for approximate nearest neighbor search
+    hnsw_index: Option<HNSWIndex<'a>>,
 
     /// Vector dimensionality
     dimensions: usize,
 }
 
-impl VectorStore {
+impl<'a> VectorStore<'a> {
     /// Create new vector store
     pub fn new(dimensions: usize) -> Self {
         Self {
             vectors: Vec::new(),
+            hnsw_index: None,
             dimensions,
         }
     }
@@ -35,12 +40,47 @@ impl VectorStore {
         }
 
         let id = self.vectors.len();
+
+        // Lazy initialize HNSW on first insert
+        if self.hnsw_index.is_none() {
+            // Start with capacity for 1M vectors
+            self.hnsw_index = Some(HNSWIndex::new(1_000_000, self.dimensions));
+        }
+
+        // Insert into HNSW index
+        if let Some(ref mut index) = self.hnsw_index {
+            index.insert(&vector.data)?;
+        }
+
         self.vectors.push(vector);
         Ok(id)
     }
 
-    /// K-nearest neighbors search (brute force for now, will use HNSW)
+    /// K-nearest neighbors search using HNSW
     pub fn knn_search(&self, query: &Vector, k: usize) -> Result<Vec<(usize, f32)>> {
+        if query.dim() != self.dimensions {
+            anyhow::bail!(
+                "Query dimension mismatch: expected {}, got {}",
+                self.dimensions,
+                query.dim()
+            );
+        }
+
+        if self.vectors.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Use HNSW index if available
+        if let Some(ref index) = self.hnsw_index {
+            return index.search(&query.data, k);
+        }
+
+        // Fallback to brute-force if no index
+        self.knn_search_brute_force(query, k)
+    }
+
+    /// Brute-force K-NN search (fallback, mainly for testing)
+    pub fn knn_search_brute_force(&self, query: &Vector, k: usize) -> Result<Vec<(usize, f32)>> {
         if query.dim() != self.dimensions {
             anyhow::bail!(
                 "Query dimension mismatch: expected {}, got {}",
@@ -97,6 +137,18 @@ impl VectorStore {
         }
         self.memory_usage() as f32 / self.vectors.len() as f32
     }
+
+    /// Set HNSW ef_search parameter (runtime tuning)
+    pub fn set_ef_search(&mut self, ef_search: usize) {
+        if let Some(ref mut index) = self.hnsw_index {
+            index.set_ef_search(ef_search);
+        }
+    }
+
+    /// Get HNSW ef_search parameter
+    pub fn get_ef_search(&self) -> Option<usize> {
+        self.hnsw_index.as_ref().map(|idx| idx.get_ef_search())
+    }
 }
 
 #[cfg(test)]
@@ -124,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_store_knn() {
+    fn test_vector_store_knn_with_hnsw() {
         let mut store = VectorStore::new(128);
 
         // Insert some vectors
@@ -132,9 +184,30 @@ mod tests {
             store.insert(random_vector(128, i)).unwrap();
         }
 
-        // Query for nearest neighbors
+        // Query for nearest neighbors (uses HNSW)
         let query = random_vector(128, 50);
         let results = store.knn_search(&query, 10).unwrap();
+
+        assert_eq!(results.len(), 10);
+
+        // Results should be sorted by distance
+        for i in 1..results.len() {
+            assert!(results[i].1 >= results[i - 1].1);
+        }
+    }
+
+    #[test]
+    fn test_vector_store_brute_force() {
+        let mut store = VectorStore::new(128);
+
+        // Insert some vectors
+        for i in 0..100 {
+            store.insert(random_vector(128, i)).unwrap();
+        }
+
+        // Query using brute-force
+        let query = random_vector(128, 50);
+        let results = store.knn_search_brute_force(&query, 10).unwrap();
 
         assert_eq!(results.len(), 10);
 
@@ -150,5 +223,22 @@ mod tests {
         let wrong_dim = Vector::new(vec![1.0; 64]);
 
         assert!(store.insert(wrong_dim).is_err());
+    }
+
+    #[test]
+    fn test_ef_search_tuning() {
+        let mut store = VectorStore::new(128);
+
+        // Insert vectors to initialize HNSW
+        for i in 0..10 {
+            store.insert(random_vector(128, i)).unwrap();
+        }
+
+        // Check default ef_search
+        assert_eq!(store.get_ef_search(), Some(100));
+
+        // Tune ef_search
+        store.set_ef_search(200);
+        assert_eq!(store.get_ef_search(), Some(200));
     }
 }
