@@ -56,8 +56,35 @@ impl<'a> VectorStore<'a> {
         Ok(id)
     }
 
+    /// Rebuild HNSW index from existing vectors
+    ///
+    /// This is needed when:
+    /// - Vectors are loaded from disk but index wasn't persisted
+    /// - Index needs to be rebuilt after batch inserts
+    pub fn rebuild_index(&mut self) -> Result<()> {
+        if self.vectors.is_empty() {
+            return Ok(());
+        }
+
+        eprintln!("🔨 Rebuilding HNSW index for {} vectors...", self.vectors.len());
+        let start = std::time::Instant::now();
+
+        // Create new HNSW index
+        let mut index = HNSWIndex::new(self.vectors.len().max(1_000_000), self.dimensions);
+
+        // Insert all vectors
+        for vector in &self.vectors {
+            index.insert(&vector.data)?;
+        }
+
+        self.hnsw_index = Some(index);
+
+        eprintln!("✅ HNSW index rebuilt in {:.2}s", start.elapsed().as_secs_f64());
+        Ok(())
+    }
+
     /// K-nearest neighbors search using HNSW
-    pub fn knn_search(&self, query: &Vector, k: usize) -> Result<Vec<(usize, f32)>> {
+    pub fn knn_search(&mut self, query: &Vector, k: usize) -> Result<Vec<(usize, f32)>> {
         if query.dim() != self.dimensions {
             anyhow::bail!(
                 "Query dimension mismatch: expected {}, got {}",
@@ -70,12 +97,20 @@ impl<'a> VectorStore<'a> {
             return Ok(Vec::new());
         }
 
+        // CRITICAL FIX: Rebuild index if missing but vectors exist
+        // This handles the case where vectors were loaded from disk but index wasn't persisted
+        if self.hnsw_index.is_none() && self.vectors.len() > 100 {
+            eprintln!("⚠️  HNSW index missing for {} vectors - rebuilding...", self.vectors.len());
+            self.rebuild_index()?;
+        }
+
         // Use HNSW index if available
         if let Some(ref index) = self.hnsw_index {
             return index.search(&query.data, k);
         }
 
-        // Fallback to brute-force if no index
+        // Fallback to brute-force if no index (small datasets only)
+        eprintln!("ℹ️  Using brute-force search for {} vectors", self.vectors.len());
         self.knn_search_brute_force(query, k)
     }
 
