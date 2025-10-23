@@ -11,8 +11,10 @@
 pub mod types;
 pub mod store;
 pub mod hnsw_index;
+pub mod pca_alex_index;
 
 // Re-export main types
 pub use types::Vector;
 pub use store::VectorStore;
 pub use hnsw_index::HNSWIndex;
+pub use pca_alex_index::PCAAlexIndex;

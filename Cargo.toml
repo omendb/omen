@@ -392,3 +392,7 @@ path = "src/bin/benchmark_hnsw.rs"
 name = "benchmark_pca"
 path = "src/bin/benchmark_pca.rs"
 
+[[bin]]
+name = "benchmark_pca_alex_vs_hnsw"
+path = "src/bin/benchmark_pca_alex_vs_hnsw.rs"
+
