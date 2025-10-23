@@ -3,8 +3,8 @@ name = "omendb"
 version = "0.1.0"
 edition = "2021"
 authors = ["OmenDB Inc."]
-description = "World's first database using only learned indexes"
-license = "Proprietary"
+description = "PostgreSQL-compatible vector database that scales"
+license = "Elastic-2.0"
 
 [lib]
 name = "omendb"
@@ -260,6 +260,11 @@ lru = "0.16.1"
 memmap2 = "0.9"
 sys-info = "0.9.1"
 
+# PCA for vector dimensionality reduction (custom SVD implementation)
+ndarray = "0.16"
+# Use OpenBLAS (system-installed or compiled)
+ndarray-linalg = { version = "0.16", features = ["openblas-system"] }
+
 [features]
 default = []
 simd = []  # Enable std::simd (requires nightly Rust)
@@ -363,7 +368,7 @@ path = "src/bin/tpch_benchmark_real.rs"
 
 [[bin]]
 name = "test_extended"
-path = "test_extended.rs"
+path = "tests/test_extended.rs"
 
 [[bin]]
 name = "benchmark_cache_effectiveness"

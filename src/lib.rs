@@ -28,8 +28,9 @@ pub use connection_pool::{Connection, ConnectionPool, PoolConfig};
 pub use logging::{init_from_env, init_logging, LogConfig};
 pub use sql_engine::QueryConfig;
 
-// Vector database module (NEW - Week 1 prototype)
+// Vector database module (NEW - Week 1-2 prototype)
 pub mod vector;
+pub mod pca; // PCA dimensionality reduction for vectors
 
 // Existing modules (will be refactored)
 pub mod alex; // ALEX adaptive learned index (replacement for RMI)

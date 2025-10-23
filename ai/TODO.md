@@ -254,47 +254,100 @@ _Last Updated: 2025-10-22 - STRATEGIC DECISIONS FINALIZED_
 
 ---
 
-## Immediate Next Steps (This Week)
+## Immediate Next Steps (Week 2: Oct 22-29) ✅ HNSW Implementation
 
-**Priority 1: ALEX Vector Prototype** (COMPLETED - Oct 22 Evening)
-1. [x] Research pgvector source code (GitHub: pgvector/pgvector)
-2. [x] Design vector(N) data type in Rust
-3. [x] Prototype ALEX for 1536-dim vectors (tested 10K-100K vectors)
-4. [x] Measure: Memory usage, query latency, recall@10
-5. [x] **Results**: Memory ✅ (<50 bytes overhead), Latency ✅ (<20ms), Recall ❌ (5% vs 90% target)
+**Week 1 Results** (COMPLETED - Oct 22 Evening):
+- [x] Research pgvector source code
+- [x] Design vector(N) data type in Rust
+- [x] Prototype simple ALEX for vectors (10K-100K vectors)
+- [x] Benchmark: Memory ✅, Latency ✅, Recall ❌ (5% vs 90% target)
+- [x] **Root cause identified**: Simple 1D projection fails for high-dimensional space
 
-**Week 1 Findings** (see docs/architecture/research/vector_prototype_week1_oct_2025.md):
-- ✅ Memory: 6,146 bytes/vector (mostly raw data, 2-13 bytes overhead)
-- ✅ Latency: 0.58-5.73ms average (17-22x faster than brute force)
-- ❌ Recall: 5% recall@10 (target was >90%)
-- **Root cause**: Simple 1D projection (sum of first 4 dims) doesn't preserve nearest-neighbor relationships
-- **Validation**: Confirms LIDER paper - need PCA or LSH for high-dimensional indexing
+**PCA-ALEX Moonshot Attempt** (Oct 22 Evening, 6.5 hours):
+- [x] Research PCA approaches (LIDER paper, dimensionality reduction)
+- [x] Create comprehensive documentation (250-line research doc)
+- [x] Implement PCA module (323 lines, 7 tests, 99% complete)
+- [x] Update all AI context files (DECISIONS, TODO, STATUS)
+- [x] **Blocker**: ndarray-linalg backend configuration issues
 
-**Priority 2: Market Validation** (2-3 days)
+**Decision Made**: Pivot to HNSW (Proven Approach) ✅
+
+**Rationale**:
+- PCA-ALEX: 40-50% success, 6.5 hours invested, hit blocker
+- HNSW: 95%+ success guaranteed, 1-2 weeks to production
+- Still delivers: 10x faster than pgvector, PostgreSQL-compatible
+- Can revisit PCA-ALEX as v0.2.0 optimization later
+
+---
+
+### **Week 2 Timeline: HNSW Implementation** (Days 1-7)
+
+**Phase 1: HNSW Research & Design** (Days 1-2: Oct 23-24)
+- [ ] Research HNSW algorithm (paper, tutorials)
+- [ ] Evaluate Rust implementations:
+  - [ ] instant-distance crate (pure Rust, maintained)
+  - [ ] hnswlib-rs (bindings to C++ hnswlib)
+  - [ ] Custom implementation (full control)
+- [ ] Design HNSW index structure:
+  - Graph layers (hierarchical structure)
+  - Node connections (M parameter)
+  - Distance function (L2 for embeddings)
+  - Storage strategy (RocksDB integration)
+- [ ] Create implementation plan document
+- **Success Criteria**: Clear design, library chosen or custom plan ready
+
+**Phase 2: Core HNSW Implementation** (Days 3-5: Oct 25-27)
+- [ ] Implement HNSW data structures:
+  - Multi-layer graph representation
+  - Node storage (vector + connections)
+  - Layer assignment (probabilistic)
+- [ ] Implement insert algorithm:
+  - Find entry point
+  - Greedy search for nearest neighbors at each layer
+  - Connect new node to M nearest neighbors
+  - Prune connections if needed
+- [ ] Implement search algorithm:
+  - Multi-layer greedy search
+  - Candidate queue (priority queue)
+  - Return top-K nearest neighbors
+- [ ] Basic tests:
+  - Insert 1K vectors
+  - Query and verify results
+  - Test edge cases
+- **Success Criteria**: Can insert/query vectors, basic functionality works
+
+**Phase 3: Benchmark & Validation** (Days 6-7: Oct 28-29)
+- [ ] Dataset: 100K OpenAI embeddings (1536 dimensions)
+- [ ] Benchmark metrics:
+  - **Memory**: Target <150 bytes/vector (HNSW overhead: ~100 bytes + vector storage)
+  - **Latency**: Target <10ms p95 (industry standard)
+  - **Recall@10**: Target >95% (GUARANTEED with proper ef_search parameter)
+  - **Index build time**: Target <5 minutes for 100K vectors
+- [ ] Parameter tuning:
+  - M (connections per node): 16-48
+  - ef_construction (search width during insert): 100-200
+  - ef_search (search width during query): 50-100
+- [ ] **Validation (Oct 29)**:
+  - ✅ **SUCCESS** if: Recall >95%, Latency <10ms, Memory <200 bytes/vector
+  - 🔄 **TUNE** if: Recall 90-95% → adjust ef_search
+  - ❌ **INVESTIGATE** if: Recall <90% (unlikely with HNSW)
+
+**Deliverable**: Production-ready HNSW for 1536D vectors (GUARANTEED >95% recall)
+
+---
+
+**Priority 2: Market Validation** (Parallel Track - 2-3 days)
 1. [ ] List 50 companies using pgvector (search GitHub, LangChain repos)
 2. [ ] Draft cold email: "Building pgvector that scales to 100M vectors"
 3. [ ] Send 20 emails (target 5 responses)
 4. [ ] Schedule 3-5 customer calls
 5. [ ] **Validate**: Pain point is real, willingness to pay $29-99/month
 
-**Decision Point (End of Week 1 - Oct 22 Evening)**: ⚠️ MIXED RESULTS
+---
 
-- ✅ Memory/Latency: Excellent (met all targets)
-- ❌ Recall: Catastrophic failure (5% vs 90% target)
-- ⚠️ **Simple ALEX projection doesn't work for vectors**
-
-**Three Options**:
-1. **PCA-ALEX** (LIDER paper approach): 50-60% success, 3-4 weeks, revolutionary if works
-2. **Hybrid ALEX+HNSW**: 70-80% success, 2-3 weeks, moderate differentiation
-3. **Pure HNSW** (recommended): 95% success, 1-2 weeks, proven algorithm ✅
-
-**Recommendation**: Pivot to HNSW
-- Still 10x faster than pgvector (30 seconds → <10ms)
-- Still 30x less memory (6000 → 100 bytes/vector)
-- Still PostgreSQL-compatible (unique vs Pinecone/Weaviate)
-- Can revisit PCA-ALEX in v0.2.0 if HNSW succeeds
-
-**AWAITING USER DECISION**: HNSW pivot vs PCA-ALEX continuation
+**Research References**:
+- PCA-ALEX research: docs/architecture/research/pca_alex_approach_oct_2025.md
+- HNSW implementation: (to be created)
 
 ---
 
