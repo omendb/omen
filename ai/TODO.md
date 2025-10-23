@@ -1,357 +1,415 @@
 # TODO
 
-_Last Updated: 2025-10-22 - STRATEGIC DECISIONS FINALIZED_
+_Last Updated: 2025-10-23 - HNSW + BINARY QUANTIZATION VALIDATED_
 
-## FINALIZED STRATEGY
+## FINALIZED STRATEGY (Updated Oct 23)
 
 **Product**: PostgreSQL-compatible vector database that scales
+**Algorithm**: HNSW + Binary Quantization (industry standard, proven)
 **License**: Elastic License 2.0 (source-available, self-hostable)
 **Pricing**: Free (100K vectors), $29, $99/month + Enterprise
 **Market**: AI startups (70%), Enterprise (30%)
-**Year 1**: omendb-server ONLY (omen-lite in Year 2+)
 
-**Timeline**: 6 months to production-ready MVP, 12 months to $10K MRR
-
----
-
-## Critical Priority: Vector Database Foundation
-
-### Phase 1: Prototype & Validation (Weeks 1-2) 🚨 URGENT
-
-**Goal**: Validate ALEX works for high-dimensional vectors OR pivot to HNSW
-
-- [ ] **Week 1: ALEX Vector Prototype**
-  - [ ] Research pgvector implementation (data types, operators, index structures)
-  - [ ] Design vector data type (`vector(N)` - dimensions 128-1536)
-  - [ ] Prototype ALEX for 1536-dim vectors (OpenAI embedding size)
-  - [ ] Test: Insert 1M vectors, measure memory & query latency
-  - [ ] **Go/No-Go Decision**: If ALEX doesn't work → pivot to HNSW algorithm
-
-- [ ] **Week 2: Customer Validation**
-  - [ ] Identify 50 companies using pgvector (GitHub, LangChain users, AI startups)
-  - [ ] Cold outreach: "We're building pgvector that scales to 100M vectors"
-  - [ ] Target: 10 customer calls, validate pain point
-  - [ ] Questions: Max vector count? Performance issues? Willing to pay?
-  - [ ] **Success Metric**: 5+ say "I would switch from pgvector if 10x faster"
-
-**Deliverable**: Technical validation + market validation OR decision to abandon vector pivot
+**Timeline**: 8 weeks to production-ready MVP with quantization
 
 ---
 
-### Phase 2: Vector Foundation (Weeks 3-10)
+## ✅ Week 1-2 Complete: Vector Search Validation
 
-**Goal**: pgvector-compatible vector database (1M-10M vector scale)
+### Week 1: ALEX Vector Prototype (FAILED)
+- ✅ Research pgvector implementation
+- ✅ Design vector(N) data type
+- ✅ Prototype ALEX for 1536D vectors
+- ✅ Benchmark: Memory ✅, Latency ✅, Recall ❌ (5% vs 90% target)
+- ✅ **Root cause**: 1D projection loses too much information
 
-**Week 3-4: Vector Data Type**
-- [ ] Implement `vector(N)` data type (variable dimensions)
-- [ ] Implement distance operators:
+### Week 2 Day 1-2: HNSW Baseline (SUCCESS ✅)
+- ✅ Integrated hnsw_rs crate
+- ✅ HNSW wrapper with M=48, ef_construction=200
+- ✅ Benchmark: **99.5% recall**, **6.63ms p95 latency** (< 10ms target)
+- ✅ 14 tests passing (6 HNSW + 4 PCA + 4 vector types)
+- ✅ **Verdict**: Production-ready HNSW baseline achieved
+
+### Week 2 Day 2: PCA-ALEX Moonshot (FAILED)
+- ✅ Custom PCA implementation (99.58% variance, 0.0738ms p95)
+- ✅ PCA-ALEX integration (64D PCA → 1D ALEX key)
+- ✅ Benchmark vs HNSW: **12.4% recall** (vs 99.5% HNSW)
+- ✅ **Root cause**: Collapsing 64D to 1D ALEX key loses spatial information
+- ✅ **Verdict**: ALEX not suitable for high-dimensional vectors
+
+### Week 2 Day 2: SOTA Research (COMPLETE)
+- ✅ Comprehensive research: DiskANN, HNSW+, quantization methods
+- ✅ 32+ citations (academic papers, industry blogs, benchmarks)
+- ✅ 1,300+ line research report: `docs/architecture/research/sota_vector_search_algorithms_2024_2025.md`
+- ✅ **Key findings**:
+  - DiskANN has immutability/batching issues (why we abandoned it)
+  - HNSW + Binary Quantization is industry standard (Qdrant, Weaviate, Elasticsearch)
+  - RaBitQ (SIGMOD 2024): 96% memory reduction, 3x faster than PQ
+  - pgvector uses 30x more memory (no quantization support)
+
+---
+
+## 🚀 Phase 1: HNSW + Binary Quantization (Weeks 3-10)
+
+**Goal**: Production-ready vector database with industry-leading memory efficiency
+
+### Week 3-4: Binary Quantization Implementation
+
+**Core Quantization:**
+- [ ] Implement binary quantization (RaBitQ-style):
+  - [ ] float32 → 1 bit per dimension = 96% memory reduction
+  - [ ] Randomized threshold selection (theoretical error bounds)
+  - [ ] Reranking with original vectors (maintain >95% recall)
+- [ ] Quantization training:
+  - [ ] Sample-based threshold computation
+  - [ ] Per-dimension quantization (better than global)
+  - [ ] Validation: measure quantization error
+- [ ] Integration with HNSW:
+  - [ ] Store quantized vectors in HNSW graph
+  - [ ] Store original vectors for reranking
+  - [ ] Two-phase search: BQ candidates → exact L2 refinement
+
+**Benchmarks:**
+- [ ] Memory comparison:
+  - Target: 10M vectors in ~15GB (vs pgvector: 170GB)
+  - Measure: quantized index + original vectors + graph overhead
+- [ ] Recall validation:
+  - Target: >95% recall@10 with reranking
+  - Compare: BQ-HNSW vs full-precision HNSW
+- [ ] Latency validation:
+  - Target: <5ms p95 (2x faster than full-precision due to BQ speed)
+  - Measure: p50, p95, p99 on 10K queries
+
+**Success Criteria:**
+- ✅ 95%+ recall maintained
+- ✅ 24x memory reduction (170GB → 7GB for 10M vectors)
+- ✅ 2-5x query speedup (BQ distance is faster)
+
+### Week 5-6: PostgreSQL Vector Integration
+
+**Vector Data Type:**
+- [ ] Implement `vector(N)` data type:
+  - [ ] Variable dimensions (128-1536 supported)
+  - [ ] Serialize/deserialize for PostgreSQL wire protocol
+  - [ ] Input validation (dimension checking, NaN handling)
+- [ ] Distance operators:
   - [ ] `<->` (L2 distance / Euclidean)
   - [ ] `<#>` (negative dot product for max inner product)
   - [ ] `<=>` (cosine distance)
-- [ ] Implement vector functions:
+- [ ] Vector functions:
   - [ ] `l2_distance(vector, vector)` → float
   - [ ] `inner_product(vector, vector)` → float
   - [ ] `cosine_distance(vector, vector)` → float
   - [ ] `l2_normalize(vector)` → vector
-- [ ] Unit tests: 50+ tests for vector operations
-- [ ] PostgreSQL wire protocol: Serialize/deserialize vector type
 
-**Week 5-6: ALEX Index for Vectors**
-- [ ] Adapt ALEX for high-dimensional keys (dimension-aware model)
-- [ ] Implement approximate nearest neighbor (ANN) search
-- [ ] CREATE INDEX USING alex syntax:
+**Index Management:**
+- [ ] `CREATE INDEX USING hnsw_bq` syntax:
   ```sql
-  CREATE INDEX ON embeddings USING alex (embedding vector_l2_ops);
+  CREATE INDEX ON embeddings USING hnsw_bq (embedding vector_l2_ops);
   ```
-- [ ] Index build optimization (batch training for ALEX models)
-- [ ] Query planning: Use ALEX index for vector similarity queries
+- [ ] Index parameters:
+  - [ ] M (connections per node): default 48
+  - [ ] ef_construction (build-time search): default 200
+  - [ ] ef_search (query-time search): default 100
+- [ ] Query planning:
+  - [ ] Use HNSW index for ORDER BY vector <-> query
+  - [ ] Sequential scan for small tables
+  - [ ] Cost estimation based on index size
 
-**Week 7-8: Benchmark vs pgvector (1M vectors)**
-- [ ] Setup: PostgreSQL 16 + pgvector vs OmenDB
-- [ ] Dataset: 1M OpenAI embeddings (1536 dimensions)
-- [ ] Queries:
-  - [ ] Top-K nearest neighbors (K=10, 100, 1000)
-  - [ ] Hybrid search (vector similarity + WHERE clauses)
-  - [ ] Batch queries (1000 queries, measure p50/p95/p99)
-- [ ] Metrics: Latency, throughput, memory usage, index build time
-- [ ] **Target**: 10x faster queries, 5x less memory than pgvector
-- [ ] **Publish**: Benchmark report (GitHub, blog post)
+**MVCC Integration:**
+- [ ] Concurrent vector inserts (snapshot isolation)
+- [ ] Index updates within transactions
+- [ ] Crash recovery (WAL replay for vectors)
 
-**Week 9-10: Integration & Testing**
-- [ ] End-to-end tests: INSERT vectors, SELECT with distance ops
-- [ ] MVCC tests: Concurrent vector inserts + queries
-- [ ] Cache integration: LRU cache for hot vectors
-- [ ] Crash recovery: WAL replay for vector data
-- [ ] Total tests: 100+ vector-specific tests
+### Week 7-8: Optimization & Advanced Features
 
-**Deliverable**: pgvector-compatible OmenDB (1M vector scale, 10x performance improvement)
+**MN-RU Update Algorithm** (July 2024 paper):
+- [ ] Implement improved HNSW updates:
+  - [ ] Fix "unreachable points" during deletions
+  - [ ] Better insertion performance
+  - [ ] Maintain recall during updates
+- [ ] Benchmark update performance:
+  - [ ] Insert throughput (vectors/sec)
+  - [ ] Delete throughput
+  - [ ] Mixed workload (50% insert, 50% query)
 
----
+**Parallel Index Building:**
+- [ ] Multi-threaded HNSW construction:
+  - [ ] Batch inserts (10K-100K at once)
+  - [ ] Parallel graph building
+  - [ ] Target: 85% reduction in build time (research finding)
+- [ ] Bulk loading optimization:
+  - [ ] COPY FROM for vector data
+  - [ ] Batch quantization training
+  - [ ] Target: 1M vectors in <60 seconds
 
-### Phase 3: Scale & Performance (Weeks 11-16)
-
-**Goal**: Production-ready at 10M-100M vector scale
-
-**Week 11-12: Large-Scale Optimization**
-- [ ] Optimize ALEX for 10M+ vectors
-  - [ ] Multi-level hierarchy tuning (3-4 levels)
-  - [ ] Node splitting strategy (minimize rebalancing)
-  - [ ] Memory pooling (reduce allocation overhead)
-- [ ] Batch insert optimization:
-  - [ ] Bulk vector loading (1M vectors in <60 seconds)
-  - [ ] Parallel index building
-  - [ ] Pre-sorting for sequential inserts
-- [ ] Memory profiling:
-  - [ ] Target: <2GB for 10M 1536-dim vectors
-  - [ ] Compare: pgvector uses ~60GB for same dataset
-  - [ ] 30x memory efficiency validation
-
-**Week 13-14: Hybrid Search & Query Optimization**
-- [ ] Combine vector search + SQL filters:
+**Hybrid Search:**
+- [ ] Combine vector similarity + SQL filters:
   ```sql
   SELECT * FROM products
-  WHERE category = 'electronics'
+  WHERE category = 'electronics' AND price < 100
   ORDER BY embedding <-> '[...]'::vector
   LIMIT 10;
   ```
-- [ ] Query planner: Decide ALEX vs sequential scan
-- [ ] Index selectivity estimation
-- [ ] Predicate pushdown (filter before vector search)
-- [ ] Benchmark: Hybrid queries vs pure vector search
+- [ ] Query optimization:
+  - [ ] Filter pushdown (reduce vector search space)
+  - [ ] ALEX index for SQL predicates
+  - [ ] Combined cost estimation
 
-**Week 15-16: Benchmark vs Pinecone/Weaviate (10M vectors)**
-- [ ] Setup: Pinecone cloud, Weaviate self-hosted, OmenDB
-- [ ] Dataset: 10M OpenAI embeddings (1536 dimensions)
-- [ ] Queries:
-  - [ ] Top-K nearest neighbors (K=10, 100, 1000)
-  - [ ] Concurrent queries (100 queries/sec)
-  - [ ] Hybrid search (vector + filters)
-- [ ] Metrics: Latency (p50/p95/p99), throughput, cost
-- [ ] **Target**:
-  - [ ] Latency: Match Pinecone (<50ms p95)
-  - [ ] Memory: 10x better than Pinecone
-  - [ ] Cost: 5-10x cheaper (due to memory efficiency)
-- [ ] **Publish**: "OmenDB vs Pinecone vs Weaviate" benchmark report
+### Week 9-10: Benchmarks & Validation
 
-**Deliverable**: Production-ready vector database (10M-100M scale, competitive with Pinecone)
+**vs pgvector (1M vectors, 1536D):**
+- [ ] Setup: PostgreSQL 16 + pgvector vs OmenDB
+- [ ] Metrics:
+  - [ ] Memory: Target 24x reduction (OmenDB: ~7GB vs pgvector: 170GB)
+  - [ ] QPS: Target 10x faster (OmenDB: 400+ vs pgvector: 40)
+  - [ ] Latency: Target <5ms p95 (pgvector: ~25ms)
+  - [ ] Recall: Both >95%
+- [ ] Publish: Benchmark blog post + GitHub
 
----
+**vs Pinecone (10M vectors):**
+- [ ] Setup: Pinecone cloud vs OmenDB self-hosted
+- [ ] Metrics:
+  - [ ] Latency: Match Pinecone (<10ms p95)
+  - [ ] Memory: 10x better (BQ efficiency)
+  - [ ] Cost: 1/10th (self-hosted vs cloud pricing)
+- [ ] Publish: "OmenDB vs Pinecone" comparison
 
-### Phase 4: Migration & Go-to-Market (Weeks 17-24)
+**Large-Scale Validation:**
+- [ ] 10M vectors stress test
+- [ ] 100M vectors feasibility (estimate memory/performance)
+- [ ] Concurrent queries (100 QPS sustained)
+- [ ] Write-heavy workload (inserts + queries)
 
-**Goal**: 50-100 active users, $1-5K MRR
-
-**Week 17-18: Migration Tooling**
-- [ ] pgvector → OmenDB migration script:
-  - [ ] Schema migration (CREATE TABLE with vector columns)
-  - [ ] Data migration (pg_dump → OmenDB import)
-  - [ ] Index migration (CREATE INDEX USING alex)
-  - [ ] Validation (compare query results)
-- [ ] Migration guide (step-by-step documentation)
-- [ ] Example: Migrate LangChain app from pgvector to OmenDB
-
-**Week 19-20: Documentation & Examples**
-- [ ] **Installation**:
-  - [ ] Docker image (1-command deploy)
-  - [ ] Binary releases (Linux, macOS)
-  - [ ] Cloud deployment (AWS, GCP, Fly.io)
-- [ ] **API Documentation**:
-  - [ ] Vector data types
-  - [ ] Distance operators
-  - [ ] Index management
-  - [ ] Query syntax
-- [ ] **Examples**:
-  - [ ] RAG application (LangChain + OmenDB)
-  - [ ] Semantic search (product catalog search)
-  - [ ] Recommendation engine (user-item embeddings)
-  - [ ] Code search (semantic code retrieval)
-
-**Week 21-22: Public Launch**
-- [ ] Make GitHub repo public (Apache 2.0 license)
-- [ ] Write launch blog post:
-  - [ ] "OmenDB: The pgvector Alternative That Scales"
-  - [ ] Benchmark results (10x faster, 30x memory efficient)
-  - [ ] Migration guide (5-minute drop-in replacement)
-- [ ] Launch on:
-  - [ ] Hacker News (Show HN: OmenDB)
-  - [ ] Reddit (/r/MachineLearning, /r/PostgreSQL, /r/LangChain)
-  - [ ] Twitter/X (tag @LangChainAI, @OpenAI, AI influencers)
-- [ ] Target: 500+ GitHub stars, 100+ Hacker News points, 50+ Discord members
-
-**Week 23-24: Managed Cloud (MVP)**
-- [ ] Deploy OmenDB cloud (Fly.io or AWS)
-- [ ] Sign-up flow (email + password, no credit card for free tier)
-- [ ] Pricing tiers:
-  - [ ] Free: 1M vectors, 1 database, community support
-  - [ ] Starter ($29/mo): 10M vectors, 100GB storage, email support
-  - [ ] Pro ($99/mo): 100M vectors, 1TB storage, priority support
-  - [ ] Enterprise (custom): Unlimited, dedicated infra, SLA
-- [ ] Payment integration (Stripe)
-- [ ] Dashboard (usage, billing, API keys)
-- [ ] **Target**: First 10 paying customers ($290-990 MRR)
-
-**Deliverable**: Public launch, 50-100 users, $1-5K MRR, validated product-market fit
+**Success Criteria:**
+- ✅ 10x faster than pgvector
+- ✅ 24x memory efficient
+- ✅ Matches Pinecone performance
+- ✅ >95% recall maintained
 
 ---
 
-## Deferred (Post-Vector MVP)
+## Phase 2: Production Hardening (Weeks 11-16)
 
-### SQL Features (Not Differentiating)
-- [ ] Subqueries (WHERE EXISTS, scalar subqueries)
-- [ ] Window functions (ROW_NUMBER, RANK)
-- [ ] CTEs (WITH clauses)
-- [ ] RIGHT/FULL OUTER JOIN
+### Week 11-12: Documentation & Examples
+
+**Installation:**
+- [ ] Docker image (1-command deploy)
+- [ ] Binary releases (Linux x86_64, macOS arm64)
+- [ ] Cloud deployment guides (AWS, GCP, Fly.io)
+
+**API Documentation:**
+- [ ] Vector data types and operators
+- [ ] Index creation and tuning
+- [ ] Query syntax and examples
+- [ ] Performance tuning guide
+
+**Examples:**
+- [ ] RAG application (LangChain + OmenDB)
+- [ ] Semantic search (product catalog)
+- [ ] Recommendation engine (user-item embeddings)
+- [ ] Code search (semantic code retrieval)
+
+### Week 13-14: Migration Tools
+
+**pgvector → OmenDB Migration:**
+- [ ] Schema migration script:
+  - [ ] Detect vector columns in PostgreSQL
+  - [ ] Generate CREATE TABLE for OmenDB
+  - [ ] Convert HNSW indexes to hnsw_bq
+- [ ] Data migration:
+  - [ ] pg_dump → OmenDB import
+  - [ ] Batch vector loading
+  - [ ] Index building
+- [ ] Validation:
+  - [ ] Compare query results (pgvector vs OmenDB)
+  - [ ] Ensure >99% query accuracy
+- [ ] Migration guide (step-by-step docs)
+
+**Example Migration:**
+```bash
+# 1. Export from pgvector
+pg_dump -t embeddings mydb > embeddings.sql
+
+# 2. Import to OmenDB
+omendb import embeddings.sql
+
+# 3. Build quantized index
+omendb -c "CREATE INDEX ON embeddings USING hnsw_bq (vector);"
+
+# 4. Validate
+omendb -c "SELECT COUNT(*) FROM embeddings;"
+```
+
+### Week 15-16: Public Launch
+
+**Pre-Launch:**
+- [ ] GitHub repo cleanup (docs, examples, CI)
+- [ ] Performance benchmark video/demo
+- [ ] Landing page (omendb.com)
+- [ ] Discord community setup
+
+**Launch Content:**
+- [ ] Blog post: "OmenDB: The pgvector Alternative That Scales"
+  - [ ] Benchmark results (10x faster, 24x memory)
+  - [ ] Why we built it (pgvector limitations)
+  - [ ] Technical deep-dive (HNSW + BQ)
+- [ ] HackerNews post (Show HN)
+- [ ] Reddit posts (/r/MachineLearning, /r/PostgreSQL, /r/LangChain)
+- [ ] Twitter/X threads
+
+**Launch Targets:**
+- [ ] 500+ GitHub stars (Week 1)
+- [ ] 100+ HackerNews points
+- [ ] 50+ Discord members
+- [ ] 10+ customer calls scheduled
+
+---
+
+## Phase 3: Managed Cloud (Weeks 17-24)
+
+### Week 17-20: Cloud Infrastructure
+
+**Backend:**
+- [ ] Multi-tenant architecture
+- [ ] Database provisioning (Fly.io machines)
+- [ ] Connection pooling (pgBouncer)
+- [ ] Monitoring (Prometheus + Grafana)
+
+**Frontend:**
+- [ ] Sign-up flow (email + password)
+- [ ] Dashboard (usage, databases, API keys)
+- [ ] Billing (Stripe integration)
+- [ ] Documentation portal
+
+**Pricing:**
+- [ ] Free: 100K vectors, 1 database, community support
+- [ ] Starter ($29/mo): 10M vectors, 10 databases, email support
+- [ ] Pro ($99/mo): 100M vectors, 50 databases, priority support
+- [ ] Enterprise (custom): Unlimited, dedicated, SLA
+
+### Week 21-24: Customer Acquisition
+
+**Outbound:**
+- [ ] 100 cold emails to pgvector users
+- [ ] 20 customer calls (validate pain, pricing)
+- [ ] 10 pilot customers (free/discounted)
+
+**Content Marketing:**
+- [ ] Weekly blog posts (vector DB tips, RAG tutorials)
+- [ ] LangChain integration guide
+- [ ] OpenAI embedding best practices
+- [ ] Pinecone migration case studies
+
+**Target Metrics:**
+- [ ] 50-100 active users (free + paid)
+- [ ] 10-20 paying customers
+- [ ] $290-$1,980 MRR
+- [ ] Product-market fit validation
+
+---
+
+## Deferred (Post-MVP)
+
+**Advanced Quantization (Phase 4):**
+- [ ] Product Quantization (32x compression)
+- [ ] Scalar Quantization (4-bit, 8-bit)
+- [ ] Extended-RaBitQ (SIGMOD 2025)
+
+**Distributed (Phase 5):**
+- [ ] Sharding for 100M+ vectors
+- [ ] Query routing across nodes
+- [ ] Replication for HA
+
+**SQL Features (Low Priority):**
+- [ ] Subqueries, window functions, CTEs
+- [ ] Advanced JOINs (RIGHT, FULL OUTER)
 - [ ] DISTINCT, UNION, INTERSECT
 
-**Rationale**: SQL completeness doesn't matter for vector database users. Focus on vector performance.
-
-### Observability (Phase 4+)
-- [ ] EXPLAIN QUERY PLAN command
-- [ ] Query performance metrics
+**Observability (Phase 6):**
+- [ ] EXPLAIN QUERY PLAN
 - [ ] Slow query logging
-- [ ] Prometheus metrics endpoint
-
-**Rationale**: Nice-to-have, not blocking for early adopters.
-
-### Backup & Recovery (Phase 5+)
-- [ ] pg_dump/pg_restore compatibility
-- [ ] Point-in-time recovery (PITR)
-- [ ] Incremental backups
-- [ ] Backup verification tools
-
-**Rationale**: Important for enterprise, but not for initial traction.
+- [ ] Index quality metrics
 
 ---
 
-## Recently Completed (Pre-Pivot)
+## Recently Completed
 
-✅ **Phase 3 Quick Wins** (Oct 22, 1 session):
-- Aggregations: COUNT, SUM, AVG, MIN, MAX, GROUP BY (22 tests)
-- HAVING clause: Full filtering support (7 tests)
-- CROSS JOIN: Cartesian product (3 tests)
-- **Result**: SQL coverage 35% → 45%, 557 total tests
+✅ **Week 2 Day 1-2: HNSW Baseline** (Oct 22-23):
+- HNSW integration (99.5% recall, 6.63ms p95)
+- 14 tests passing
+- Production-ready baseline
 
-✅ **Phase 2 Security (Days 1-10) COMPLETE**:
-- Days 1-5: Auth + User Management (40 tests)
-- Days 6-7: SSL/TLS Implementation (6 tests)
-- Day 8: Security integration tests (17 tests)
-- Day 9: Security documentation (SECURITY.md)
-- Day 10: Security audit & validation
-- **Total**: 57 security tests, 10 days on schedule
+✅ **Week 2 Day 2: PCA-ALEX Experiment** (Oct 23):
+- Custom PCA (99.58% variance)
+- PCA-ALEX integration (12.4% recall - failed)
+- Validated ALEX not suitable for high-D vectors
 
-✅ **Cache Layer (Days 1-10) COMPLETE**:
-- LRU cache (1-10GB configurable)
-- 2-3x speedup validated (90% hit rate)
-- 7 cache integration tests
+✅ **Week 2 Day 2: SOTA Research** (Oct 23):
+- 1,300+ line research report
+- 32+ citations (papers, blogs, benchmarks)
+- Validated HNSW + BQ as optimal approach
 
-✅ **Phase 3 Week 1-2: INNER JOIN + LEFT JOIN** (14 tests)
+✅ **Phase 3 Quick Wins** (Oct 22):
+- Aggregations, HAVING, CROSS JOIN
+- 557 total tests
 
-✅ **Phase 3 Week 1: UPDATE/DELETE support** (30 tests)
+✅ **Phase 2 Security** (Complete):
+- Auth + SSL/TLS (57 tests)
 
-✅ **Phase 1: MVCC snapshot isolation** (85 tests)
+✅ **Cache Layer** (Complete):
+- LRU cache (2-3x speedup)
 
-✅ **Multi-level ALEX index** (1.5-3x faster than SQLite)
-
----
-
-## Immediate Next Steps (Week 2: Oct 22-29) ✅ HNSW Implementation
-
-**Week 1 Results** (COMPLETED - Oct 22 Evening):
-- [x] Research pgvector source code
-- [x] Design vector(N) data type in Rust
-- [x] Prototype simple ALEX for vectors (10K-100K vectors)
-- [x] Benchmark: Memory ✅, Latency ✅, Recall ❌ (5% vs 90% target)
-- [x] **Root cause identified**: Simple 1D projection fails for high-dimensional space
-
-**PCA-ALEX Moonshot Attempt** (Oct 22 Evening, 6.5 hours):
-- [x] Research PCA approaches (LIDER paper, dimensionality reduction)
-- [x] Create comprehensive documentation (250-line research doc)
-- [x] Implement PCA module (323 lines, 7 tests, 99% complete)
-- [x] Update all AI context files (DECISIONS, TODO, STATUS)
-- [x] **Blocker**: ndarray-linalg backend configuration issues
-
-**Decision Made**: Pivot to HNSW (Proven Approach) ✅
-
-**Rationale**:
-- PCA-ALEX: 40-50% success, 6.5 hours invested, hit blocker
-- HNSW: 95%+ success guaranteed, 1-2 weeks to production
-- Still delivers: 10x faster than pgvector, PostgreSQL-compatible
-- Can revisit PCA-ALEX as v0.2.0 optimization later
+✅ **Phase 1 MVCC** (Complete):
+- Snapshot isolation (85 tests)
 
 ---
 
-### **Week 2 Timeline: HNSW Implementation** (Days 1-7)
+## Immediate Next Steps (Week 3: Oct 23-30)
 
-**Phase 1: HNSW Research & Design** (Days 1-2: Oct 23-24)
-- [ ] Research HNSW algorithm (paper, tutorials)
-- [ ] Evaluate Rust implementations:
-  - [ ] instant-distance crate (pure Rust, maintained)
-  - [ ] hnswlib-rs (bindings to C++ hnswlib)
-  - [ ] Custom implementation (full control)
-- [ ] Design HNSW index structure:
-  - Graph layers (hierarchical structure)
-  - Node connections (M parameter)
-  - Distance function (L2 for embeddings)
-  - Storage strategy (RocksDB integration)
-- [ ] Create implementation plan document
-- **Success Criteria**: Clear design, library chosen or custom plan ready
+**Binary Quantization Implementation:**
+1. [ ] Research RaBitQ algorithm (SIGMOD 2024 paper)
+2. [ ] Implement float32 → binary conversion
+3. [ ] Integrate with existing HNSW index
+4. [ ] Benchmark memory reduction (target: 24x)
+5. [ ] Validate recall >95% with reranking
 
-**Phase 2: Core HNSW Implementation** (Days 3-5: Oct 25-27)
-- [ ] Implement HNSW data structures:
-  - Multi-layer graph representation
-  - Node storage (vector + connections)
-  - Layer assignment (probabilistic)
-- [ ] Implement insert algorithm:
-  - Find entry point
-  - Greedy search for nearest neighbors at each layer
-  - Connect new node to M nearest neighbors
-  - Prune connections if needed
-- [ ] Implement search algorithm:
-  - Multi-layer greedy search
-  - Candidate queue (priority queue)
-  - Return top-K nearest neighbors
-- [ ] Basic tests:
-  - Insert 1K vectors
-  - Query and verify results
-  - Test edge cases
-- **Success Criteria**: Can insert/query vectors, basic functionality works
+**Success Criteria:**
+- ✅ 95%+ recall maintained
+- ✅ 10GB for 10M vectors (vs 170GB unquantized)
+- ✅ 2-5x query speedup
 
-**Phase 3: Benchmark & Validation** (Days 6-7: Oct 28-29)
-- [ ] Dataset: 100K OpenAI embeddings (1536 dimensions)
-- [ ] Benchmark metrics:
-  - **Memory**: Target <150 bytes/vector (HNSW overhead: ~100 bytes + vector storage)
-  - **Latency**: Target <10ms p95 (industry standard)
-  - **Recall@10**: Target >95% (GUARANTEED with proper ef_search parameter)
-  - **Index build time**: Target <5 minutes for 100K vectors
-- [ ] Parameter tuning:
-  - M (connections per node): 16-48
-  - ef_construction (search width during insert): 100-200
-  - ef_search (search width during query): 50-100
-- [ ] **Validation (Oct 29)**:
-  - ✅ **SUCCESS** if: Recall >95%, Latency <10ms, Memory <200 bytes/vector
-  - 🔄 **TUNE** if: Recall 90-95% → adjust ef_search
-  - ❌ **INVESTIGATE** if: Recall <90% (unlikely with HNSW)
-
-**Deliverable**: Production-ready HNSW for 1536D vectors (GUARANTEED >95% recall)
+**Timeline:** 7 days to working BQ prototype
 
 ---
 
-**Priority 2: Market Validation** (Parallel Track - 2-3 days)
-1. [ ] List 50 companies using pgvector (search GitHub, LangChain repos)
-2. [ ] Draft cold email: "Building pgvector that scales to 100M vectors"
-3. [ ] Send 20 emails (target 5 responses)
-4. [ ] Schedule 3-5 customer calls
-5. [ ] **Validate**: Pain point is real, willingness to pay $29-99/month
+## Strategic Decisions
+
+**✅ HNSW + Binary Quantization** (Industry Standard)
+- Proven: Used by Qdrant, Weaviate, Elasticsearch
+- Fast: 10,000-40,000 QPS at 95% recall
+- Memory Efficient: 96% reduction with BQ
+- Real-time Updates: Better than DiskANN
+
+**❌ ALEX for Vectors** (Experimental, Not Production-Ready)
+- Week 1: 5% recall (1D projection)
+- Week 2: 12.4% recall (PCA + 1D key)
+- Verdict: Keep ALEX for SQL indexing only
+
+**❌ DiskANN** (Immutability Issues)
+- Requires batch updates
+- NVMe SSD dependency
+- Operational complexity
+- Already tried and abandoned
+
+**✅ Focus on HTAP Hybrid Search** (Unique Advantage)
+- Vector similarity + SQL filters in one query
+- Nobody else has this (Pinecone no SQL, pgvector doesn't scale)
+- Leverage existing ALEX + MVCC work
 
 ---
 
-**Research References**:
-- PCA-ALEX research: docs/architecture/research/pca_alex_approach_oct_2025.md
-- HNSW implementation: (to be created)
-
----
-
-**Status**: Strategic pivot approved, execution begins immediately
-**Focus**: Validate ALEX for vectors + validate market demand
-**Timeline**: 6 months to production-ready vector database
-**Goal**: $100K-500K ARR, 50-200 paying customers (Year 1)
+**Status**: Week 2 complete, optimal plan validated, ready for BQ implementation
+**Focus**: Ship HNSW + BQ in 8 weeks → Acquire customers → Iterate
+**Timeline**: 6 months to production-ready, 12 months to $10K MRR
+**Goal**: 50-100 users, $1-5K MRR by Month 6
