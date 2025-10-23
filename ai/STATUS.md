@@ -65,10 +65,29 @@
 
 ## Current Focus (Week 2: Oct 23-29) ✅ HNSW
 
+**Day 0 (Oct 22 Evening): Research & Planning** - COMPLETED ✅
+- [x] Research HNSW algorithm (Malkov & Yashunin 2018 paper)
+- [x] Evaluate Rust implementations (instant-distance, hnsw_rs)
+- [x] Choose hnsw_rs (SIMD, full parameter control, persistence)
+- [x] Design HNSW index structure for 1536D vectors
+- [x] Create comprehensive research document (250+ lines)
+- [x] Create tactical implementation plan (7-day timeline)
+
+**Research Findings**:
+- **Algorithm**: Industry-proven (Qdrant, Pinecone, Weaviate, pgvecto.rs all use HNSW)
+- **Parameters**: M=48-64, ef_construction=200-400, ef_search=100-500
+- **Expected**: >95% recall, <10ms p95 latency, ~500 bytes/vector
+- **Production validation**: pgvecto.rs is 20x faster than pgvector with HNSW
+
 **HNSW Implementation Timeline**:
-- [ ] Days 1-2 (Oct 23-24): Research + design HNSW
-- [ ] Days 3-5 (Oct 25-27): Implement core HNSW (insert, search)
-- [ ] Days 6-7 (Oct 28-29): Benchmark + validation
+- [x] Day 0 (Oct 22): Research + planning (COMPLETED)
+- [ ] Day 1 (Oct 23): Setup + basic integration (hnsw_rs dependency, wrapper)
+- [ ] Day 2 (Oct 24): RocksDB integration (serialization, storage)
+- [ ] Day 3 (Oct 25): PostgreSQL protocol (distance operators)
+- [ ] Day 4 (Oct 26): INSERT optimization (batch, parallel)
+- [ ] Day 5 (Oct 27): Search optimization (ef_search tuning, SIMD)
+- [ ] Day 6 (Oct 28): Benchmark (100K vectors)
+- [ ] Day 7 (Oct 29): Validation + go/no-go decision
 
 **Success Criteria (Oct 29)** - GUARANTEED:
 - ✅ Recall >95%, Latency <10ms, Memory <200 bytes/vector

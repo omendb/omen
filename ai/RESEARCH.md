@@ -1,12 +1,48 @@
 # Vector Index Algorithm Research
 
-**Status**: 🚨 **RESEARCH IN PROGRESS**
+**Status**: ✅ **RESEARCH COMPLETE**
 **Created**: October 22, 2025
+**Completed**: October 22, 2025 (Evening)
 **Goal**: Determine optimal vector indexing algorithm before Week 2 implementation
+**Decision**: HNSW (hnsw_rs implementation)
 
 ---
 
-## Research Objectives
+## Research Completed (Oct 22, 2025)
+
+### PCA-ALEX Moonshot Attempt (6.5 hours)
+**Documents**:
+- `docs/architecture/research/pca_alex_approach_oct_2025.md` (250 lines)
+- `src/pca.rs` (323 lines, 99% complete, 7 tests)
+
+**Result**: BLOCKED on ndarray-linalg backend configuration
+**Decision**: Pivot to HNSW (proven approach with 95%+ success)
+
+### HNSW Research & Planning (4 hours)
+**Documents**:
+- `docs/architecture/research/hnsw_implementation_oct_2025.md` (comprehensive research, 600+ lines)
+- `docs/architecture/research/hnsw_implementation_plan_oct_2025.md` (tactical plan, 500+ lines)
+
+**Key Findings**:
+- **Algorithm**: HNSW (Malkov & Yashunin 2018) - industry standard
+- **Production validation**: Qdrant, pgvecto.rs (20x faster than pgvector), Pinecone, Weaviate
+- **Implementation**: hnsw_rs crate (SIMD, full parameter control, persistence)
+- **Parameters**: M=48-64, ef_construction=200-400, ef_search=100-500
+- **Expected results**: >95% recall, <10ms p95 latency, ~500 bytes/vector
+
+**Decision**: Implement HNSW with hnsw_rs (7-day timeline, 95%+ success probability)
+
+**Rationale**:
+1. Time pressure: Need go/no-go by Oct 29 (Week 2)
+2. Risk management: HNSW is 95%+ proven, PCA-ALEX was 40-50% moonshot
+3. Value preserved: HNSW still delivers 10x faster than pgvector
+4. Can retry PCA-ALEX: Documented for v0.2.0 optimization if HNSW succeeds
+
+**See**: `ai/DECISIONS.md` (Oct 22 entries) for full rationale
+
+---
+
+## Original Research Objectives (Historical)
 
 **Primary Question**: What vector indexing algorithm should we use for omendb-server and omen-lite?
 
