@@ -32,6 +32,7 @@ pub use sql_engine::QueryConfig;
 pub mod vector;
 pub mod vector_operators; // Distance operators for SQL (<->, <#>, <=>)
 pub mod vector_index; // Index metadata and management for HNSW+BQ
+pub mod vector_query_planner; // Query planning and optimization for vector queries
 pub mod pca; // PCA dimensionality reduction for vectors (resuming development)
 pub mod quantization; // Binary quantization (Week 3 - RaBitQ implementation)
 
