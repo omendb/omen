@@ -32,6 +32,45 @@
 
 **Decision**: Implement HNSW with hnsw_rs (7-day timeline, 95%+ success probability)
 
+### State-of-the-Art Vector Search Survey (6 hours) - Oct 22, 2025
+**Document**:
+- `docs/architecture/research/sota_vector_search_algorithms_2024_2025.md` (comprehensive survey, 1300+ lines)
+
+**Research scope**:
+- DiskANN deep dive (production problems, why abandon for HNSW+)
+- HNSW improvements 2024-2025 (MN-RU, BBQ, RaBitQ, dual-branch)
+- Alternative algorithms (ScaNN SOAR, SPANN, NSG, CAGRA, learned indexes)
+- Production vector DB analysis (Pinecone, Weaviate, Qdrant, Milvus, pgvector)
+- 2024-2025 research papers (VLDB, SIGMOD, NeurIPS Big-ANN)
+- Quantization techniques (Binary, Product, RaBitQ, BBQ)
+- Benchmark results (ann-benchmarks.com, VIBE, Big-ANN 2023)
+- Memory footprint analysis (GB per 1M vectors)
+- Implementation complexity and timelines
+
+**Key findings**:
+- **HNSW + Binary Quantization** is the production standard (Pinecone, Weaviate, Qdrant)
+- **DiskANN fails**: Immutability, I/O inefficiency, complex batching, NVMe requirements
+- **RaBitQ (SIGMOD 2024)**: Theoretical error bounds, 3x faster than PQ, 95% memory reduction
+- **BBQ (Elasticsearch 2024)**: 20-30x faster quantization, 2-5x faster queries vs PQ
+- **ScaNN SOAR (Google 2024)**: Best indexing/query tradeoff, smallest memory footprint
+- **Performance**: 10,000-44,000 QPS at 90-95% recall (VIBE, ann-benchmarks)
+- **Memory**: HNSW+BQ uses ~15GB for 10M 1536D vectors (vs 170GB float32)
+- **pgvector comparison**: HNSW 15x faster than IVFFlat (40.5 vs 2.6 QPS)
+
+**Recommendation for OmenDB**:
+✅ **Ship HNSW + Binary Quantization in 2 months**
+- Proven: 100M+ vectors, 95%+ recall, <10ms latency
+- Memory efficient: 95% reduction vs float32
+- Fast implementation: Use hnswlib or hnsw_rs
+- Clear differentiation vs pgvector: Quantization support (pgvector doesn't have)
+
+⚠️ **Defer ALEX for vectors to Phase 2**
+- Learned indexes (LIDER/LISA) haven't proven superior to HNSW
+- High risk, unproven for 1536D vectors
+- Better to ship proven tech, acquire customers, then innovate
+
+**Sources**: 32+ citations (ArXiv, SIGMOD/VLDB 2024, industry blogs, benchmarks)
+
 **Rationale**:
 1. Time pressure: Need go/no-go by Oct 29 (Week 2)
 2. Risk management: HNSW is 95%+ proven, PCA-ALEX was 40-50% moonshot

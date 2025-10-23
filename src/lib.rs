@@ -31,6 +31,7 @@ pub use sql_engine::QueryConfig;
 // Vector database module (NEW - Week 1-2 prototype)
 pub mod vector;
 pub mod pca; // PCA dimensionality reduction for vectors (resuming development)
+pub mod quantization; // Binary quantization (Week 3 - RaBitQ implementation)
 
 // Existing modules (will be refactored)
 pub mod alex; // ALEX adaptive learned index (replacement for RMI)
