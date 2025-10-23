@@ -295,6 +295,14 @@ fn append_value_to_builder(builder: &mut Box<dyn ArrayBuilder>, value: &Value) -
                 .ok_or_else(|| anyhow!("Builder type mismatch"))?;
             b.append_value(*v);
         }
+        Value::Vector(v) => {
+            let b = builder
+                .as_any_mut()
+                .downcast_mut::<BinaryBuilder>()
+                .ok_or_else(|| anyhow!("Builder type mismatch"))?;
+            let bytes = v.to_postgres_binary();
+            b.append_value(&bytes);
+        }
         Value::Null => {
             // Determine builder type and append null appropriately
             if let Some(b) = builder.as_any_mut().downcast_mut::<Int64Builder>() {
@@ -311,6 +319,8 @@ fn append_value_to_builder(builder: &mut Box<dyn ArrayBuilder>, value: &Value) -
             {
                 b.append_null();
             } else if let Some(b) = builder.as_any_mut().downcast_mut::<BooleanBuilder>() {
+                b.append_null();
+            } else if let Some(b) = builder.as_any_mut().downcast_mut::<BinaryBuilder>() {
                 b.append_null();
             } else {
                 return Err(anyhow!("Unsupported builder type for NULL"));

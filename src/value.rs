@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
 
+use crate::vector::VectorValue;
+
 /// Generic value type that can represent any SQL value
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Value {
@@ -29,6 +31,9 @@ pub enum Value {
     /// Boolean value
     Boolean(bool),
 
+    /// Vector value (for embeddings/similarity search)
+    Vector(VectorValue),
+
     /// NULL value
     Null,
 }
@@ -43,6 +48,7 @@ impl Value {
             (Value::Text(_), DataType::Utf8) => true,
             (Value::Timestamp(_), DataType::Timestamp(_, _)) => true,
             (Value::Boolean(_), DataType::Boolean) => true,
+            (Value::Vector(_), DataType::Binary) => true, // Vector stored as binary
             (Value::Null, _) => true, // NULL matches any type
             _ => false,
         }
@@ -97,6 +103,15 @@ impl Value {
                     .ok_or_else(|| anyhow!("Failed to downcast to BooleanArray"))?;
                 Ok(Value::Boolean(arr.value(index)))
             }
+            DataType::Binary => {
+                let arr = array
+                    .as_any()
+                    .downcast_ref::<BinaryArray>()
+                    .ok_or_else(|| anyhow!("Failed to downcast to BinaryArray"))?;
+                let bytes = arr.value(index);
+                let vector = VectorValue::from_postgres_binary(bytes)?;
+                Ok(Value::Vector(vector))
+            }
             _ => Err(anyhow!("Unsupported data type: {:?}", array.data_type())),
         }
     }
@@ -114,6 +129,7 @@ impl Value {
             }
             Value::Boolean(b) => Ok(if *b { 1 } else { 0 }),
             Value::Text(_) => Err(anyhow!("Cannot convert Text to i64")),
+            Value::Vector(_) => Err(anyhow!("Cannot convert Vector to i64")),
             Value::Null => Err(anyhow!("Cannot convert NULL to i64")),
         }
     }
@@ -141,6 +157,7 @@ impl Value {
                 DataType::Timestamp(arrow::datatypes::TimeUnit::Microsecond, None)
             }
             Value::Boolean(_) => DataType::Boolean,
+            Value::Vector(_) => DataType::Binary,
             Value::Null => DataType::Null,
         }
     }
@@ -155,6 +172,14 @@ impl PartialOrd for Value {
             (Value::Text(a), Value::Text(b)) => a.partial_cmp(b),
             (Value::Timestamp(a), Value::Timestamp(b)) => a.partial_cmp(b),
             (Value::Boolean(a), Value::Boolean(b)) => a.partial_cmp(b),
+            (Value::Vector(a), Value::Vector(b)) => {
+                // Vectors are equal only if exactly equal
+                if a == b {
+                    Some(Ordering::Equal)
+                } else {
+                    None // Vectors don't have natural ordering
+                }
+            }
             (Value::Null, Value::Null) => Some(Ordering::Equal),
             (Value::Null, _) => Some(Ordering::Less),
             (_, Value::Null) => Some(Ordering::Greater),
@@ -196,8 +221,16 @@ impl std::hash::Hash for Value {
                 5u8.hash(state);
                 v.hash(state);
             }
-            Value::Null => {
+            Value::Vector(v) => {
                 6u8.hash(state);
+                // Hash dimensions and data
+                v.dimensions().hash(state);
+                for &val in v.data() {
+                    val.to_bits().hash(state);
+                }
+            }
+            Value::Null => {
+                7u8.hash(state);
             }
         }
     }
@@ -212,6 +245,7 @@ impl fmt::Display for Value {
             Value::Text(v) => write!(f, "'{}'", v),
             Value::Timestamp(v) => write!(f, "{}", v),
             Value::Boolean(v) => write!(f, "{}", v),
+            Value::Vector(v) => write!(f, "{}", v),
             Value::Null => write!(f, "NULL"),
         }
     }
