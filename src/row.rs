@@ -205,6 +205,10 @@ fn value_to_array(value: &Value, data_type: &arrow::datatypes::DataType) -> Resu
             Ok(Arc::new(TimestampMicrosecondArray::from(vec![*v])))
         }
         (Value::Boolean(v), DataType::Boolean) => Ok(Arc::new(BooleanArray::from(vec![*v]))),
+        (Value::Vector(v), DataType::Binary) => {
+            let bytes = v.to_postgres_binary();
+            Ok(Arc::new(BinaryArray::from(vec![bytes.as_slice()])))
+        }
         (Value::Null, _) => {
             // Create single-element null array of appropriate type
             match data_type {
@@ -216,6 +220,7 @@ fn value_to_array(value: &Value, data_type: &arrow::datatypes::DataType) -> Resu
                     None as Option<i64>,
                 ]))),
                 DataType::Boolean => Ok(Arc::new(BooleanArray::from(vec![None as Option<bool>]))),
+                DataType::Binary => Ok(Arc::new(BinaryArray::from(vec![None as Option<&[u8]>]))),
                 _ => Err(anyhow!("Unsupported data type for NULL: {:?}", data_type)),
             }
         }
@@ -243,6 +248,7 @@ fn create_array_builder(
             capacity,
         ))),
         DataType::Boolean => Ok(Box::new(BooleanBuilder::with_capacity(capacity))),
+        DataType::Binary => Ok(Box::new(BinaryBuilder::with_capacity(capacity, 1024))),
         _ => Err(anyhow!(
             "Unsupported data type for builder: {:?}",
             data_type

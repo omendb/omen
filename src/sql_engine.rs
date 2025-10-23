@@ -2118,20 +2118,39 @@ impl SqlEngine {
     /// Convert SQL data type to Arrow data type
     fn sql_type_to_arrow(sql_type: &SqlDataType) -> Result<DataType> {
         match sql_type {
-            SqlDataType::BigInt(_) | SqlDataType::Int8(_) | SqlDataType::Int64 => {
-                Ok(DataType::Int64)
-            }
-            SqlDataType::Double | SqlDataType::Float8 | SqlDataType::Float64 => {
-                Ok(DataType::Float64)
-            }
+            // Integer types → Int64
+            SqlDataType::Int(_)
+            | SqlDataType::Integer(_)
+            | SqlDataType::BigInt(_)
+            | SqlDataType::Int8(_)
+            | SqlDataType::Int64 => Ok(DataType::Int64),
+            // Float types → Float64
+            SqlDataType::Float(_)
+            | SqlDataType::Real
+            | SqlDataType::Double
+            | SqlDataType::Float8
+            | SqlDataType::Float64 => Ok(DataType::Float64),
+            // String types → Utf8
             SqlDataType::Varchar(_) | SqlDataType::Text | SqlDataType::String(_) => {
                 Ok(DataType::Utf8)
             }
+            // Timestamp
             SqlDataType::Timestamp(_, _) => Ok(DataType::Timestamp(
                 arrow::datatypes::TimeUnit::Microsecond,
                 None,
             )),
+            // Boolean
             SqlDataType::Boolean => Ok(DataType::Boolean),
+            // Vector type (VECTOR(N)) → Binary
+            SqlDataType::Custom(name, _params) => {
+                // Check if it's a VECTOR type
+                if let Some(ident) = name.0.first() {
+                    if ident.value.to_uppercase() == "VECTOR" {
+                        return Ok(DataType::Binary);
+                    }
+                }
+                Err(anyhow!("Unsupported custom SQL data type: {:?}", sql_type))
+            }
             _ => Err(anyhow!("Unsupported SQL data type: {:?}", sql_type)),
         }
     }
@@ -2147,6 +2166,12 @@ impl SqlEngine {
             },
             Expr::Value(sqlparser::ast::Value::SingleQuotedString(s)) => match expected_type {
                 DataType::Utf8 => Ok(Value::Text(s.clone())),
+                DataType::Binary => {
+                    // Parse vector literal: '[1.0, 2.0, 3.0]'
+                    use crate::vector::VectorValue;
+                    let vec = VectorValue::from_literal(s)?;
+                    Ok(Value::Vector(vec))
+                }
                 _ => Err(anyhow!("Cannot convert string to {:?}", expected_type)),
             },
             Expr::Value(sqlparser::ast::Value::Boolean(b)) => match expected_type {

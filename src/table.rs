@@ -553,6 +553,7 @@ impl Table {
             "Float64" => Ok(DataType::Float64),
             "Utf8" => Ok(DataType::Utf8),
             "Boolean" => Ok(DataType::Boolean),
+            "Binary" => Ok(DataType::Binary), // Vector types stored as Binary
             _ if s.starts_with("Timestamp") => Ok(DataType::Timestamp(TimeUnit::Microsecond, None)),
             _ => Err(anyhow!("Unsupported data type: {}", s)),
         }

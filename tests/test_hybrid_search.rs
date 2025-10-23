@@ -8,51 +8,58 @@ use std::sync::Arc;
 
 /// Helper: Create a test catalog with products table
 fn create_products_catalog() -> (Catalog, Arc<tempfile::TempDir>) {
+    use std::path::PathBuf;
+
     let temp_dir = Arc::new(tempfile::tempdir().unwrap());
-    let mut catalog = Catalog::new(temp_dir.path().to_str().unwrap()).unwrap();
+    let data_dir = PathBuf::from(temp_dir.path());
 
-    // Create products table with vector embeddings
-    let create_table_sql = "
-        CREATE TABLE products (
-            id INT PRIMARY KEY,
-            name TEXT,
-            category TEXT,
-            price FLOAT,
-            embedding VECTOR(128)
-        )
-    ";
+    // Create catalog and engine in a scope to ensure they're dropped before reloading
+    {
+        let catalog = Catalog::new(data_dir.clone()).unwrap();
+        let mut engine = SqlEngine::new(catalog);
 
-    let mut engine = SqlEngine::new(catalog.clone());
-    engine.execute(create_table_sql).unwrap();
+        // Create products table with vector embeddings
+        let create_table_sql = "
+            CREATE TABLE products (
+                id INT PRIMARY KEY,
+                name TEXT,
+                category TEXT,
+                price FLOAT,
+                embedding VECTOR(128)
+            )
+        ";
+        engine.execute(create_table_sql).unwrap();
 
-    // Insert test products with embeddings
-    for i in 0..100 {
-        let category = if i < 30 {
-            "electronics"
-        } else if i < 60 {
-            "clothing"
-        } else {
-            "books"
-        };
+        // Insert test products with embeddings
+        for i in 0..100 {
+            let category = if i < 30 {
+                "electronics"
+            } else if i < 60 {
+                "clothing"
+            } else {
+                "books"
+            };
 
-        let price = 10.0 + (i as f32 * 2.5);
+            let price = 10.0 + (i as f64 * 2.5);
 
-        // Create embedding based on product ID (for deterministic testing)
-        let embedding: Vec<f32> = (0..128)
-            .map(|j| ((i * 7 + j * 3) % 100) as f32 / 100.0)
-            .collect();
-        let embedding_str = format!("[{}]", embedding.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", "));
+            // Create embedding based on product ID (for deterministic testing)
+            let embedding: Vec<f32> = (0..128)
+                .map(|j| ((i * 7 + j * 3) % 100) as f32 / 100.0)
+                .collect();
+            let embedding_str = format!("[{}]", embedding.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(", "));
 
-        let insert_sql = format!(
-            "INSERT INTO products (id, name, category, price, embedding) VALUES ({}, 'Product {}', '{}', {}, '{}')",
-            i, i, category, price, embedding_str
-        );
+            let insert_sql = format!(
+                "INSERT INTO products (id, name, category, price, embedding) VALUES ({}, 'Product {}', '{}', {}, '{}')",
+                i, i, category, price, embedding_str
+            );
 
-        engine.execute(&insert_sql).unwrap();
+            engine.execute(&insert_sql).unwrap();
+        }
+        // Engine and catalog dropped here
     }
 
-    // Get the updated catalog from the engine
-    let catalog = Catalog::new(temp_dir.path().to_str().unwrap()).unwrap();
+    // Reload catalog from disk to get the updated state
+    let catalog = Catalog::new(data_dir).unwrap();
 
     (catalog, temp_dir)
 }
@@ -102,7 +109,7 @@ fn test_hybrid_filter_first_pk_equality() {
 
             // Verify it's product 5
             let id_value = data[0].get(0).unwrap();
-            assert_eq!(*id_value, Value::Int32(5));
+            assert_eq!(*id_value, Value::Int64(5));
         }
         _ => panic!("Expected Selected result"),
     }
@@ -140,10 +147,10 @@ fn test_hybrid_filter_first_category_filter() {
             // Verify all results are electronics
             for row in &data {
                 let category = row.get(category_idx).unwrap();
-                if let Value::Utf8(cat_str) = category {
+                if let Value::Text(cat_str) = category {
                     assert_eq!(cat_str, "electronics");
                 } else {
-                    panic!("Expected Utf8 category");
+                    panic!("Expected Text category");
                 }
             }
         }
@@ -182,14 +189,14 @@ fn test_hybrid_filter_first_price_range() {
             // Verify all results are within price range
             for row in &data {
                 let price = row.get(price_idx).unwrap();
-                if let Value::Float32(price_val) = price {
+                if let Value::Float64(price_val) = price {
                     assert!(
                         *price_val >= 50.0 && *price_val <= 100.0,
                         "Price {} should be in range [50.0, 100.0]",
                         price_val
                     );
                 } else {
-                    panic!("Expected Float32 price");
+                    panic!("Expected Float64 price");
                 }
             }
         }
@@ -256,16 +263,16 @@ fn test_hybrid_filter_first_multiple_predicates() {
                 let category = row.get(category_idx).unwrap();
                 let price = row.get(price_idx).unwrap();
 
-                if let Value::Utf8(cat_str) = category {
+                if let Value::Text(cat_str) = category {
                     assert_eq!(cat_str, "electronics");
                 } else {
-                    panic!("Expected Utf8 category");
+                    panic!("Expected Text category");
                 }
 
-                if let Value::Float32(price_val) = price {
+                if let Value::Float64(price_val) = price {
                     assert!(*price_val < 50.0, "Price {} should be < 50.0", price_val);
                 } else {
-                    panic!("Expected Float32 price");
+                    panic!("Expected Float64 price");
                 }
             }
         }
