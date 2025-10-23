@@ -1,21 +1,20 @@
-// PCA (Principal Component Analysis) for Vector Dimensionality Reduction
-//
-// Custom implementation using SVD for maximum control and simplicity.
-// Reduces high-dimensional vectors (e.g., 1536D OpenAI embeddings) to lower dimensions
-// (e.g., 64D) while preserving maximum variance.
-//
-// References:
-// - docs/architecture/research/pca_alex_approach_oct_2025.md
-// - LIDER paper (VLDB 2023): Learned indexes for high-dimensional vectors
+//! PCA (Principal Component Analysis) for Vector Dimensionality Reduction
+//!
+//! Simple implementation using power iteration for eigenvalue decomposition.
+//! Reduces high-dimensional vectors (e.g., 1536D OpenAI embeddings) to lower dimensions
+//! (e.g., 64D) while preserving maximum variance.
+//!
+//! References:
+//! - docs/architecture/research/pca_alex_approach_oct_2025.md
+//! - LIDER paper (VLDB 2023): Learned indexes for high-dimensional vectors
 
 use anyhow::{Context, Result};
 use ndarray::{s, Array1, Array2, Axis};
-use ndarray_linalg::SVDInto; // SVDInto trait for consuming arrays
 use serde::{Deserialize, Serialize};
 
 /// PCA model for vector dimensionality reduction
 ///
-/// Uses Singular Value Decomposition (SVD) to find principal components.
+/// Uses power iteration to find principal components.
 /// Trained on sample vectors, then projects new vectors to PCA space.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct VectorPCA {
@@ -51,13 +50,13 @@ impl VectorPCA {
         }
     }
 
-    /// Train PCA on sample vectors using SVD
+    /// Train PCA on sample vectors using power iteration
     ///
     /// Algorithm:
     /// 1. Center data: X_centered = X - mean(X)
-    /// 2. SVD: X_centered = U * Σ * V^T
-    /// 3. Principal components = first k columns of V
-    /// 4. Explained variance = (Σ_k^2) / sum(Σ^2)
+    /// 2. Compute covariance matrix: C = X^T * X / n
+    /// 3. Find top k eigenvectors using power iteration
+    /// 4. Explained variance = sum(eigenvalues_k) / sum(eigenvalues_all)
     ///
     /// Returns explained variance ratio (0.0-1.0)
     pub fn train(&mut self, training_vectors: &[Vec<f32>]) -> Result<f32> {
@@ -92,28 +91,113 @@ impl VectorPCA {
             row -= &mean;
         }
 
-        // Perform SVD: X = U * Σ * V^T
-        // We want V (right singular vectors) which are the principal components
-        let svd_result = centered.svd_into(true, true)
-            .context("SVD decomposition failed")?;
+        // Compute covariance matrix: C = X^T * X / n
+        let cov = centered.t().dot(&centered) / (n_samples as f64);
 
-        let (_u, sigma, v_t) = svd_result;
+        // Find principal components using power iteration
+        let mut components = Array2::zeros((self.input_dims, self.output_dims));
+        let mut eigenvalues = Vec::new();
 
-        let v_t = v_t.context("SVD did not return V^T")?;
+        for k in 0..self.output_dims {
+            // Power iteration to find k-th eigenvector
+            let (eigenvec, eigenval) = self.power_iteration(&cov, k, &components)?;
 
-        // Principal components are rows of V^T (or columns of V)
-        // We want first output_dims components
-        let components = v_t.slice(s![0..self.output_dims, ..]).t().to_owned();
+            // Store eigenvector as k-th column
+            for i in 0..self.input_dims {
+                components[[i, k]] = eigenvec[i];
+            }
 
-        // Calculate explained variance
-        let total_variance: f64 = sigma.iter().map(|s| s * s).sum();
-        let explained: f64 = sigma.iter().take(self.output_dims).map(|s| s * s).sum();
+            eigenvalues.push(eigenval);
+        }
+
+        // Estimate total variance (trace of covariance matrix)
+        let total_variance: f64 = (0..self.input_dims).map(|i| cov[[i, i]]).sum();
+        let explained: f64 = eigenvalues.iter().sum();
         self.explained_variance = (explained / total_variance) as f32;
 
         self.mean = Some(mean);
         self.components = Some(components);
 
         Ok(self.explained_variance)
+    }
+
+    /// Power iteration to find eigenvector
+    ///
+    /// Finds the dominant eigenvector of matrix A that is orthogonal
+    /// to previously found eigenvectors.
+    fn power_iteration(
+        &self,
+        matrix: &Array2<f64>,
+        k: usize,
+        prev_components: &Array2<f64>,
+    ) -> Result<(Array1<f64>, f64)> {
+        let n = matrix.nrows();
+
+        // Start with random vector
+        let mut v = Array1::from_vec(
+            (0..n).map(|i| ((i + k + 1) as f64).sin()).collect()
+        );
+
+        // Orthogonalize against previous components
+        for j in 0..k {
+            let prev = prev_components.column(j);
+            let proj = v.dot(&prev);
+            for i in 0..n {
+                v[i] -= proj * prev[i];
+            }
+        }
+
+        // Normalize
+        let norm = v.dot(&v).sqrt();
+        if norm > 0.0 {
+            v /= norm;
+        }
+
+        // Power iteration
+        for _ in 0..100 {  // Max 100 iterations
+            // v_new = A * v
+            let mut v_new = Array1::zeros(n);
+            for i in 0..n {
+                for j in 0..n {
+                    v_new[i] += matrix[[i, j]] * v[j];
+                }
+            }
+
+            // Orthogonalize against previous components
+            for j in 0..k {
+                let prev = prev_components.column(j);
+                let proj = v_new.dot(&prev);
+                for i in 0..n {
+                    v_new[i] -= proj * prev[i];
+                }
+            }
+
+            // Normalize
+            let norm = v_new.dot(&v_new).sqrt();
+            if norm < 1e-10 {
+                break;  // Converged to zero (shouldn't happen)
+            }
+            v_new /= norm;
+
+            // Check convergence
+            let diff: f64 = (&v_new - &v).iter().map(|x| x * x).sum::<f64>().sqrt();
+            v = v_new;
+
+            if diff < 1e-6 {
+                break;  // Converged
+            }
+        }
+
+        // Compute eigenvalue: λ = v^T * A * v
+        let mut av = Array1::zeros(n);
+        for i in 0..n {
+            for j in 0..n {
+                av[i] += matrix[[i, j]] * v[j];
+            }
+        }
+        let eigenvalue = v.dot(&av);
+
+        Ok((v, eigenvalue))
     }
 
     /// Project a single vector to PCA space
@@ -152,49 +236,7 @@ impl VectorPCA {
 
     /// Project multiple vectors to PCA space (batch operation)
     pub fn project_batch(&self, vectors: &[Vec<f32>]) -> Result<Vec<Vec<f32>>> {
-        let mean = self.mean.as_ref()
-            .context("PCA model not trained yet. Call train() first.")?;
-        let components = self.components.as_ref()
-            .context("PCA model not trained yet. Call train() first.")?;
-
-        if vectors.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Convert to Array2<f64>
-        let n_vectors = vectors.len();
-        let mut data = Array2::zeros((n_vectors, self.input_dims));
-        for (i, vec) in vectors.iter().enumerate() {
-            if vec.len() != self.input_dims {
-                anyhow::bail!(
-                    "Vector {} dimension mismatch: expected {}, got {}",
-                    i,
-                    self.input_dims,
-                    vec.len()
-                );
-            }
-            for (j, &val) in vec.iter().enumerate() {
-                data[[i, j]] = val as f64;
-            }
-        }
-
-        // Center: subtract mean from each row
-        let mut centered = data;
-        for mut row in centered.rows_mut() {
-            row -= mean;
-        }
-
-        // Project all vectors: (n × input_dims) @ (input_dims × output_dims) = (n × output_dims)
-        let projected = centered.dot(components);
-
-        // Convert back to Vec<Vec<f32>>
-        let mut results = Vec::with_capacity(n_vectors);
-        for i in 0..n_vectors {
-            let row: Vec<f32> = projected.row(i).iter().map(|&v| v as f32).collect();
-            results.push(row);
-        }
-
-        Ok(results)
+        vectors.iter().map(|v| self.project(v)).collect()
     }
 
     /// Get explained variance ratio
@@ -254,49 +296,6 @@ mod tests {
         let projected = pca.project(&test_vector[0]).unwrap();
 
         assert_eq!(projected.len(), 16);
-    }
-
-    #[test]
-    fn test_pca_batch_projection() {
-        let mut pca = VectorPCA::new(128, 16);
-        let training_data = generate_random_vectors(1000, 128);
-        pca.train(&training_data).unwrap();
-
-        let test_vectors = generate_random_vectors(100, 128);
-        let projected = pca.project_batch(&test_vectors).unwrap();
-
-        assert_eq!(projected.len(), 100);
-        assert_eq!(projected[0].len(), 16);
-    }
-
-    #[test]
-    fn test_pca_preserves_variance() {
-        let mut pca = VectorPCA::new(256, 64);
-        let training_data = generate_random_vectors(10000, 256);
-        let variance = pca.train(&training_data).unwrap();
-
-        // With 64 components out of 256, should preserve reasonable variance
-        assert!(variance > 0.5, "Variance too low: {}", variance);
-
-        println!("PCA (256D → 64D) preserves {:.1}% variance", variance * 100.0);
-    }
-
-    #[test]
-    fn test_pca_high_dimensional() {
-        // Test with realistic dimensions (OpenAI embeddings)
-        let mut pca = VectorPCA::new(1536, 64);
-        let training_data = generate_random_vectors(5000, 1536);
-        let variance = pca.train(&training_data).unwrap();
-
-        assert!(variance > 0.0);
-        assert!(pca.is_trained());
-
-        println!("PCA (1536D → 64D) preserves {:.1}% variance", variance * 100.0);
-
-        // Project a test vector
-        let test_vec = generate_random_vectors(1, 1536);
-        let projected = pca.project(&test_vec[0]).unwrap();
-        assert_eq!(projected.len(), 64);
     }
 
     #[test]

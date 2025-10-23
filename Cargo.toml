@@ -260,10 +260,8 @@ lru = "0.16.1"
 memmap2 = "0.9"
 sys-info = "0.9.1"
 
-# PCA for vector dimensionality reduction (custom SVD implementation)
+# PCA for vector dimensionality reduction (simple custom implementation, no external LAPACK)
 ndarray = "0.16"
-# Use OpenBLAS (system-installed or compiled)
-ndarray-linalg = { version = "0.16", features = ["openblas-system"] }
 
 # HNSW for vector search (Week 2 implementation)
 hnsw_rs = "0.3"
@@ -389,4 +387,8 @@ path = "src/bin/benchmark_cache_scale.rs"
 [[bin]]
 name = "benchmark_hnsw"
 path = "src/bin/benchmark_hnsw.rs"
+
+[[bin]]
+name = "benchmark_pca"
+path = "src/bin/benchmark_pca.rs"
 
