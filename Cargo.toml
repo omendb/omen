@@ -265,9 +265,13 @@ ndarray = "0.16"
 # Use OpenBLAS (system-installed or compiled)
 ndarray-linalg = { version = "0.16", features = ["openblas-system"] }
 
+# HNSW for vector search (Week 2 implementation)
+hnsw_rs = "0.3"
+
 [features]
 default = []
 simd = []  # Enable std::simd (requires nightly Rust)
+hnsw-simd = ["hnsw_rs/simdeez_f"]  # Enable SIMD for HNSW (x86_64 only)
 
 [profile.release]
 lto = true

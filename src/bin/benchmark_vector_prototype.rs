@@ -84,67 +84,12 @@ fn benchmark_query(store: &VectorStore, num_queries: usize, k: usize) {
     println!("  p50 latency: ~{:.2} ms (approx)", brute_latency_ms);
     println!("  p95 latency: ~{:.2} ms (approx)", brute_latency_ms * 1.2);
 
-    // Benchmark ALEX-accelerated search
-    let start = Instant::now();
-    for query in &queries {
-        let _ = store.knn_search_alex(query, k, 10).unwrap();
-    }
-    let alex_duration = start.elapsed();
-    let alex_latency_ms = alex_duration.as_secs_f64() * 1000.0 / num_queries as f64;
-
-    println!("\nALEX-accelerated search:");
-    println!("  Total time: {:?}", alex_duration);
-    println!("  Avg latency: {:.2} ms/query", alex_latency_ms);
-    println!("  Speedup: {:.2}x vs brute-force", brute_latency_ms / alex_latency_ms);
-
-    // Goal check: <20ms p95 latency
-    if alex_latency_ms < 20.0 {
-        println!("  ✅ PASS: Query latency goal met (<20ms)");
-    } else {
-        println!("  ❌ FAIL: Query latency goal NOT met (>20ms)");
-    }
+    // Note: ALEX-accelerated search removed (pivoted to HNSW in Week 2)
 }
 
-fn benchmark_recall(store: &VectorStore, num_queries: usize, k: usize) {
-    println!("\n=== Recall Benchmark: {} queries, k={} ===", num_queries, k);
-
-    let dim = if store.len() > 0 {
-        store.get(0).unwrap().dim()
-    } else {
-        return;
-    };
-
-    let mut total_recall = 0.0;
-
-    for _ in 0..num_queries {
-        let query = generate_random_vector(dim);
-
-        // Ground truth: brute-force k-NN
-        let ground_truth = store.knn_search(&query, k).unwrap();
-
-        // ALEX-accelerated k-NN
-        let alex_results = store.knn_search_alex(&query, k, 10).unwrap();
-
-        // Compute recall@k (fraction of true neighbors found)
-        let ground_truth_ids: std::collections::HashSet<_> =
-            ground_truth.iter().map(|(id, _)| id).collect();
-        let alex_ids: std::collections::HashSet<_> =
-            alex_results.iter().map(|(id, _)| id).collect();
-
-        let intersection = ground_truth_ids.intersection(&alex_ids).count();
-        let recall = intersection as f64 / k as f64;
-        total_recall += recall;
-    }
-
-    let avg_recall = total_recall / num_queries as f64;
-    println!("Average Recall@{}: {:.2}%", k, avg_recall * 100.0);
-
-    // Goal check: >90% recall
-    if avg_recall > 0.90 {
-        println!("  ✅ PASS: Recall goal met (>90%)");
-    } else {
-        println!("  ❌ FAIL: Recall goal NOT met (<90%)");
-    }
+fn benchmark_recall(_store: &VectorStore, _num_queries: usize, _k: usize) {
+    // Note: Recall benchmark removed (ALEX prototype failed, pivoted to HNSW in Week 2)
+    println!("\n=== Recall Benchmark: Skipped (Week 1 ALEX approach failed) ===");
 }
 
 fn main() {

@@ -30,7 +30,7 @@ pub use sql_engine::QueryConfig;
 
 // Vector database module (NEW - Week 1-2 prototype)
 pub mod vector;
-pub mod pca; // PCA dimensionality reduction for vectors
+// pub mod pca; // PCA dimensionality reduction for vectors (deferred to v0.2.0)
 
 // Existing modules (will be refactored)
 pub mod alex; // ALEX adaptive learned index (replacement for RMI)
