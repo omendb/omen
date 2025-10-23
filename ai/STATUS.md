@@ -81,7 +81,11 @@
 
 **HNSW Implementation Timeline**:
 - [x] Day 0 (Oct 22): Research + planning (COMPLETED)
-- [ ] Day 1 (Oct 23): Setup + basic integration (hnsw_rs dependency, wrapper)
+- [x] Day 1 (Oct 23): Setup + basic integration (COMPLETED)
+  - Added hnsw_rs v0.3 dependency
+  - Refactored vector module (mod.rs, types.rs, store.rs, hnsw_index.rs)
+  - Implemented HNSWIndex wrapper (M=48, ef_construction=200, ef_search=100)
+  - 6 unit tests passing (insert, search, recall, error handling)
 - [ ] Day 2 (Oct 24): RocksDB integration (serialization, storage)
 - [ ] Day 3 (Oct 25): PostgreSQL protocol (distance operators)
 - [ ] Day 4 (Oct 26): INSERT optimization (batch, parallel)
