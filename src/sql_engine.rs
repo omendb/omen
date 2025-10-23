@@ -6,11 +6,14 @@ use crate::metrics::{record_sql_query, record_sql_query_error};
 use crate::postgres::OmenDbAuthSource;
 use crate::row::Row;
 use crate::value::Value;
+use crate::vector_query_planner::{
+    HybridQueryPattern, HybridQueryStrategy, VectorQueryPlanner,
+};
 use crate::wal::{Transaction, TransactionManager, WalManager};
 use anyhow::{anyhow, Result};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use sqlparser::ast::{
-    ColumnDef, DataType as SqlDataType, Expr, Ident, Join, JoinConstraint, JoinOperator,
+    ColumnDef, DataType as SqlDataType, Expr, JoinConstraint, JoinOperator,
     ObjectName, OrderByExpr, Query, Select, SelectItem, SetExpr, Statement, TableFactor, Values,
 };
 use sqlparser::dialect::GenericDialect;
@@ -592,8 +595,19 @@ impl SqlEngine {
             None => &[],
         };
 
+        // Extract LIMIT value for hybrid query planning
+        let limit = if let Some(limit_expr) = &query.limit {
+            if let Expr::Value(sqlparser::ast::Value::Number(n, _)) = limit_expr {
+                Some(n.parse::<usize>()?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let mut result = match query.body.as_ref() {
-            SetExpr::Select(select) => self.execute_select(select, order_by)?,
+            SetExpr::Select(select) => self.execute_select(select, order_by, limit)?,
             _ => return Err(anyhow!("Only SELECT queries supported")),
         };
 
@@ -675,7 +689,12 @@ impl SqlEngine {
     }
 
     /// Execute SELECT statement
-    fn execute_select(&self, select: &Select, order_by: &[OrderByExpr]) -> Result<ExecutionResult> {
+    fn execute_select(
+        &self,
+        select: &Select,
+        order_by: &[OrderByExpr],
+        limit: Option<usize>,
+    ) -> Result<ExecutionResult> {
         // Check if this is a JOIN query
         if select.from.len() == 1 && !select.from[0].joins.is_empty() {
             return self.execute_join(select, order_by);
@@ -692,6 +711,17 @@ impl SqlEngine {
         };
 
         let table = self.catalog.get_table(&table_name)?;
+
+        // Check for hybrid query pattern (vector search + SQL predicates)
+        if let Ok(Some(hybrid_pattern)) = HybridQueryPattern::detect(
+            table_name.clone(),
+            select.selection.as_ref(),
+            order_by,
+            limit,
+        ) {
+            debug!("Detected hybrid query pattern");
+            return self.execute_hybrid_query(&hybrid_pattern, table);
+        }
 
         // Get rows based on WHERE clause
         let mut rows = if let Some(ref selection) = select.selection {
@@ -743,6 +773,226 @@ impl SqlEngine {
             rows: rows.len(),
             data: rows,
         })
+    }
+
+    /// Execute hybrid query combining vector search with SQL predicates
+    fn execute_hybrid_query(
+        &self,
+        pattern: &HybridQueryPattern,
+        table: &crate::table::Table,
+    ) -> Result<ExecutionResult> {
+        // Validate the pattern
+        pattern.validate()?;
+
+        // Create vector query planner
+        let planner = VectorQueryPlanner::default();
+
+        // Plan hybrid query execution strategy
+        let strategy = planner.plan_hybrid(
+            pattern,
+            table.row_count(),
+            table.primary_key(),
+        );
+
+        debug!(
+            "Executing hybrid query with strategy: {:?}, selectivity estimate: {:.2}%",
+            strategy,
+            planner.estimate_selectivity(
+                &pattern.sql_predicates,
+                table.row_count(),
+                table.primary_key()
+            ) * 100.0
+        );
+
+        // Execute based on chosen strategy
+        let rows = match strategy {
+            HybridQueryStrategy::FilterFirst => {
+                self.execute_hybrid_filter_first(pattern, table)?
+            }
+            HybridQueryStrategy::VectorFirst { expansion_factor } => {
+                self.execute_hybrid_vector_first(pattern, table, expansion_factor)?
+            }
+            HybridQueryStrategy::DualScan => {
+                // For now, fall back to Filter-First (Dual-Scan is Phase 2)
+                debug!("DualScan not yet implemented, falling back to FilterFirst");
+                self.execute_hybrid_filter_first(pattern, table)?
+            }
+        };
+
+        // Extract column names (return all columns for now)
+        let column_names: Vec<String> = table
+            .schema()
+            .fields()
+            .iter()
+            .map(|f| f.name().clone())
+            .collect();
+
+        Ok(ExecutionResult::Selected {
+            columns: column_names,
+            rows: rows.len(),
+            data: rows,
+        })
+    }
+
+    /// Execute hybrid query using Filter-First strategy
+    /// 1. Execute SQL predicates using ALEX index
+    /// 2. Run vector search only on filtered rows
+    fn execute_hybrid_filter_first(
+        &self,
+        pattern: &HybridQueryPattern,
+        table: &crate::table::Table,
+    ) -> Result<Vec<Row>> {
+        debug!("Executing Filter-First hybrid query");
+
+        // Step 1: Execute WHERE clause to get filtered rows
+        let filtered_rows = self.execute_where_clause(table, &pattern.sql_predicates)?;
+
+        debug!(
+            "SQL filter returned {} rows (from {} total)",
+            filtered_rows.len(),
+            table.row_count()
+        );
+
+        // If no rows pass the filter, return empty result
+        if filtered_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Step 2: Run vector search on filtered rows only
+        // TODO: Implement Table::vector_search_filtered() method
+        // For now, we'll use a workaround: rerank filtered rows by distance
+        let query_vector = &pattern.vector_pattern.query_vector;
+        let column_name = &pattern.vector_pattern.column_name;
+        let k = pattern.vector_pattern.k;
+
+        // Find the column index for the vector column
+        let schema = table.schema();
+        let col_idx = schema
+            .index_of(column_name)
+            .map_err(|_| anyhow!("Vector column '{}' not found", column_name))?;
+
+        // Compute distances for all filtered rows
+        use crate::value::Value;
+        let mut scored_rows: Vec<(Row, f32)> = filtered_rows
+            .into_iter()
+            .filter_map(|row| {
+                if let Ok(Value::Vector(vec_val)) = row.get(col_idx) {
+                    // Compute distance based on operator
+                    let distance = match pattern.vector_pattern.operator {
+                        crate::vector_operators::VectorOperator::L2Distance => {
+                            vec_val.l2_distance(query_vector).ok()?
+                        }
+                        crate::vector_operators::VectorOperator::CosineDistance => {
+                            vec_val.cosine_distance(query_vector).ok()?
+                        }
+                        crate::vector_operators::VectorOperator::NegativeInnerProduct => {
+                            -vec_val.inner_product(query_vector).ok()?
+                        }
+                    };
+                    Some((row, distance))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Sort by distance (ascending for nearest neighbors)
+        scored_rows.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Take top-k results
+        let result: Vec<Row> = scored_rows.into_iter().take(k).map(|(row, _)| row).collect();
+
+        debug!("Filter-First returned {} nearest neighbors", result.len());
+
+        Ok(result)
+    }
+
+    /// Execute hybrid query using Vector-First strategy
+    /// 1. Run vector search with over-fetch (k * expansion_factor)
+    /// 2. Apply SQL predicates to filter results
+    fn execute_hybrid_vector_first(
+        &self,
+        pattern: &HybridQueryPattern,
+        table: &crate::table::Table,
+        expansion_factor: usize,
+    ) -> Result<Vec<Row>> {
+        debug!(
+            "Executing Vector-First hybrid query with expansion factor {}",
+            expansion_factor
+        );
+
+        // Step 1: Run vector search with over-fetch
+        // TODO: Implement proper vector index search
+        // For now, use brute-force search on all rows
+        let query_vector = &pattern.vector_pattern.query_vector;
+        let column_name = &pattern.vector_pattern.column_name;
+        let k = pattern.vector_pattern.k;
+        let candidates_k = k * expansion_factor;
+
+        // Find the column index for the vector column
+        let schema = table.schema();
+        let col_idx = schema
+            .index_of(column_name)
+            .map_err(|_| anyhow!("Vector column '{}' not found", column_name))?;
+
+        // Get all rows and compute distances
+        let all_rows = table.scan_all()?;
+        use crate::value::Value;
+        let mut scored_rows: Vec<(Row, f32)> = all_rows
+            .into_iter()
+            .filter_map(|row| {
+                if let Ok(Value::Vector(vec_val)) = row.get(col_idx) {
+                    let distance = match pattern.vector_pattern.operator {
+                        crate::vector_operators::VectorOperator::L2Distance => {
+                            vec_val.l2_distance(query_vector).ok()?
+                        }
+                        crate::vector_operators::VectorOperator::CosineDistance => {
+                            vec_val.cosine_distance(query_vector).ok()?
+                        }
+                        crate::vector_operators::VectorOperator::NegativeInnerProduct => {
+                            -vec_val.inner_product(query_vector).ok()?
+                        }
+                    };
+                    Some((row, distance))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Sort by distance
+        scored_rows.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Take top candidates_k
+        let candidates: Vec<Row> = scored_rows
+            .into_iter()
+            .take(candidates_k)
+            .map(|(row, _)| row)
+            .collect();
+
+        debug!(
+            "Vector search returned {} candidates (requested {} over-fetch)",
+            candidates.len(),
+            candidates_k
+        );
+
+        // Step 2: Apply SQL predicates to filter candidates
+        let filtered = self.execute_where_clause_with_schema(
+            &schema,
+            candidates,
+            &pattern.sql_predicates,
+        )?;
+
+        debug!(
+            "After applying SQL filters: {} rows (target: {})",
+            filtered.len(),
+            k
+        );
+
+        // Step 3: Take top-k after filtering
+        let result: Vec<Row> = filtered.into_iter().take(k).collect();
+
+        Ok(result)
     }
 
     /// Execute JOIN query (INNER JOIN, LEFT JOIN)

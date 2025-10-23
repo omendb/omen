@@ -1,19 +1,20 @@
 # STATUS
 
 **Last Updated**: October 23, 2025
-**Phase**: Week 4 - PostgreSQL Vector Integration (COMPLETE ✅)
-**Status**: Vector types, operators, query planning, MVCC compatibility complete ✅
+**Phase**: Week 5 Day 1 - Hybrid Search Implementation (IN PROGRESS 🚧)
+**Status**: Core hybrid search (Filter-First + Vector-First) implemented, tests in progress
 
 ---
 
-## Current State: PostgreSQL Vector Integration Complete
+## Current State: Hybrid Search Implementation (Week 5 Day 1)
 
 **Product**: PostgreSQL-compatible vector database (omendb-server)
-**Algorithm**: HNSW + Binary Quantization (industry standard)
+**Algorithm**: HNSW + Binary Quantization + Hybrid Search
 **License**: Elastic License 2.0 (source-available)
-**Timeline**: 8 weeks to production-ready MVP (Week 4/8 complete)
+**Timeline**: 8 weeks to production-ready MVP (Week 5/8 in progress)
 
-**Immediate Next**: Hybrid search + optimization (Week 5-6)
+**Today's Progress**: Hybrid search (vector + SQL predicates) core implementation complete
+**Immediate Next**: Fix test compilation issues, verify functionality, add benchmarks
 
 ---
 
@@ -232,6 +233,110 @@
 - **Total: 66 new vector tests** (100% passing)
 
 **Verdict**: PostgreSQL vector integration complete, ready for hybrid search ✅
+
+---
+
+## 🚧 Week 5 Day 1: Hybrid Search Implementation (IN PROGRESS)
+
+### Goal: Combine vector similarity search with SQL predicates
+
+**Example Query**:
+```sql
+SELECT * FROM products
+WHERE category = 'electronics' AND price < 100
+ORDER BY embedding <-> '[...]'::vector
+LIMIT 10;
+```
+
+### Implementation Complete:
+
+**1. Design Document** (`docs/architecture/HYBRID_SEARCH_DESIGN.md`):
+- 380 lines comprehensive design
+- Three strategies: Filter-First, Vector-First, Dual-Scan
+- Cost estimation and examples
+- Implementation roadmap
+
+**2. Vector Query Planner Extensions** (`src/vector_query_planner.rs`):
+- ✅ `HybridQueryPattern` struct (vector pattern + SQL predicates)
+- ✅ `HybridQueryStrategy` enum (FilterFirst, VectorFirst, DualScan)
+- ✅ `HybridQueryPattern::detect()` - detects hybrid queries from SQL AST
+- ✅ `estimate_selectivity()` - heuristic-based SQL predicate selectivity
+- ✅ `plan_hybrid()` - chooses optimal strategy based on selectivity
+  - < 10% selectivity → Filter-First
+  - > 50% selectivity → Vector-First (3x over-fetch)
+  - 10-50% → Dual-Scan (Phase 2, currently falls back to Filter-First)
+
+**3. SQL Engine Integration** (`src/sql_engine.rs`):
+- ✅ Added hybrid query detection in `execute_select()`
+- ✅ `execute_hybrid_query()` - main orchestration method
+- ✅ `execute_hybrid_filter_first()` - SQL predicates → vector search
+  - Executes WHERE clause using ALEX index
+  - Reranks filtered rows by vector distance
+  - Returns top-k nearest neighbors
+- ✅ `execute_hybrid_vector_first()` - Vector search → SQL filter
+  - Vector search with over-fetch (k * expansion_factor)
+  - Applies SQL predicates to candidates
+  - Returns top-k after filtering
+
+**4. Query Flow**:
+```
+User SQL Query
+  ↓
+Parse & Detect Hybrid Pattern
+  ↓
+Estimate SQL Predicate Selectivity
+  ↓
+Choose Strategy (Filter-First vs Vector-First)
+  ↓
+Execute Hybrid Query
+  ↓
+Return Ranked Results
+```
+
+### Status:
+
+**Completed**:
+- ✅ Hybrid query pattern detection
+- ✅ Selectivity estimation (heuristic-based)
+- ✅ Filter-First strategy (100% implemented)
+- ✅ Vector-First strategy (100% implemented)
+- ✅ SQL engine integration
+- ✅ Compiles successfully (0 errors, only warnings)
+
+**In Progress**:
+- 🚧 Integration tests (10+ tests written, fixing compilation issues)
+- 🚧 Test data setup helpers
+
+**Pending** (Week 5 Days 2-6):
+- [ ] Fix test compilation (Value enum variants)
+- [ ] Verify Filter-First correctness
+- [ ] Verify Vector-First correctness
+- [ ] Edge case testing (empty results, large k, etc.)
+- [ ] Benchmark: Filter-First vs Vector-First
+- [ ] Benchmark: Hybrid vs naive baseline
+- [ ] Add Dual-Scan parallel execution (Phase 2)
+- [ ] Document hybrid search in user guide
+
+### Files Changed (Week 5 Day 1):
+
+1. `docs/architecture/HYBRID_SEARCH_DESIGN.md` (NEW, 380 lines)
+2. `src/vector_query_planner.rs` (+220 lines)
+   - HybridQueryPattern, HybridQueryStrategy
+   - Selectivity estimation
+   - Strategy selection
+3. `src/sql_engine.rs` (+240 lines)
+   - Hybrid query detection
+   - Filter-First execution
+   - Vector-First execution
+4. `tests/test_hybrid_search.rs` (NEW, 400+ lines)
+   - 10 integration tests (pending fixes)
+
+### Next Steps (Week 5 Day 2):
+
+1. Fix test compilation issues (Value enum, Catalog API)
+2. Run and verify all hybrid search tests pass
+3. Add benchmark comparing strategies
+4. Document performance characteristics
 
 ---
 

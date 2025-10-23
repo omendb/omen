@@ -4,11 +4,10 @@
 //! - HNSW+BQ index scan for large tables
 //! - Sequential scan for small tables or when no index exists
 
-use crate::value::Value;
 use crate::vector::VectorValue;
 use crate::vector_operators::VectorOperator;
 use anyhow::{anyhow, Result};
-use sqlparser::ast::{Expr, OrderByExpr, Query};
+use sqlparser::ast::{Expr, OrderByExpr};
 
 /// Vector query pattern detection result
 #[derive(Debug, Clone, PartialEq)]
@@ -27,6 +26,81 @@ pub struct VectorQueryPattern {
 
     /// Whether to use ascending or descending order
     pub ascending: bool,
+}
+
+/// Hybrid query pattern combining vector search with SQL predicates
+#[derive(Debug, Clone, PartialEq)]
+pub struct HybridQueryPattern {
+    /// Vector similarity search pattern
+    pub vector_pattern: VectorQueryPattern,
+
+    /// SQL filter predicates from WHERE clause
+    pub sql_predicates: Expr,
+
+    /// Table name
+    pub table_name: String,
+}
+
+/// Hybrid query execution strategy
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HybridQueryStrategy {
+    /// Execute SQL predicates first, then vector search on filtered set
+    /// Best for highly selective filters (< 10% of rows)
+    FilterFirst,
+
+    /// Execute vector search first, then apply SQL predicates
+    /// Best for non-selective filters (> 50% of rows)
+    VectorFirst {
+        /// Over-fetch factor (fetch k * expansion candidates)
+        expansion_factor: usize,
+    },
+
+    /// Execute both in parallel and merge results
+    /// Best for medium selectivity (10-50% of rows)
+    DualScan,
+}
+
+impl HybridQueryPattern {
+    /// Detect hybrid query pattern from SQL query
+    ///
+    /// # Arguments
+    /// * `table_name` - Name of the table being queried
+    /// * `where_clause` - Optional WHERE clause
+    /// * `order_by` - ORDER BY expressions
+    /// * `limit` - LIMIT value
+    ///
+    /// # Returns
+    /// HybridQueryPattern if both vector ORDER BY and WHERE clause exist, None otherwise
+    pub fn detect(
+        table_name: String,
+        where_clause: Option<&Expr>,
+        order_by: &[OrderByExpr],
+        limit: Option<usize>,
+    ) -> Result<Option<Self>> {
+        // First, try to detect vector query pattern
+        let vector_pattern = match VectorQueryPattern::detect(order_by, limit)? {
+            Some(pattern) => pattern,
+            None => return Ok(None), // Not a vector query
+        };
+
+        // Check if WHERE clause exists (required for hybrid)
+        let sql_predicates = match where_clause {
+            Some(expr) => expr.clone(),
+            None => return Ok(None), // No WHERE clause = pure vector query
+        };
+
+        // Both vector pattern and WHERE clause exist = hybrid query
+        Ok(Some(HybridQueryPattern {
+            vector_pattern,
+            sql_predicates,
+            table_name,
+        }))
+    }
+
+    /// Validate that this hybrid pattern can be executed
+    pub fn validate(&self) -> Result<()> {
+        self.vector_pattern.validate()
+    }
 }
 
 impl VectorQueryPattern {
@@ -154,6 +228,116 @@ impl VectorQueryPlanner {
         Self {
             min_table_size_for_index,
             default_expansion,
+        }
+    }
+
+    /// Estimate selectivity of SQL predicate (returns fraction of rows that match)
+    ///
+    /// # Arguments
+    /// * `predicate` - SQL WHERE expression
+    /// * `table_size` - Total number of rows in table
+    /// * `primary_key` - Name of the primary key column
+    ///
+    /// # Returns
+    /// Estimated selectivity (0.0 to 1.0)
+    pub fn estimate_selectivity(
+        &self,
+        predicate: &Expr,
+        table_size: usize,
+        primary_key: &str,
+    ) -> f64 {
+        use sqlparser::ast::BinaryOperator;
+
+        match predicate {
+            // Primary key equality: 1 row (very selective)
+            Expr::BinaryOp { left, op, right } if matches!(op, BinaryOperator::Eq) => {
+                if let Expr::Identifier(col) = left.as_ref() {
+                    if col.value == primary_key {
+                        return 1.0 / table_size as f64;
+                    }
+                }
+                // Non-PK equality: assume 1% selectivity
+                0.01
+            }
+
+            // Primary key range (>, >=, <, <=): estimate 10% for single bound
+            Expr::BinaryOp { left, op, .. }
+                if matches!(
+                    op,
+                    BinaryOperator::Gt
+                        | BinaryOperator::GtEq
+                        | BinaryOperator::Lt
+                        | BinaryOperator::LtEq
+                ) =>
+            {
+                if let Expr::Identifier(col) = left.as_ref() {
+                    if col.value == primary_key {
+                        return 0.10; // Assume 10% of rows for single bound
+                    }
+                }
+                // Non-PK range: assume 20% selectivity
+                0.20
+            }
+
+            // AND: multiply selectivities (assumes independence)
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::And,
+                right,
+            } => {
+                let left_sel = self.estimate_selectivity(left, table_size, primary_key);
+                let right_sel = self.estimate_selectivity(right, table_size, primary_key);
+                left_sel * right_sel
+            }
+
+            // OR: add selectivities (capped at 1.0)
+            Expr::BinaryOp {
+                left,
+                op: BinaryOperator::Or,
+                right,
+            } => {
+                let left_sel = self.estimate_selectivity(left, table_size, primary_key);
+                let right_sel = self.estimate_selectivity(right, table_size, primary_key);
+                (left_sel + right_sel).min(1.0)
+            }
+
+            // Default: assume 10% selectivity for unknown predicates
+            _ => 0.10,
+        }
+    }
+
+    /// Choose optimal execution strategy for hybrid query
+    ///
+    /// # Arguments
+    /// * `pattern` - Detected hybrid query pattern
+    /// * `table_size` - Number of rows in table
+    /// * `primary_key` - Name of the primary key column
+    ///
+    /// # Returns
+    /// Recommended hybrid execution strategy
+    pub fn plan_hybrid(
+        &self,
+        pattern: &HybridQueryPattern,
+        table_size: usize,
+        primary_key: &str,
+    ) -> HybridQueryStrategy {
+        // Estimate selectivity of SQL predicates
+        let selectivity =
+            self.estimate_selectivity(&pattern.sql_predicates, table_size, primary_key);
+
+        // Choose strategy based on selectivity thresholds
+        if selectivity < 0.10 {
+            // Highly selective (< 10%) → Filter-First
+            HybridQueryStrategy::FilterFirst
+        } else if selectivity > 0.50 {
+            // Low selectivity (> 50%) → Vector-First with over-fetch
+            HybridQueryStrategy::VectorFirst {
+                expansion_factor: 3, // Fetch 3x candidates to ensure k results after filtering
+            }
+        } else {
+            // Medium selectivity (10-50%) → Dual-Scan
+            // For now, fall back to Filter-First (Dual-Scan is Phase 2)
+            HybridQueryStrategy::FilterFirst
         }
     }
 
