@@ -44,7 +44,10 @@ impl<'a> HNSWIndex<'a> {
         // Parameters for high-dimensional vectors (based on research)
         let max_nb_connection = 48; // M=48 for high-dim embeddings
         let ef_construction = 200; // Balanced quality/speed
-        let nb_layer = 16.min((max_elements as f32).ln().trunc() as usize);
+
+        // CRITICAL: nb_layer MUST be 16 for graph serialization to work
+        // hnsw_rs requires nb_layer == NB_LAYER_MAX (16) for file_dump()
+        let nb_layer = 16;
 
         let index = Hnsw::<f32, DistL2>::new(
             max_nb_connection,

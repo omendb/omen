@@ -412,3 +412,7 @@ path = "src/bin/benchmark_bq_recall.rs"
 name = "benchmark_hnsw_persistence"
 path = "src/bin/benchmark_hnsw_persistence.rs"
 
+[[bin]]
+name = "test_graph_serialization"
+path = "src/bin/test_graph_serialization.rs"
+
