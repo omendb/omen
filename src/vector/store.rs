@@ -94,7 +94,11 @@ impl VectorStore {
             );
         }
 
-        if self.vectors.is_empty() {
+        // Check if we have any data (either in vectors or in HNSW)
+        let has_data = !self.vectors.is_empty() ||
+                      (self.hnsw_index.is_some() && self.hnsw_index.as_ref().unwrap().len() > 0);
+
+        if !has_data {
             return Ok(Vec::new());
         }
 

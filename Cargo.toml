@@ -416,3 +416,7 @@ path = "src/bin/benchmark_hnsw_persistence.rs"
 name = "test_graph_serialization"
 path = "src/bin/test_graph_serialization.rs"
 
+[[bin]]
+name = "benchmark_graph_serialization_100k"
+path = "src/bin/benchmark_graph_serialization_100k.rs"
+

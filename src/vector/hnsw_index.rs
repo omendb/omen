@@ -221,6 +221,9 @@ impl HNSWIndex<'static> {
         // Load HNSW graph from dump
         let hnsw = loader_static.load_hnsw::<f32, DistL2>()?;
 
+        // Get the number of vectors from the loaded HNSW
+        let num_vectors = hnsw.get_nb_point();
+
         // Create HNSWIndex wrapper
         Ok(Self {
             index: hnsw,
@@ -229,7 +232,7 @@ impl HNSWIndex<'static> {
             ef_construction: 200,
             ef_search: 100,
             dimensions,
-            num_vectors: 0, // Will be updated by VectorStore
+            num_vectors,
         })
     }
 }

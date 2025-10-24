@@ -1,8 +1,65 @@
 # STATUS
 
-**Last Updated**: October 24, 2025 - Morning (Week 6 Day 2 In Progress)
-**Phase**: Week 6 Day 2 - Testing HNSW Persistence at 100K Scale
-**Status**: ✅ HNSW persistence implemented + unit tests passing. 🔄 Running 100K benchmark (slow HNSW build expected).
+**Last Updated**: October 24, 2025 - Afternoon (Week 6 Day 2)
+**Phase**: Week 6 Day 2 - HNSW Graph Serialization Complete
+**Status**: ✅ HNSW graph serialization fully implemented and tested. 🔄 Running 100K benchmark to validate <1s load (vs 30min rebuild).
+
+---
+
+## Today's Work: HNSW Graph Serialization (Week 6 Day 2)
+
+**Goal**: Fix 100K+ scale bottleneck (load time 30 minutes → <1 second)
+
+### Implementation Complete ✅
+
+**Problem**: HNSW index rebuild takes ~1800s (30 minutes) for 100K vectors
+**Solution**: Serialize/deserialize HNSW graph directly using hnsw_rs dump API
+
+**Changes**:
+1. **HNSWIndex::from_file_dump()** (`src/vector/hnsw_index.rs`):
+   - Uses `hnsw_rs::hnswio` API for graph serialization
+   - Solves lifetime issue with `Box::leak` (safe for this use case)
+   - Fixed `nb_layer = 16` requirement (hnsw_rs constraint)
+   - Gets `num_vectors` from loaded HNSW via `get_nb_point()`
+
+2. **VectorStore integration** (`src/vector/store.rs`):
+   - `save_to_disk()`: Uses `file_dump()` when HNSW exists
+   - `load_from_disk()`: Fast path (graph load) with fallback (rebuild)
+   - `knn_search()`: Checks both vectors and HNSW for data
+
+3. **Tests and benchmarks**:
+   - `test_graph_serialization.rs`: 1K vectors, roundtrip validation ✅
+   - `benchmark_graph_serialization_100k.rs`: 100K vectors (running)
+
+**Bugs Fixed**:
+- E0277: `HnswIo::new()` doesn't return Result
+- Lifetime error: Separate `impl HNSWIndex<'static>` block needed
+- nb_layer error: Must be exactly 16 for serialization
+- num_vectors = 0: Call `hnsw.get_nb_point()` after load
+- 0 query results: Check HNSW for data, not just vectors array
+
+**Test Results** (1K vectors):
+- Build: 0.17s
+- Save: 0.002s (graph + data)
+- Load: 0.002s (deserialization)
+- **75x faster** than rebuild
+- Query accuracy: 5/5 top results match (100%)
+
+**Expected Results** (100K vectors, currently testing):
+- Build: ~1800s (30 minutes)
+- Save: ~0.5s (graph + data)
+- Load: <1s (vs 1800s rebuild)
+- **Expected: 1800x improvement**
+- Query latency: <15ms p95
+
+**Status**: ✅ Implementation complete, 🔄 100K benchmark running
+
+**Files Modified**:
+- `docs/architecture/HNSW_GRAPH_SERIALIZATION_RESEARCH.md` (300+ lines)
+- `src/vector/hnsw_index.rs` (added from_file_dump, fixed nb_layer)
+- `src/vector/store.rs` (updated save/load, fixed knn_search)
+- `src/bin/test_graph_serialization.rs` (NEW - 112 lines)
+- `src/bin/benchmark_graph_serialization_100k.rs` (NEW - 181 lines)
 
 ---
 
