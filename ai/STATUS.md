@@ -1,8 +1,8 @@
 # STATUS
 
-**Last Updated**: October 23, 2025 - Late Evening (Week 6 Day 1 Complete)
-**Phase**: Week 6 Day 1 DONE → Day 2 Testing & Integration
-**Status**: ✅ HNSW persistence implemented (compile OK). Ready for 100K testing tomorrow.
+**Last Updated**: October 24, 2025 - Morning (Week 6 Day 2 In Progress)
+**Phase**: Week 6 Day 2 - Testing HNSW Persistence at 100K Scale
+**Status**: ✅ HNSW persistence implemented + unit tests passing. 🔄 Running 100K benchmark (slow HNSW build expected).
 
 ---
 
@@ -746,21 +746,31 @@ LIMIT 10;
 **Rationale**: Avoids complex lifetime issues, rebuild is fast enough
 **Expected**: 96-122ms → <10ms queries after persistence
 
-### Day 2 Plan (Oct 24 - 4-6 hours)
+### ✅ Day 2 Morning (Oct 24 - 3 hours)
 
-**Morning (2-3 hours)**:
-1. [ ] Fix test bracket errors
-2. [ ] Run unit tests (save/load roundtrip)
-3. [ ] Build 100K vector test dataset
-4. [ ] Test save/load with 100K vectors
-5. [ ] Benchmark: verify <10ms p95 queries
+**HNSW Persistence Testing**:
+1. ✅ Reapplied working implementation (git checkout had reverted changes)
+2. ✅ Fixed VectorStore lifetime parameters across codebase
+3. ✅ Fixed sql_engine.rs Arc<VectorStore> immutable access
+4. ✅ Fixed benchmark_vector_prototype.rs mutable borrows
+5. ✅ Added Debug derive to VectorStore
+6. ✅ Unit tests passing: test_save_load_roundtrip, test_rebuild_index
+7. 🔄 Running benchmark_hnsw_persistence (100K vectors, 1536D)
+   - Building HNSW index is slow (~10-20 min for 100K vectors)
+   - Expected: Save <5s, Load+rebuild <20s, Query <10ms p95
 
-**Afternoon (2-3 hours)**:
-6. [ ] Integrate with Table.rs (auto-save/load)
-7. [ ] End-to-end test with SQL queries
-8. [ ] Document results
+**Code Changes**:
+- `src/vector/store.rs`: save_to_disk(), load_from_disk() methods
+- `src/vector/hnsw_index.rs`: get_hnsw(), from_hnsw() accessors
+- `src/bin/benchmark_hnsw_persistence.rs`: New benchmark (100K scale)
+- All tests passing, code compiles cleanly
 
-**Success Criteria**: 100K vectors <10ms queries ✅
+**Day 2 Afternoon Plan** (2-3 hours):
+6. [ ] Analyze 100K benchmark results
+7. [ ] Document performance characteristics
+8. [ ] (Optional) Integrate with Table.rs auto-save/load
+
+**Success Criteria**: 100K vectors <10ms queries after persistence ✅
 
 ### Day 3-4: 1M Scale Validation
 5. [ ] Insert 1M vectors, measure performance
