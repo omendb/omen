@@ -1,7 +1,7 @@
 # OmenDB Server Development Context
 
 **Repository**: omendb-server (PostgreSQL-compatible Vector Database)
-**Last Updated**: October 22, 2025 - STRATEGIC DECISIONS FINALIZED
+**Last Updated**: October 23, 2025 - Week 5 Complete, Week 6 Critical Path
 **License**: Elastic License 2.0 (source-available, self-hostable)
 
 ## Product Overview
@@ -63,12 +63,12 @@
 
 ## Current Status
 
-**Product**: PostgreSQL-compatible vector database with learned index (ALEX)
-**Achievement**: Technology foundation ready for vectors (ALEX, PostgreSQL protocol, MVCC, 28x memory efficiency)
-**Status**: STRATEGIC PIVOT → Vector database prototyping (Week 1-2)
-**Stack**: Rust (Multi-level ALEX + PostgreSQL protocol + RocksDB + MVCC + LRU cache)
-**Phase**: Vector foundation prototyping → 6 months to production-ready
-**Priority**: 🚨 Validate ALEX for high-dimensional vectors (Week 1-2)
+**Product**: PostgreSQL-compatible vector database (HNSW + Binary Quantization)
+**Achievement**: Week 5 complete - Hybrid search working at <50K scale
+**Status**: Week 6 CRITICAL PATH → Fix 100K+ persistence bottleneck (2-3 days)
+**Stack**: Rust (HNSW + Binary Quantization + PostgreSQL protocol + RocksDB + MVCC)
+**Phase**: Week 6/8 → Fix persistence → Validate 1M scale → Benchmarks vs pgvector
+**Priority**: 🚨 Persisted HNSW index (100K vectors: 96-122ms → <10ms)
 
 ## Technical Core
 
@@ -420,28 +420,32 @@ cargo build --release            # Optimized build
 
 ---
 
-## Immediate Next Steps (This Week)
+## Immediate Next Steps (Week 6: Oct 24-30)
 
-### Critical Priority: Vector Prototype & Validation
+### 🔥 CRITICAL: Fix 100K+ Scale Bottleneck
 
-**Week 1 (Oct 22-28): ALEX Vector Prototype**
-1. [ ] Research pgvector implementation (GitHub: pgvector/pgvector)
-2. [ ] Design vector(N) data type in Rust
-3. [ ] Prototype ALEX for 1536-dim vectors (100K-1M vectors)
-4. [ ] Measure: Memory usage, query latency, index build time
-5. [ ] **Go/No-Go**: If ALEX doesn't work → pivot to HNSW algorithm
+**Days 1-2: Persisted HNSW Index** (BLOCKER)
+1. [ ] Implement hnsw_rs serialization (dump/reload via hnswio module)
+2. [ ] Add persistence to VectorStore (save/load graph + data)
+3. [ ] Test 100K vectors: 96-122ms → <10ms (10-15x improvement expected)
+4. [ ] Auto-rebuild on first query if index missing
 
-**Week 1 (Oct 22-28): Customer Validation**
-1. [ ] Identify 50 companies using pgvector (search GitHub, LangChain repos)
-2. [ ] Draft cold email: "Building pgvector that scales to 100M vectors"
-3. [ ] Send 20 emails (target 5 responses)
-4. [ ] Schedule 3-5 customer calls
-5. [ ] **Validate**: Pain point is real, willingness to pay $29-99/month
+**Days 3-4: 1M Scale Validation**
+5. [ ] Insert 1M vectors (1536D), measure performance
+6. [ ] Expected: <15ms p95 queries, <15GB memory
+7. [ ] Document: Scaling characteristics, any new bottlenecks
+8. [ ] Validate: Linear scaling from 10K → 100K → 1M
 
-**Decision Point** (End of Week 1):
-- ✅ If ALEX works + 3+ customer validations → Proceed with vector DB
-- ❌ If ALEX doesn't work → Pivot to HNSW algorithm
-- ❌ If no customer interest → Reconsider vector market
+**Days 5-7: MN-RU Updates** (Optional)
+9. [ ] Research MN-RU algorithm (ArXiv 2407.07871)
+10. [ ] Implement multi-neighbor replaced updates
+11. [ ] Test insert/delete performance, graph quality
+12. [ ] Benchmark mixed workload (50% reads, 50% writes)
+
+**Success Criteria** (Week 6):
+- ✅ 100K vectors <10ms p95 queries (vs current 96-122ms)
+- ✅ 1M vectors <15ms p95 queries
+- ✅ Persisted HNSW working (no rebuild on restart)
 
 ---
 

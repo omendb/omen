@@ -10,6 +10,7 @@
 use anyhow::Result;
 use hnsw_rs::hnsw::Hnsw;
 use hnsw_rs::prelude::*;
+use std::fmt;
 
 /// HNSW index for high-dimensional vectors
 pub struct HNSWIndex<'a> {
@@ -144,9 +145,44 @@ impl<'a> HNSWIndex<'a> {
         }
     }
 
-    // TODO: Serialization methods (defer to Day 3 after basic integration works)
-    // pub fn to_bytes(&self) -> Result<Vec<u8>>
-    // pub fn from_bytes(bytes: &[u8], dimensions: usize) -> Result<Self>
+    /// Get reference to underlying HNSW index (for serialization)
+    pub fn get_hnsw(&self) -> &Hnsw<'a, f32, DistL2> {
+        &self.index
+    }
+
+    /// Get mutable reference to underlying HNSW index (for deserialization)
+    pub fn get_hnsw_mut(&mut self) -> &mut Hnsw<'a, f32, DistL2> {
+        &mut self.index
+    }
+
+    /// Create HNSWIndex from existing Hnsw struct (for deserialization)
+    pub fn from_hnsw(
+        index: Hnsw<'a, f32, DistL2>,
+        max_elements: usize,
+        dimensions: usize,
+    ) -> Self {
+        Self {
+            index,
+            max_elements,
+            max_nb_connection: 48, // Default M
+            ef_construction: 200,  // Default ef_construction
+            ef_search: 100,        // Default ef_search
+            dimensions,
+            num_vectors: 0, // Will be updated by VectorStore
+        }
+    }
+}
+
+impl<'a> fmt::Debug for HNSWIndex<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HNSWIndex")
+            .field("max_elements", &self.max_elements)
+            .field("max_nb_connection", &self.max_nb_connection)
+            .field("ef_construction", &self.ef_construction)
+            .field("ef_search", &self.ef_search)
+            .field("dimensions", &self.dimensions)
+            .finish()
+    }
 }
 
 /// HNSW index parameters

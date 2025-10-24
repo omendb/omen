@@ -366,21 +366,41 @@ omendb -c "SELECT COUNT(*) FROM embeddings;"
 
 ---
 
-## Immediate Next Steps (Week 3: Oct 23-30)
+## 🔥 CRITICAL PATH: Week 6 (Oct 24-30)
 
-**Binary Quantization Implementation:**
-1. [ ] Research RaBitQ algorithm (SIGMOD 2024 paper)
-2. [ ] Implement float32 → binary conversion
-3. [ ] Integrate with existing HNSW index
-4. [ ] Benchmark memory reduction (target: 24x)
-5. [ ] Validate recall >95% with reranking
+**BLOCKER**: Persisted HNSW Index (100K+ scale unusable: 96-122ms → target <10ms)
 
-**Success Criteria:**
-- ✅ 95%+ recall maintained
-- ✅ 10GB for 10M vectors (vs 170GB unquantized)
-- ✅ 2-5x query speedup
+### Days 1-2: Persisted HNSW Index ⭐ HIGHEST PRIORITY
+1. [ ] Research hnsw_rs serialization (hnswio module, dump/reload)
+2. [ ] Implement graph persistence:
+   - [ ] Add dump() method to VectorStore (save to files)
+   - [ ] Add load() method to VectorStore (reload from files)
+   - [ ] Store in RocksDB column family OR use file-based storage
+3. [ ] Test 100K vectors:
+   - [ ] Before: 96-122ms queries
+   - [ ] After: <10ms queries (10-15x improvement)
+4. [ ] Implement auto-rebuild on first query (if index missing)
 
-**Timeline:** 7 days to working BQ prototype
+**Success Criteria**: 100K vectors <10ms p95 queries
+
+### Days 3-4: 1M Scale Validation
+5. [ ] Insert 1M vectors (1536D)
+6. [ ] Measure performance:
+   - [ ] Query latency (p50, p95, p99)
+   - [ ] Memory usage (target <15GB with quantization)
+   - [ ] Build time (target <10 minutes)
+7. [ ] Document scaling characteristics
+8. [ ] Identify any new bottlenecks
+
+**Success Criteria**: 1M vectors <15ms p95 queries
+
+### Days 5-7: MN-RU Updates (Optional if time)
+9. [ ] Research MN-RU algorithm (ArXiv 2407.07871)
+10. [ ] Implement multi-neighbor replaced updates
+11. [ ] Test insert/delete performance
+12. [ ] Benchmark mixed workload
+
+**Success Criteria**: Production-ready write performance
 
 ---
 
