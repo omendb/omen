@@ -941,7 +941,14 @@ impl SqlEngine {
         // Search HNSW for top candidates
         use crate::vector::Vector;
         let query = Vector::new(query_vector.data().to_vec());
-        let hnsw_results = vector_store.search_cached(&query, candidates_k)?;
+
+        // Since we need mutable access for search (may rebuild index), we need to handle Arc properly
+        // For now, use the immutable brute-force fallback if index is available
+        let hnsw_results = if let Some(ref index) = vector_store.hnsw_index {
+            index.search(&query.data, candidates_k)?
+        } else {
+            vector_store.knn_search_brute_force(&query, candidates_k)?
+        };
 
         debug!(
             "HNSW search found {} candidates from {} vectors",

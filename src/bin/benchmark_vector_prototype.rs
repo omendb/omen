@@ -56,7 +56,7 @@ fn benchmark_insertion(num_vectors: usize, dim: usize) {
     }
 }
 
-fn benchmark_query(store: &VectorStore, num_queries: usize, k: usize) {
+fn benchmark_query(store: &mut VectorStore, num_queries: usize, k: usize) {
     println!("\n=== Query Benchmark: {} queries, k={} ===", num_queries, k);
 
     let dim = if store.len() > 0 {
@@ -108,7 +108,7 @@ fn main() {
         let vector = generate_random_vector(1536);
         store.insert(vector);
     }
-    benchmark_query(&store, 100, 10);
+    benchmark_query(&mut store, 100, 10);
     benchmark_recall(&store, 50, 10);
 
     // Test 2: 100K vectors (medium scale)
@@ -120,7 +120,7 @@ fn main() {
         let vector = generate_random_vector(1536);
         store.insert(vector);
     }
-    benchmark_query(&store, 100, 10);
+    benchmark_query(&mut store, 100, 10);
     benchmark_recall(&store, 50, 10);
 
     // Test 3: 1M vectors (large scale) - commented out for quick iteration
@@ -134,7 +134,7 @@ fn main() {
         let vector = generate_random_vector(1536);
         store.insert(vector);
     }
-    benchmark_query(&store, 100, 10);
+    benchmark_query(&mut store, 100, 10);
     benchmark_recall(&store, 50, 10);
     */
 
