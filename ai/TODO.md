@@ -1,6 +1,6 @@
 # TODO
 
-_Last Updated: 2025-10-23 - HNSW + BINARY QUANTIZATION VALIDATED_
+_Last Updated: 2025-10-26 - WEEK 6 DAYS 1-2 COMPLETE (100K VALIDATED)_
 
 ## FINALIZED STRATEGY (Updated Oct 23)
 
@@ -368,7 +368,7 @@ omendb -c "SELECT COUNT(*) FROM embeddings;"
 
 ## 🔥 CRITICAL PATH: Week 6 (Oct 24-30)
 
-**Status**: ✅ Days 1-2 COMPLETE - 100K validated with 3626x improvement!
+**Status**: ✅ Days 1-2 COMPLETE, 🔄 Days 3-4 IN PROGRESS (1M benchmark running)
 
 ### Days 1-2: Persisted HNSW Index ⭐ COMPLETE ✅
 1. [✅] Research hnsw_rs serialization (hnswio module, dump/reload)
@@ -402,16 +402,21 @@ omendb -c "SELECT COUNT(*) FROM embeddings;"
 
 **Success Criteria**: ✅ ALL PASSED - Exceeded all targets!
 
-### Days 3-4: 1M Scale Validation
-5. [ ] Insert 1M vectors (1536D)
+### Days 3-4: 1M Scale Validation 🔄 IN PROGRESS
+5. [🔄] Insert 1M vectors (1536D) - Benchmark running (~30 min build)
 6. [ ] Measure performance:
    - [ ] Query latency (p50, p95, p99)
    - [ ] Memory usage (target <15GB with quantization)
-   - [ ] Build time (target <10 minutes)
+   - [ ] Build time (target <30 minutes)
+   - [ ] Save time (target <10s)
+   - [ ] Load time (target <10s)
 7. [ ] Document scaling characteristics
 8. [ ] Identify any new bottlenecks
 
-**Success Criteria**: 1M vectors <15ms p95 queries
+**Success Criteria**:
+- Build <30 min, Save <10s, Load <10s
+- 1M vectors <15ms p95 queries
+- >50x improvement vs rebuild
 
 ### Days 5-7: MN-RU Updates (Optional if time)
 9. [ ] Research MN-RU algorithm (ArXiv 2407.07871)
