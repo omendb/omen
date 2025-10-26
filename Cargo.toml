@@ -420,3 +420,7 @@ path = "src/bin/test_graph_serialization.rs"
 name = "benchmark_graph_serialization_100k"
 path = "src/bin/benchmark_graph_serialization_100k.rs"
 
+[[bin]]
+name = "benchmark_1m_scale_validation"
+path = "src/bin/benchmark_1m_scale_validation.rs"
+
