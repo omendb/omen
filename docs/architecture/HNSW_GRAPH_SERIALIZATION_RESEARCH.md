@@ -288,11 +288,22 @@ impl HNSWIndex<'static> {
 - Query accuracy: 100% (5/5 top results match)
 - Query latency: Identical before/after load
 
-**100K vectors (1536D) - Testing in progress**:
-- Build time: ~1800s (30 minutes, expected)
-- Save time: Expected ~0.5s
-- Load time: Expected <1s (vs 1800s rebuild)
-- **Expected improvement**: ~1800x faster
+**100K vectors (1536D) - VALIDATED ✅** (October 26, 2025):
+- Build time: 1806.43s (~30 minutes)
+- Save time: 0.699s (graph + data)
+- Load time: 0.498s (graph deserialization)
+- **Actual improvement**: **3626x faster than rebuild!**
+- Query latency (before): 10.33ms avg (97 QPS)
+- Query latency (after): 9.45ms avg (106 QPS)
+- Query performance change: -8.5% (FASTER after reload!)
+- Disk usage: 743.74 MB (127 MB graph + 616 MB data)
+
+**All Pass/Fail Criteria: ✅ PASS**
+- ✅ Save time <2s (got 0.699s)
+- ✅ Load time <5s (got 0.498s - 10x under target!)
+- ✅ >100x improvement (got 3626x - 36x better than target!)
+- ✅ Query latency <20ms (got 9.45ms)
+- ✅ Query performance within 20% (improved by 8.5%!)
 
 ### Key Insights:
 
@@ -302,7 +313,7 @@ impl HNSWIndex<'static> {
 
 3. **Vectors can be empty**: When loading from graph dump, the `vectors` array is empty but HNSW contains the data. All query logic must check HNSW.
 
-4. **Fast path works**: For 1K vectors, we already see 75x improvement. Expecting 1800x for 100K.
+4. **Fast path works**: Validated at both scales - 75x for 1K vectors, **3626x for 100K vectors**. Scales linearly with build time!
 
 ### Files Modified:
 
@@ -314,5 +325,6 @@ impl HNSWIndex<'static> {
 
 ---
 
-**Status**: ✅ Implementation complete and tested
-**Next**: Validate 100K results, then proceed to 1M scale testing
+**Status**: ✅ Implementation complete and VALIDATED at 100K scale
+**Achievement**: 3626x performance improvement (0.498s load vs 1806s rebuild)
+**Next**: Proceed to 1M scale validation (Week 6 Days 3-4)

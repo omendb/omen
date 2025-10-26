@@ -368,9 +368,9 @@ omendb -c "SELECT COUNT(*) FROM embeddings;"
 
 ## 🔥 CRITICAL PATH: Week 6 (Oct 24-30)
 
-**Status**: Day 2 - Graph serialization complete, testing at 100K scale
+**Status**: ✅ Days 1-2 COMPLETE - 100K validated with 3626x improvement!
 
-### Days 1-2: Persisted HNSW Index ⭐ HIGHEST PRIORITY
+### Days 1-2: Persisted HNSW Index ⭐ COMPLETE ✅
 1. [✅] Research hnsw_rs serialization (hnswio module, dump/reload)
    - Completed: 300+ line research doc
    - Solution: Box::leak for 'static lifetime, nb_layer = 16
@@ -379,10 +379,10 @@ omendb -c "SELECT COUNT(*) FROM embeddings;"
    - [✅] Update save_to_disk() to use file_dump()
    - [✅] Update load_from_disk() with fast path
    - [✅] Fixed knn_search to check HNSW for data
-3. [🔄] Test 100K vectors:
+3. [✅] Test 100K vectors:
    - [✅] 1K vectors: 0.002s load (75x faster than rebuild)
-   - [🔄] 100K vectors: Building now (40K/100K inserted)
-   - Expected: <1s load (vs 1800s rebuild = 1800x improvement)
+   - [✅] 100K vectors: 0.498s load (3626x faster than rebuild!)
+   - All pass/fail criteria exceeded
 4. [✅] Auto-rebuild fallback implemented (in load_from_disk)
 
 **Test Results (1K vectors)**:
@@ -391,12 +391,16 @@ omendb -c "SELECT COUNT(*) FROM embeddings;"
 - Load: 0.002s (deserialize)
 - Query accuracy: 100% (5/5 top results match)
 
-**Expected Results (100K vectors)**:
-- Build: ~1800s (30 minutes)
-- Save: ~0.5s (graph + data)
-- Load: <1s (vs 1800s rebuild)
+**Actual Results (100K vectors)** - VALIDATED ✅:
+- Build: 1806.43s (~30 minutes)
+- Save: 0.699s (graph + data)
+- Load: 0.498s (deserialize)
+- **Improvement: 3626x faster than rebuild!**
+- Query (before): 10.33ms avg (97 QPS)
+- Query (after): 9.45ms avg (106 QPS) - 8.5% faster!
+- Disk: 743.74 MB (127 MB graph + 616 MB data)
 
-**Success Criteria**: 100K vectors <1s load time (vs 30min rebuild)
+**Success Criteria**: ✅ ALL PASSED - Exceeded all targets!
 
 ### Days 3-4: 1M Scale Validation
 5. [ ] Insert 1M vectors (1536D)
