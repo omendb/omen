@@ -1,7 +1,7 @@
 # OmenDB Server Development Context
 
 **Repository**: omendb-server (PostgreSQL-compatible Vector Database)
-**Last Updated**: October 26, 2025 - Week 6 Days 1-2 Complete, Days 3-4 In Progress
+**Last Updated**: October 27, 2025 - Week 6 Days 1-4 Nearly Complete (Parallel Building + 1M Validation)
 **License**: Elastic License 2.0 (source-available, self-hostable)
 
 ## Product Overview
@@ -64,11 +64,12 @@
 ## Current Status
 
 **Product**: PostgreSQL-compatible vector database (HNSW + Binary Quantization)
-**Achievement**: Week 6 Days 1-2 COMPLETE - 100K graph serialization validated (3626x improvement!)
-**Status**: Week 6 Days 3-4 IN PROGRESS → 1M scale validation running
+**Achievement**: Week 6 Days 1-4 NEARLY COMPLETE
+  - Days 1-2: Graph serialization (3626x improvement at 100K)
+  - Days 3-4: Parallel building (4.64x speedup on 10K, 1M validation running on Fedora 24-core)
 **Stack**: Rust (HNSW + Binary Quantization + PostgreSQL protocol + RocksDB + MVCC)
-**Phase**: Week 6/8 → Validate 1M scale → Optimize → Benchmarks vs pgvector
-**Current**: Running 1M benchmark (~30 min build + save/load/query testing)
+**Phase**: Week 6/8 → Parallel building validated → 1M scale validation running → Next: pgvector benchmarks
+**Priority**: ⏳ 1M parallel benchmark on Fedora (expected 7-9x speedup vs 7h sequential)
 
 ## Technical Core
 
@@ -438,19 +439,25 @@ cargo build --release            # Optimized build
 - Disk: 743.74 MB (127 MB graph + 616 MB data)
 - **All pass/fail criteria exceeded ✅**
 
-### 🔄 Days 3-4: 1M Scale Validation (IN PROGRESS)
-5. [🔄] Running benchmark: 1M vectors (1536D), ~30 min build
-6. [ ] Measure: Query latency (p50, p95, p99), memory usage, disk usage
-7. [ ] Document: Scaling characteristics, any new bottlenecks
-8. [ ] Validate: Linear scaling from 100K → 1M
+### ⏳ Days 3-4: Parallel Building + 1M Validation (NEARLY COMPLETE)
+5. [✅] Implemented parallel building (HNSWIndex::batch_insert + VectorStore::batch_insert)
+6. [✅] Tested correctness: 10K vectors, 4.64x speedup, 100% query success
+7. [✅] Edge cases handled: empty batch, single vector, large batches, dimension validation
+8. [⏳] Running 1M benchmark on Fedora 24-core (expected 7-9x speedup vs 7h sequential)
 
-**Expected Results** (1M vectors):
-- Build: <30 minutes
+**Implementation Results** (10K vectors):
+- Sequential: 1,851 vec/sec
+- Parallel: 8,595 vec/sec
+- **Speedup: 4.64x** (exceeds 2-4x target!)
+- Query success: 100% for both methods
+- Edge cases: All handled
+
+**Expected 1M Results** (running on Fedora now):
+- Build: ~45-60 mins with 24 cores (vs 7 hours sequential = 7-9x faster!)
 - Save: <10s
-- Load: <10s (vs ~5-10 hour rebuild)
+- Load: <10s (vs ~2 hour rebuild)
 - Query p95: <15ms
 - Memory: <15GB
-- Improvement: >50x vs rebuild
 
 ### Days 5-7: MN-RU Updates (Optional)
 9. [ ] Research MN-RU algorithm (ArXiv 2407.07871)
@@ -460,7 +467,8 @@ cargo build --release            # Optimized build
 
 **Success Criteria** (Week 6):
 - ✅ 100K vectors <10ms p95 queries (achieved 9.45ms!)
-- [ ] 1M vectors <15ms p95 queries (testing now)
+- ✅ Parallel building 2-4x speedup (achieved 4.64x!)
+- ⏳ 1M vectors <15ms p95 queries (testing now on Fedora)
 - ✅ Persisted HNSW working (3626x improvement validated)
 
 ---
@@ -476,11 +484,11 @@ cargo build --release            # Optimized build
 
 ---
 
-*Last Updated: October 26, 2025 - Week 6 Days 1-2 COMPLETE (100K validated)*
+*Last Updated: October 27, 2025 - Week 6 Days 1-4 NEARLY COMPLETE (Parallel Building + 1M Validation Running)*
 
 **Product**: omendb-server - Cloud/server PostgreSQL-compatible vector database
 **Companion**: omen-lite - Embedded vector database (separate repo, future)
 **Market**: $10.6B vector DB market (23.54% CAGR)
 **Timeline**: 6 months to production-ready, 12 months to $100K-500K ARR
-**Next Milestone**: 1M scale validation (Week 6 Days 3-4, in progress)
+**Next Milestone**: Complete 1M validation on Fedora (Week 6 Day 4, running now)
 **GitHub**: omendb/omendb-server
