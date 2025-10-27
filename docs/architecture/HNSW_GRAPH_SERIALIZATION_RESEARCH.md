@@ -305,6 +305,26 @@ impl HNSWIndex<'static> {
 - ✅ Query latency <20ms (got 9.45ms)
 - ✅ Query performance within 20% (improved by 8.5%!)
 
+**1M vectors (1536D) - VALIDATED ✅** (October 27, 2025):
+- Build time: 25146.41s (419 minutes = 7 hours) ⚠️
+- Build rate: 40 vectors/sec (degraded from 55 at 100K - O(n log n))
+- Save time: 4.91s (graph + data)
+- Load time: 6.02s (graph deserialization)
+- **Actual improvement**: **4175x faster than rebuild!**
+- Query latency (before): p50=13.70ms, p95=16.01ms, p99=17.10ms
+- Query latency (after): p50=12.24ms, p95=14.23ms, p99=15.26ms
+- Query performance change: -11.1% (FASTER after reload!)
+- Disk usage: 7.26 GB (1.09 GB graph + 6.16 GB data)
+
+**Pass/Fail Criteria (1M Scale): 6/7 PASS**
+- ⚠️ Build time >30 min (419 min - parallel building needed)
+- ✅ Save time <10s (got 4.91s)
+- ✅ Load time <10s (got 6.02s)
+- ✅ >50x improvement (got 4175x!)
+- ✅ Query p95 <20ms (got 14.23ms)
+- ✅ Query performance within 20% (improved by 11.1%!)
+- ✅ Disk usage <15GB (got 7.26 GB)
+
 ### Key Insights:
 
 1. **Box::leak is safe here**: The loader is needed for the lifetime of HNSW, and we only leak once per VectorStore. Memory is reclaimed on process exit.
@@ -313,7 +333,13 @@ impl HNSWIndex<'static> {
 
 3. **Vectors can be empty**: When loading from graph dump, the `vectors` array is empty but HNSW contains the data. All query logic must check HNSW.
 
-4. **Fast path works**: Validated at both scales - 75x for 1K vectors, **3626x for 100K vectors**. Scales linearly with build time!
+4. **Fast path works at all scales**:
+   - 1K vectors: 75x improvement
+   - 100K vectors: 3626x improvement
+   - 1M vectors: 4175x improvement
+   - Serialization scales linearly with build time!
+
+5. **Build time is bottleneck**: O(n log n) complexity causes degradation at scale (55→40 vec/sec). Parallel building with hnsw_rs `parallel_insert()` could provide 2-4x speedup.
 
 ### Files Modified:
 
@@ -325,6 +351,7 @@ impl HNSWIndex<'static> {
 
 ---
 
-**Status**: ✅ Implementation complete and VALIDATED at 100K scale
-**Achievement**: 3626x performance improvement (0.498s load vs 1806s rebuild)
-**Next**: Proceed to 1M scale validation (Week 6 Days 3-4)
+**Status**: ✅ Implementation complete and VALIDATED at 1M scale
+**Achievement**: 4175x performance improvement (6.02s load vs 7 hours rebuild)
+**Graph serialization**: PRODUCTION READY ✅
+**Next**: Implement parallel building (optional optimization for 2-4x faster builds)
