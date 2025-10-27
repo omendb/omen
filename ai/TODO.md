@@ -1,6 +1,6 @@
 # TODO
 
-_Last Updated: 2025-10-27 - WEEK 6 DAYS 1-4 COMPLETE (Parallel Building PRODUCTION READY)_
+_Last Updated: 2025-10-27 - WEEK 6 COMPLETE (Graph Serialization + Parallel Building + SOTA Research)_
 
 ## FINALIZED STRATEGY (Updated Oct 23)
 
@@ -122,42 +122,121 @@ _Last Updated: 2025-10-27 - WEEK 6 DAYS 1-4 COMPLETE (Parallel Building PRODUCTI
 - [ ] Index updates within transactions
 - [ ] Crash recovery (WAL replay for vectors)
 
-### Week 6-7: Optimization & Advanced Features
+### Week 6 Days 5-7: SOTA Research & Planning ✅ COMPLETE
 
-**MN-RU Update Algorithm** (July 2024 paper):
-- [ ] Implement improved HNSW updates:
-  - [ ] Fix "unreachable points" during deletions
-  - [ ] Better insertion performance
-  - [ ] Maintain recall during updates
-- [ ] Benchmark update performance:
-  - [ ] Insert throughput (vectors/sec)
-  - [ ] Delete throughput
-  - [ ] Mixed workload (50% insert, 50% query)
+**SOTA Algorithm Investigation** (Oct 27):
+- [✅] Research MN-RU (ArXiv 2407.07871) - ❌ BLOCKED by hnsw_rs limitations
+- [✅] Research SPANN/SPFresh - ⚠️ TOO COMPLEX (DiskANN-style issues)
+- [✅] Research Hybrid HNSW-IF (Vespa) - ✅ RECOMMENDED (simple, proven)
+- [✅] Research Extended RaBitQ (SIGMOD 2025) - ✅ RECOMMENDED (SOTA quantization)
+- [✅] Research NGT-QG (Yahoo) - ⚠️ ALTERNATIVE (not clearly better)
+- [✅] Document findings: `ai/research/SOTA_ALGORITHMS_INVESTIGATION_OCT2025.md`
+- [✅] Strategic decision: Target HNSW-IF + Extended RaBitQ
 
-**Parallel Index Building:**
-- [ ] Multi-threaded HNSW construction:
-  - [ ] Batch inserts (10K-100K at once)
-  - [ ] Parallel graph building
-  - [ ] Target: 85% reduction in build time (research finding)
-- [ ] Bulk loading optimization:
-  - [ ] COPY FROM for vector data
-  - [ ] Batch quantization training
-  - [ ] Target: 1M vectors in <60 seconds
+**Key Findings**:
+- MN-RU: Blocked (hnsw_rs has no delete/update methods, would require fork)
+- SPANN/SPFresh: Too complex (offline clustering, NVMe dependency, like DiskANN)
+- HNSW-IF: Simple, Vespa-proven, addresses "many workloads at many scales"
+- Extended RaBitQ: SIGMOD 2025, arbitrary compression rates (4x-32x)
 
-**Hybrid Search:**
-- [ ] Combine vector similarity + SQL filters:
-  ```sql
-  SELECT * FROM products
-  WHERE category = 'electronics' AND price < 100
-  ORDER BY embedding <-> '[...]'::vector
-  LIMIT 10;
-  ```
-- [ ] Query optimization:
-  - [ ] Filter pushdown (reduce vector search space)
-  - [ ] ALEX index for SQL predicates
-  - [ ] Combined cost estimation
+**Strategic Roadmap** (Validated):
+1. **Weeks 7-8**: pgvector benchmarks (CRITICAL - validate "10x faster" claims)
+2. **Weeks 9-10**: HNSW-IF implementation (billion-scale support)
+3. **Weeks 11-12**: Extended RaBitQ (SOTA quantization)
 
-### Week 8-9: Benchmarks & Validation
+### Week 7-8: pgvector Benchmarks ⭐ CRITICAL PATH
+
+**Goal**: Validate we can claim "10x faster than pgvector" with honest metrics
+
+**Setup**:
+- [ ] Install PostgreSQL 16 + pgvector on Mac (128GB RAM)
+- [ ] Create test dataset (1M, 10M vectors @ 1536D)
+- [ ] Configure both systems (same hardware, same data)
+
+**Benchmarks** (1M vectors, 1536D):
+- [ ] Memory comparison:
+  - [ ] OmenDB memory usage (with BQ + HNSW)
+  - [ ] pgvector memory usage (full precision + HNSW)
+  - [ ] Calculate reduction factor (target: 10-20x)
+- [ ] Query latency:
+  - [ ] OmenDB p95 latency (target: <10ms)
+  - [ ] pgvector p95 latency (expected: ~25-50ms)
+  - [ ] Calculate speedup factor (target: 3-10x)
+- [ ] Recall validation:
+  - [ ] Both systems >95% recall@10
+  - [ ] Same ef_search settings for fairness
+- [ ] Build time:
+  - [ ] OmenDB parallel build time
+  - [ ] pgvector sequential build time
+  - [ ] Calculate speedup (we have 16x, document it)
+
+**10M Scale Validation** (if 128GB sufficient):
+- [ ] Run same benchmarks at 10M scale
+- [ ] Document where we excel (<10M range likely)
+- [ ] Document scale limits (50-100M on 128GB RAM)
+
+**Deliverables**:
+- [ ] Benchmark blog post draft
+- [ ] Honest performance comparison table
+- [ ] Known limitations documented
+- [ ] Next bottleneck identified (HNSW-IF if memory-bound)
+
+**Success Criteria**:
+- ✅ Can honestly claim "10x faster than pgvector" at some scale
+- ✅ Documented where we excel and where we don't
+- ✅ Clear path to billion-scale (HNSW-IF validates need)
+
+### Week 9-10: Hybrid HNSW-IF Implementation
+
+**Goal**: Scale to billions without NVMe/clustering complexity
+
+**Approach** (Vespa-style):
+1. **Centroid Selection**: Random 20% of dataset (no clustering!)
+2. **Index Structure**:
+   - HNSW for centroids (in-memory)
+   - Posting lists for neighbors (on disk)
+3. **Search**: Two-phase
+   - Phase 1: HNSW search on centroids → top-K posting lists
+   - Phase 2: Scan posting lists on disk → refine results
+4. **Threshold**: Automatic switch at 10M vectors (configurable)
+
+**Implementation**:
+- [ ] Centroid selection (random 20% sampling)
+- [ ] Posting list storage (on-disk format)
+- [ ] Two-phase search (HNSW → disk scan)
+- [ ] Automatic mode switching (<10M in-memory, >10M hybrid)
+- [ ] Performance validation (100M-1B scale)
+
+**Success Criteria**:
+- ✅ 100M+ vectors with <128GB RAM
+- ✅ <20ms p95 queries at billion-scale
+- ✅ No NVMe/SPDK dependencies
+- ✅ Works for general use cases (not specialized)
+
+### Week 11-12: Extended RaBitQ Implementation
+
+**Goal**: SOTA quantization with arbitrary compression rates
+
+**Approach** (SIGMOD 2025):
+1. **Replace**: Current BinaryQuantization with Extended RaBitQ
+2. **Add**: Compression rate parameter (4x, 8x, 16x, 32x)
+3. **Improve**: Accuracy at same memory footprint
+4. **Maintain**: Backward compatibility with existing BQ code
+
+**Implementation**:
+- [ ] Extended RaBitQ algorithm (4x-32x compression)
+- [ ] Compression rate selection (auto-tune or user-specified)
+- [ ] Integration with HNSW-IF (if implemented)
+- [ ] Benchmarks vs current BQ (accuracy-memory tradeoff)
+
+**Success Criteria**:
+- ✅ Better recall at same memory vs current BQ
+- ✅ Flexible compression rates (4x, 8x, 16x, 32x)
+- ✅ Backward compatible with existing code
+
+**Differentiator**: SOTA quantization (SIGMOD 2025) - competitors use older methods
+
+### Week 13-14: Benchmarks & Validation
 
 **vs pgvector (1M vectors, 1536D):**
 - [ ] Setup: PostgreSQL 16 + pgvector vs OmenDB
