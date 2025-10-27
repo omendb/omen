@@ -1,6 +1,6 @@
 # TODO
 
-_Last Updated: 2025-10-27 - WEEK 6 COMPLETE (Graph Serialization + Parallel Building + SOTA Research)_
+_Last Updated: 2025-10-27 - WEEK 7 DAY 1 COMPLETE (Correctness Validation Phase Begun)_
 
 ## FINALIZED STRATEGY (Updated Oct 23)
 
@@ -144,26 +144,49 @@ _Last Updated: 2025-10-27 - WEEK 6 COMPLETE (Graph Serialization + Parallel Buil
 2. **Weeks 9-10**: HNSW-IF implementation (billion-scale support)
 3. **Weeks 11-12**: Extended RaBitQ (SOTA quantization)
 
-### Week 7-8: pgvector Benchmarks ⭐ CRITICAL PATH
+### Week 7 Day 1: Correctness Validation ✅ COMPLETE
 
-**Goal**: Validate we can claim "10x faster than pgvector" with honest metrics
+**CRITICAL PIVOT**: User feedback - "need serious verification for AI-generated database"
+**Strategy**: Validation BEFORE marketing (12-18 month timeline per VALIDATION_PLAN.md)
 
-**Setup**:
-- [ ] Install PostgreSQL 16 + pgvector on Mac (128GB RAM)
-- [ ] Create test dataset (1M, 10M vectors @ 1536D)
-- [ ] Configure both systems (same hardware, same data)
+**Phase 1: Vector Operations Correctness** (Week 7 Day 1 ✅):
+- [x] Distance calculations (L2, cosine, dot product) - 10 tests, 100% passing
+- [x] HNSW recall vs brute-force - 5 tests, 97-100% recall (exceeds 85% target)
+- [x] Binary Quantization correctness - 7 tests passing
+  - Hamming-L2 correlation: 0.67
+  - Baseline recall: 33.60% (expected for 1-bit quantization)
+  - Reranking recall: 69.80% (+35.4pp improvement)
+  - High-dimensional (1536D): 60% recall, 29.54x compression
+- [x] Added Vector::normalize() method
+- [x] Created 3 comprehensive test files (1,164 lines total)
 
-**Benchmarks** (1M vectors, 1536D):
-- [ ] Memory comparison:
-  - [ ] OmenDB memory usage (with BQ + HNSW)
-  - [ ] pgvector memory usage (full precision + HNSW)
-  - [ ] Calculate reduction factor (target: 10-20x)
-- [ ] Query latency:
-  - [ ] OmenDB p95 latency (target: <10ms)
-  - [ ] pgvector p95 latency (expected: ~25-50ms)
-  - [ ] Calculate speedup factor (target: 3-10x)
-- [ ] Recall validation:
-  - [ ] Both systems >95% recall@10
+**Files Created**:
+- `tests/test_distance_correctness.rs` (295 lines)
+- `tests/test_hnsw_recall.rs` (336 lines)
+- `tests/test_quantization_correctness.rs` (533 lines)
+
+**Key Finding**: Binary Quantization is a first-pass filter (30-40% baseline recall),
+production workflow requires reranking with full precision (65-70% recall).
+
+### Week 7 Day 2-7: Continue Validation Phase ⏳ IN PROGRESS
+
+**Goal**: Complete Phase 1-3 validation before ANY marketing/benchmarking
+
+**Remaining Phase 1 Tasks**:
+- [ ] MVCC snapshot isolation validation (65 tests already passing)
+- [ ] Crash recovery validation
+- [ ] HNSW graph connectivity verification
+
+**Phase 2: Edge Case & Failure Testing** (Weeks 7-8):
+- [ ] Resource exhaustion handling (OOM, disk full, thread exhaustion)
+- [ ] Invalid input handling (malformed vectors, NaN/Inf, SQL injection)
+- [ ] Concurrency edge cases (TSAN/ASAN validation)
+- [ ] Fuzz testing
+
+**Phase 3: Performance Validation** (Weeks 9-10):
+- [ ] Independent performance verification
+- [ ] Profile and identify bottlenecks
+- [ ] Compare with pgvector (honest, reproducible methodology)
   - [ ] Same ef_search settings for fairness
 - [ ] Build time:
   - [ ] OmenDB parallel build time
