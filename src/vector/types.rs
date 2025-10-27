@@ -86,6 +86,18 @@ impl Vector {
     pub fn l2_norm(&self) -> f32 {
         self.data.iter().map(|x| x * x).sum::<f32>().sqrt()
     }
+
+    /// Normalize vector to unit length (L2 norm = 1.0)
+    pub fn normalize(&self) -> Result<Vector> {
+        let norm = self.l2_norm();
+
+        if norm == 0.0 {
+            return Err(anyhow!("Cannot normalize zero vector"));
+        }
+
+        let normalized_data: Vec<f32> = self.data.iter().map(|x| x / norm).collect();
+        Ok(Vector::new(normalized_data))
+    }
 }
 
 #[cfg(test)]
