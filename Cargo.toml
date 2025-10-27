@@ -428,3 +428,7 @@ path = "src/bin/benchmark_1m_scale_validation.rs"
 name = "test_parallel_building"
 path = "src/bin/test_parallel_building.rs"
 
+[[bin]]
+name = "benchmark_1m_parallel"
+path = "src/bin/benchmark_1m_parallel.rs"
+

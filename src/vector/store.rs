@@ -114,7 +114,7 @@ impl VectorStore {
 
             // Log progress for large batches
             if vectors.len() >= CHUNK_SIZE {
-                let processed = (chunk_idx + 1) * CHUNK_SIZE.min(vectors.len());
+                let processed = ((chunk_idx + 1) * CHUNK_SIZE).min(vectors.len());
                 eprintln!(
                     "  Inserted {} / {} vectors ({:.1}%)",
                     processed,
