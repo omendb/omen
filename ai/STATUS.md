@@ -1,13 +1,13 @@
 # STATUS
 
-**Last Updated**: October 27, 2025 - Evening (Week 7 Day 2+ ASAN Complete ✅)
+**Last Updated**: October 27, 2025 - Late Evening (Week 7 Day 2+ Phase 2 60% ✅)
 **Phase**: Week 7 Day 2+ - Phase 2 Edge Case & Failure Testing
 **Status**:
   - ✅ Phase 1: 98% Complete (101 tests validated)
-  - 🔨 Phase 2: 50% Complete (29 tests + 40 ASAN validated)
+  - 🔨 Phase 2: 60% Complete (41 functional tests + 40 ASAN validated)
   - ✅ ASAN: 40 tests, ZERO memory safety issues
-  - **Total**: 130 tests passing (40 also validated with ASAN)
-**Next**: Resource exhaustion testing, or move to Phase 3 (performance validation)
+  - **Total**: 142 tests passing (40 also validated with ASAN)
+**Next**: Optional extreme resource tests, or move to Phase 3 (performance validation)
 
 ---
 
@@ -297,6 +297,67 @@ Ran 40 tests with ASAN instrumentation (Rust nightly, `-Z sanitizer=address`):
 
 **Status**: Memory safety validation complete for Phase 2
 **Next**: Resource exhaustion testing, or consider Phase 2 concurrency validation sufficient
+
+---
+
+## Week 7 Day 2+ Late Evening - Resource Limits & Boundaries ✅
+
+**Achievement**: Comprehensive boundary condition validation - all edge cases handled
+
+### Resource Limits Testing ✅ COMPLETE
+Created `tests/test_resource_limits.rs` (371 lines) - 12 tests covering:
+
+**Test Coverage**:
+1. ✅ **Large batch insert** (10K vectors)
+   - All vectors inserted successfully
+   - No performance degradation
+2. ✅ **Many small inserts** (5K sequential)
+   - Individual insert performance stable
+3. ✅ **Search on large datasets** (20K vectors, k=100)
+   - Query latency acceptable
+   - Result set correct
+4. ✅ **Very high dimensions** (4096D)
+   - No dimension limit issues
+   - Memory usage scales linearly
+5. ✅ **Empty operations**
+   - Empty batch insert succeeds
+   - Search on empty store returns empty
+6. ✅ **Dimension boundaries** (2D, 512D, 2048D)
+   - All dimension ranges work
+7. ✅ **k parameter boundaries** (0, 1, exact size, exceeds size)
+   - Edge cases handled correctly
+8. ✅ **Memory usage reporting**
+   - Accurate reporting (512 bytes/vector for 128D)
+   - Memory increases correctly with inserts
+9. ✅ **Duplicate vectors** (100 identical)
+   - All stored correctly
+   - Search returns exact matches (distance=0)
+10. ✅ **Mixed batch sizes** (10, 90, 900)
+    - All batch sizes work
+11. ✅ **ef_search boundaries** (10-200)
+    - All parameter values valid
+12. ✅ **Operations after HNSW built**
+    - Can continue inserting after index creation
+    - Search continues to work
+
+**Test Results**: All 12 tests passing (45.40s total runtime)
+
+**Key Findings**:
+- System handles boundary conditions gracefully
+- No crashes under stress conditions
+- Memory usage scales predictably
+- Large batch operations work efficiently
+- High-dimensional vectors (4096D) supported
+- Empty operations handled correctly (no panics)
+
+**Total Test Coverage**: 142 tests (101 Phase 1 + 41 Phase 2)
+- 20 input validation
+- 9 concurrency
+- 12 resource limits
+- 40 also validated with ASAN (zero issues)
+
+**Status**: Phase 2 Edge Case Testing 60% complete
+**Next**: Optional extreme resource exhaustion (OOM, disk full), or move to Phase 3
 
 ---
 
