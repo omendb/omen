@@ -424,3 +424,7 @@ path = "src/bin/benchmark_graph_serialization_100k.rs"
 name = "benchmark_1m_scale_validation"
 path = "src/bin/benchmark_1m_scale_validation.rs"
 
+[[bin]]
+name = "test_parallel_building"
+path = "src/bin/test_parallel_building.rs"
+

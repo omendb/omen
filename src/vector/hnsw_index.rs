@@ -88,6 +88,41 @@ impl<'a> HNSWIndex<'a> {
         Ok(id)
     }
 
+    /// Insert batch of vectors in parallel using Rayon
+    ///
+    /// This uses hnsw_rs's parallel_insert which distributes work across multiple threads.
+    /// Recommended batch size: 1000+ vectors (ideally 1000 × num_threads for best performance)
+    ///
+    /// Returns Vec of IDs for inserted vectors
+    pub fn batch_insert(&mut self, vectors: &[Vec<f32>]) -> Result<Vec<usize>> {
+        // Validate all vectors have correct dimensions
+        for (i, vector) in vectors.iter().enumerate() {
+            if vector.len() != self.dimensions {
+                anyhow::bail!(
+                    "Vector {} dimension mismatch: expected {}, got {}",
+                    i,
+                    self.dimensions,
+                    vector.len()
+                );
+            }
+        }
+
+        // Generate IDs for this batch
+        let start_id = self.num_vectors;
+        let ids: Vec<usize> = (start_id..start_id + vectors.len()).collect();
+
+        // Convert to format expected by hnsw_rs parallel_insert: &[(&Vec<T>, usize)]
+        let data: Vec<(&Vec<f32>, usize)> = vectors.iter().zip(ids.iter().copied()).collect();
+
+        // Parallel insert using hnsw_rs (uses Rayon internally)
+        self.index.parallel_insert(&data);
+
+        // Update counter
+        self.num_vectors += vectors.len();
+
+        Ok(ids)
+    }
+
     /// Search for K nearest neighbors
     ///
     /// Returns Vec<(id, distance)> sorted by distance (ascending)

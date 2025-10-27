@@ -57,6 +57,80 @@ impl VectorStore {
         Ok(id)
     }
 
+    /// Insert batch of vectors in parallel
+    ///
+    /// Automatically chunks vectors into optimal batch sizes for parallel insertion.
+    /// Uses hnsw_rs's parallel_insert with Rayon for multi-threaded building.
+    ///
+    /// Chunk size of 10,000 balances:
+    /// - Parallelization overhead (want batches large enough)
+    /// - Memory usage (smaller batches more memory-friendly)
+    /// - Progress reporting (can log after each chunk)
+    ///
+    /// Returns Vec of IDs for inserted vectors
+    pub fn batch_insert(&mut self, vectors: Vec<Vector>) -> Result<Vec<usize>> {
+        if vectors.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Validate dimensions
+        for (i, vector) in vectors.iter().enumerate() {
+            if vector.dim() != self.dimensions {
+                anyhow::bail!(
+                    "Vector {} dimension mismatch: expected {}, got {}",
+                    i,
+                    self.dimensions,
+                    vector.dim()
+                );
+            }
+        }
+
+        // Lazy initialize HNSW on first insert
+        if self.hnsw_index.is_none() {
+            let capacity = vectors.len().max(1_000_000);
+            self.hnsw_index = Some(HNSWIndex::new(capacity, self.dimensions));
+        }
+
+        let start_id = self.vectors.len();
+        let mut all_ids = Vec::with_capacity(vectors.len());
+
+        // Chunk size for parallel insertion (recommended: 1000 × num_threads)
+        // Using 10,000 as a good default (works well for 4-16 core machines)
+        const CHUNK_SIZE: usize = 10_000;
+
+        // Process in chunks for better memory management and progress tracking
+        for (chunk_idx, chunk) in vectors.chunks(CHUNK_SIZE).enumerate() {
+            // Extract vector data for HNSW
+            let vector_data: Vec<Vec<f32>> = chunk
+                .iter()
+                .map(|v| v.data.clone())
+                .collect();
+
+            // Parallel insert this chunk
+            if let Some(ref mut index) = self.hnsw_index {
+                let chunk_ids = index.batch_insert(&vector_data)?;
+                all_ids.extend(chunk_ids);
+            }
+
+            // Log progress for large batches
+            if vectors.len() >= CHUNK_SIZE {
+                let processed = (chunk_idx + 1) * CHUNK_SIZE.min(vectors.len());
+                eprintln!(
+                    "  Inserted {} / {} vectors ({:.1}%)",
+                    processed,
+                    vectors.len(),
+                    (processed as f64 / vectors.len() as f64) * 100.0
+                );
+            }
+        }
+
+        // Add vectors to storage
+        self.vectors.extend(vectors);
+
+        // Return IDs from HNSW
+        Ok(all_ids)
+    }
+
     /// Rebuild HNSW index from existing vectors
     ///
     /// This is needed when:
