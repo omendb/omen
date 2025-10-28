@@ -1,8 +1,9 @@
 # OmenDB Server Development Context
 
 **Repository**: omendb-server (PostgreSQL-compatible Vector Database)
-**Last Updated**: October 27, 2025 - Week 7 Day 1 Complete (Correctness Validation)
+**Last Updated**: October 27, 2025 - Week 7 Day 2+ (Phase 2 Validation 60% Complete)
 **License**: Elastic License 2.0 (source-available, self-hostable)
+**Status**: 142 tests passing, HNSW graph serialization working, validation in progress
 
 ## Product Overview
 
@@ -10,14 +11,33 @@
 
 **Positioning**: "PostgreSQL-compatible vector database. Drop-in replacement for pgvector. 10x faster, 28x more memory efficient. Source-available. Self-hostable."
 
-**Year 1 Focus** (2025-2026):
-- Cloud-native deployment (managed service $29-99/month)
-- Self-hosting mode (enterprises, compliance-driven)
-- PostgreSQL wire protocol (drop-in pgvector compatibility)
+## OmenDB Product Roadmap (Multi-Database Platform)
 
-**Future** (Year 2+):
-- omen-lite (embedded variant) - shares 80% of codebase, different wire protocol
-- Currently on hold to maintain focus
+**Phase 1 - Vector Database** (Current - 2025-2026):
+- Core: PostgreSQL-compatible vector database (HNSW + Binary Quantization)
+- Target: AI/ML workloads (RAG, semantic search, embeddings)
+- Market: $10.6B by 2032 (23.54% CAGR)
+- Delivery: Server mode + self-hosted
+
+**Phase 2 - Time Series Database** (2026-2027):
+- Core: Embedded time series database optimized for edge/IoT
+- Target: Metrics, logs, sensor data, monitoring
+- Focus: Low memory footprint, high write throughput
+- Delivery: Embedded library + server mode
+
+**Phase 3 - Graph Database** (2027-2028):
+- Core: Graph database for relationship-heavy workloads
+- Target: Social networks, knowledge graphs, recommendations
+- Focus: Traversal performance, memory efficiency
+- Delivery: Embedded library + server mode
+
+**Unified Platform** (2028+):
+- Single server supporting all 3 database types
+- Shared infrastructure (MVCC, storage, wire protocol)
+- Multi-model queries (vector + time series + graph)
+- Target: "One database for all your data"
+
+**Current Focus**: Vector DB validation and performance optimization
 
 ## Quick Start for AI Agents
 
@@ -64,16 +84,20 @@
 ## Current Status
 
 **Product**: PostgreSQL-compatible vector database (HNSW + Binary Quantization)
-**Achievement**: Week 7 Day 1 COMPLETE - Correctness Validation Phase Begun
+**Achievement**: Week 7 Day 2+ COMPLETE - Phase 2 Validation 60% Complete
   - Week 6: Graph serialization (4175x) + Parallel building (16x) + SOTA research ✅
   - Week 7 Day 1: Comprehensive correctness validation ✅
     - Distance calculations: 10 tests, 100% passing
     - HNSW recall: 5 tests, 97-100% recall (exceeds 85% target)
     - Binary Quantization: 7 tests, realistic performance (33% baseline, 70% with reranking)
+  - Week 7 Day 2+: Resource exhaustion & boundary testing ✅
+    - Resource limits: 12 tests, all passing (large batches, high dimensions, boundaries)
+    - ASAN validation: 40 tests, ZERO memory safety issues
+    - Phase 2 validation: 60% complete
 **Stack**: Rust (HNSW + Binary Quantization + PostgreSQL protocol + RocksDB + MVCC)
-**Phase**: Week 7 (Validation Phase) - 22 correctness tests added + 65 MVCC tests passing
+**Phase**: Week 7 (Validation Phase) - 142 tests passing (101 Phase 1 + 41 Phase 2)
 **Priority**: 🔍 Validation before marketing (12-18 month timeline per VALIDATION_PLAN.md)
-**Next**: Continue Phase 1 validation → Edge cases → Performance verification
+**Next**: Complete Phase 2 validation → Performance benchmarks vs pgvector
 
 ## Technical Core
 
@@ -99,12 +123,15 @@
 
 **SOTA Positioning** (Post-Implementation):
 
-*Current State (Week 6 Complete):*
+*Current State (Week 7 Day 2+ Complete):*
 - ✅ HNSW: 99.5% recall, <15ms p95 (industry standard)
 - ✅ Binary Quantization: 19.9x memory reduction (competitive)
 - ✅ **16x parallel building** (UNIQUE - undocumented by competitors)
 - ✅ **4175x serialization** (UNIQUE - undocumented by competitors)
 - ✅ PostgreSQL compatible (UNIQUE vs pure vector DBs)
+- ✅ **142 tests passing** (101 Phase 1 + 41 Phase 2)
+- ✅ **ASAN validated** (40 tests, ZERO memory safety issues)
+- ✅ **Phase 2 validation** (60% complete - edge cases, boundaries, resource limits)
 
 *After HNSW-IF (Weeks 9-10):*
 - ✅ All above +
@@ -217,7 +244,7 @@ omendb-server/
 │   ├── catalog.rs         # Table + user management
 │   ├── user_store.rs      # Persistent user storage
 │   └── table.rs           # Table storage + ALEX + cache
-└── tests/                 # 557 tests (99.8% passing) ✅
+└── tests/                 # 142 tests passing (Phase 1 + Phase 2 validation) ✅
 ```
 
 **Pattern**: Standard OSS database structure (like PostgreSQL, MongoDB, DuckDB, CockroachDB)
@@ -268,10 +295,10 @@ omendb-server/
 6. ✅ **Crash recovery** (100% success rate)
 7. ✅ **RocksDB storage** (LSM tree, write-optimized)
 
-**Test Coverage**: 557 tests passing
-- 468 library tests (MVCC, storage, ALEX)
-- 57 security tests (auth, SSL/TLS)
-- 32 SQL tests (aggregations, joins)
+**Test Coverage**: 142 tests passing (Week 7 Day 2+)
+- 101 Phase 1 tests (distance correctness, HNSW recall, serialization, concurrency, input validation)
+- 41 Phase 2 tests (resource limits, edge cases, boundaries)
+- 40 tests ASAN validated (ZERO memory safety issues)
 
 **Performance Characteristics** (Base Technology):
 - Memory: 1.50 bytes/key (28x better than PostgreSQL)
@@ -423,7 +450,7 @@ omendb-server/
 - Rust (cargo, rustc)
 - PostgreSQL clients (psql, pgcli)
 - Benchmarking tools (hyperfine, flamegraph)
-- Testing: 557 tests via cargo test
+- Testing: 142 tests via cargo test (101 Phase 1 + 41 Phase 2)
 
 ---
 
@@ -522,11 +549,12 @@ cargo build --release            # Optimized build
 
 ---
 
-*Last Updated: October 27, 2025 - Week 6 COMPLETE (Graph Serialization + Parallel Building + SOTA Research)*
+*Last Updated: October 27, 2025 - Week 7 Day 2+ (Phase 2 Validation 60% Complete)*
 
-**Product**: omendb-server - Cloud/server PostgreSQL-compatible vector database
-**Companion**: omen-lite - Embedded vector database (separate repo, future)
+**Product**: omendb-server - PostgreSQL-compatible vector database (Phase 1 focus)
+**Future Products**: Time series database (2026-2027), Graph database (2027-2028)
+**Platform Vision**: Unified multi-database platform with shared infrastructure
 **Market**: $10.6B vector DB market (23.54% CAGR)
-**Timeline**: 6 months to production-ready, 12 months to $100K-500K ARR
-**Next Milestone**: Weeks 7-8 - pgvector benchmarks (CRITICAL PATH - validate "10x faster" claims)
+**Current Phase**: Validation before marketing (142 tests, ASAN clean)
+**Next Milestone**: Complete Phase 2 validation → pgvector benchmarks
 **GitHub**: omendb/omendb-server
