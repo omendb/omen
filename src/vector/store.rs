@@ -284,6 +284,12 @@ impl VectorStore {
         // Create directory if needed
         fs::create_dir_all(directory)?;
 
+        // Always save vectors array (needed for get/len/verification)
+        let vectors_path = directory.join(format!("{}.vectors.bin", filename));
+        let vectors_data: Vec<Vec<f32>> = self.vectors.iter().map(|v| v.data.clone()).collect();
+        let encoded = bincode::serialize(&vectors_data)?;
+        fs::write(&vectors_path, encoded)?;
+
         // Check if HNSW index exists
         if let Some(ref index) = self.hnsw_index {
             // Use hnsw_rs file_dump to save graph + data
@@ -297,12 +303,6 @@ impl VectorStore {
                 actual_basename
             );
         } else {
-            // No HNSW index - save vectors only (fallback for small datasets)
-            let vectors_path = directory.join(format!("{}.vectors.bin", filename));
-            let vectors_data: Vec<Vec<f32>> = self.vectors.iter().map(|v| v.data.clone()).collect();
-            let encoded = bincode::serialize(&vectors_data)?;
-            fs::write(&vectors_path, encoded)?;
-
             eprintln!(
                 "💾 Saved {} vectors ({} dims) without HNSW index (no index built yet)",
                 self.vectors.len(),
@@ -344,16 +344,26 @@ impl VectorStore {
                 dimensions,
             )?;
 
-            // Note: We need to extract vectors from the loaded HNSW
-            // For now, we'll just create an empty vector store
-            // The vectors are in the HNSW data file
+            // Load vectors array (needed for get/len/verification)
+            let vectors_path = directory.join(format!("{}.vectors.bin", filename));
+            let vectors = if vectors_path.exists() {
+                let vectors_data = fs::read(&vectors_path)?;
+                let vectors_raw: Vec<Vec<f32>> = bincode::deserialize(&vectors_data)?;
+                vectors_raw.into_iter().map(Vector::new).collect()
+            } else {
+                // Fallback: empty vectors (search still works via HNSW)
+                eprintln!("⚠️  Warning: vectors.bin not found, get() and len() unavailable");
+                Vec::new()
+            };
+
             eprintln!(
-                "✅ Loaded HNSW graph with {} dims (fast load: <1s)",
+                "✅ Loaded {} vectors ({} dims) with HNSW graph (fast load: <1s)",
+                vectors.len(),
                 dimensions
             );
 
             Ok(Self {
-                vectors: Vec::new(), // Vectors are in HNSW, accessed via search
+                vectors,
                 hnsw_index: Some(hnsw_index),
                 dimensions,
             })
@@ -484,7 +494,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Fix - load_from_disk doesn't extract vectors from HNSW (vectors.len() = 0)
     fn test_save_load_roundtrip() {
         use std::fs;
 
