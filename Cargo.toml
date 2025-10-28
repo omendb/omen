@@ -36,12 +36,10 @@ predicates = "3.0"
 # HTTP client for testing REST API
 reqwest = { version = "0.12", features = ["json"] }
 
-# PostgreSQL client for testing Extended Query Protocol
-postgres = "0.19"
-
 [dependencies]
-# PostgreSQL client for benchmarks and testing
+# PostgreSQL clients for benchmarks and testing
 tokio-postgres = "0.7"
+postgres = "0.19"
 # SQLite for comparison benchmarks
 rusqlite = { version = "0.32", features = ["bundled"] }
 
@@ -158,6 +156,9 @@ ndarray = "0.16"
 # HNSW for vector search (Week 2 implementation)
 hnsw_rs = "0.3"
 
+# System information (CPU count, etc)
+num_cpus = "1.16"
+
 [features]
 default = []
 simd = []  # Enable std::simd (requires nightly Rust)
@@ -217,4 +218,16 @@ path = "src/bin/test_parallel_building.rs"
 [[bin]]
 name = "benchmark_1m_parallel"
 path = "src/bin/benchmark_1m_parallel.rs"
+
+[[bin]]
+name = "validate_1m_end_to_end"
+path = "src/bin/validate_1m_end_to_end.rs"
+
+[[bin]]
+name = "profile_queries"
+path = "src/bin/profile_queries.rs"
+
+[[bin]]
+name = "benchmark_pgvector_comparison"
+path = "src/bin/benchmark_pgvector_comparison.rs"
 

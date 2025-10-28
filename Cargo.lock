@@ -3673,6 +3673,7 @@ dependencies = [
  "miette",
  "moka",
  "ndarray",
+ "num_cpus",
  "once_cell",
  "parquet",
  "pgwire",
