@@ -16,6 +16,11 @@
 - Validation BEFORE marketing (12-18 month timeline per VALIDATION_PLAN.md)
 - Need to identify where we excel AND where we don't
 
+**Hardware Strategy**:
+- **Mac M3 Max (128GB)**: Development, testing, 10M scale (more RAM)
+- **Fedora i9-13900KF (24-core, 32GB)**: Primary benchmarking (more cores, server-class)
+- **Rationale**: Fedora shows parallel building advantage (16x vs 4.6x speedup)
+
 **Success Criteria**:
 - ✅ Can honestly claim "10x faster than pgvector" at SOME scale
 - ✅ Documented where we excel and where we don't
@@ -316,11 +321,12 @@ Recall:
 ### Week 7 (Oct 28 - Nov 3)
 
 **Day 1-2** (Oct 28-29): Setup + 1M benchmark
-- [ ] Install PostgreSQL 16 + pgvector 0.7
+- [✅] Install PostgreSQL 14 + pgvector 0.8.1 (Mac)
+- [ ] Setup PostgreSQL + pgvector on Fedora
 - [ ] Create benchmark_pgvector_comparison.rs
 - [ ] Generate 1M realistic vectors (1536D)
-- [ ] Run OmenDB baseline (already have data)
-- [ ] Run pgvector baseline (initial)
+- [ ] Run OmenDB baseline on Fedora (parallel building advantage)
+- [ ] Run pgvector baseline on Fedora
 
 **Day 3** (Oct 30): Parameter tuning + recall validation
 - [ ] Tune ef_search for both systems (>95% recall)
