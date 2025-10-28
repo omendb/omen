@@ -32,7 +32,8 @@ pub mod quantization; // Binary quantization (Week 3 - RaBitQ implementation)
 
 // Existing modules (will be refactored)
 pub mod alex; // ALEX adaptive learned index (replacement for RMI)
-// alex_storage*, datafusion, redb_storage archived to omen-core (commit 127a87d)
+// alex_storage*, redb_storage archived to omen-core (commit 127a87d)
+pub mod datafusion; // DataFusion SQL integration (needed by postgres module)
 pub mod backup;
 pub mod concurrent;
 pub mod constraints; // Table constraint management (PRIMARY KEY, etc.)

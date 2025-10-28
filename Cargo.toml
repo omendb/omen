@@ -50,14 +50,6 @@ name = "postgres_server"
 path = "src/bin/postgres_server.rs"
 
 [[bin]]
-name = "postgres_server_auth"
-path = "src/bin/postgres_server_auth.rs"
-
-[[bin]]
-name = "postgres_alex_server"
-path = "src/bin/postgres_alex_server.rs"
-
-[[bin]]
 name = "rest_server"
 path = "src/bin/rest_server.rs"
 
