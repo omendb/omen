@@ -1,13 +1,70 @@
 # STATUS
 
-**Last Updated**: October 27, 2025 - Late Evening (Week 7 Day 2+ Phase 2 60% ✅)
+**Last Updated**: October 27, 2025 - Night (Week 7 Day 2+ Phase 2 60% ✅)
 **Phase**: Week 7 Day 2+ - Phase 2 Edge Case & Failure Testing
 **Status**:
   - ✅ Phase 1: 98% Complete (101 tests validated)
-  - 🔨 Phase 2: 60% Complete (41 functional tests + 40 ASAN validated)
+  - ✅ Phase 2: 60% Complete (41 functional tests + 40 ASAN validated)
   - ✅ ASAN: 40 tests, ZERO memory safety issues
+  - ✅ Resource Limits: 12 tests, all passing
   - **Total**: 142 tests passing (40 also validated with ASAN)
-**Next**: Optional extreme resource tests, or move to Phase 3 (performance validation)
+**Next**: Continue Phase 2 (input validation fuzzing, serialization fuzzing) or move to Phase 3 (performance validation)
+
+---
+
+## Week 7 Day 2+ Night (Oct 27) - Resource Exhaustion Testing ✅ COMPLETE
+
+**Goal**: Validate graceful handling under resource constraints and extreme conditions
+
+### Resource Limits & Boundaries ✅ COMPLETE
+
+**Achievement**: 12 comprehensive resource limit tests passing - all edge cases handled gracefully
+
+**Tests Created**: `tests/test_resource_limits.rs` (371 lines, 12 tests, 45.40s runtime)
+
+**Test Coverage**:
+1. ✅ Large batch insert (10,000 vectors in one operation)
+2. ✅ Many small inserts (5,000 sequential individual inserts)
+3. ✅ Search on large datasets (20,000 vectors with random data)
+4. ✅ Very high dimensions (4096D vectors - 100 inserts + search)
+5. ✅ Dimension boundaries (2D, 512D, 2048D - all working)
+6. ✅ k parameter boundaries (k=0, k=1, k=size, k>size - all handled correctly)
+7. ✅ Memory usage tracking (validates reporting accuracy)
+8. ✅ Duplicate vectors (100 identical vectors, distance=0.0 validation)
+9. ✅ Mixed batch sizes (10, 100, 1000 in sequence)
+10. ✅ ef_search boundaries (10, 50, 100, 200 - all working)
+11. ✅ Operations after HNSW built (2000 initial + 100 more - no issues)
+12. ✅ Empty operations (empty batch insert, search on empty store)
+
+**Key Findings**:
+- System handles up to 20K vectors for search validation
+- 4096D vectors work correctly (highest dimension tested)
+- Memory reporting accurate (bytes per vector = dimension * 4 + overhead)
+- Duplicate vectors correctly return distance=0.0
+- k parameter edge cases handled (k=0 → empty, k>size → all available)
+- HNSW continues working correctly after initial build (2000+100 vectors)
+
+**Docker/Podman Tests** (Optional - Too Slow for CI):
+- Created `src/bin/resource_exhaustion_test.rs` (197 lines) - binary for resource constraint testing
+- Created `tests/test_docker_resource_exhaustion.sh` (167 lines) - orchestration script
+- Tests: OOM (512MB, 256MB), CPU (0.5 cores), FD limit (100), combined constraints
+- Supports both Docker and Podman (auto-detection)
+- **Status**: Functional but too slow (>60min for full suite)
+- **Use Case**: Manual stress testing, not for CI
+- **Commits**: 5ccde17 (test files), 184511d (podman support)
+
+**Decisions**:
+- Docker/Podman tests are optional exploratory tools, not required validation
+- 12 resource limit tests provide sufficient boundary condition coverage
+- Focus on functional tests with reasonable timeouts for CI
+
+**Commits**:
+- `160e228` - test: add resource limits & boundary condition tests (12 tests)
+- `5ccde17` - test: add Docker resource exhaustion tests
+- `184511d` - fix: support podman in resource exhaustion tests
+- `2e0d709` - docs: update Phase 2 validation status (60% complete)
+
+**Test Count**: 142 total (101 Phase 1 + 41 Phase 2)
 
 ---
 
