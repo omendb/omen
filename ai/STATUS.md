@@ -1555,3 +1555,9 @@ LIMIT 10;
 - Future: NEW omen-server as thin wrapper for hosted service
 - Pattern: Embedded first (like libSQL→Turso, PostgreSQL→Neon)
 - Updated checklist with complete execution plan at ../REORGANIZATION_CHECKLIST.md
+
+**Parent Directory CLAUDE.md Created** (Oct 27 Night):
+- Created `/Users/nick/github/omendb/CLAUDE.md` as meta-context file
+- Contains: Repository overview, architecture decision, reorganization plan summary
+- Purpose: Entry point for Claude Code when working in parent directory
+- Links to: REORGANIZATION_CHECKLIST.md for detailed execution plan
