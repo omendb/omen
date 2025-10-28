@@ -1,10 +1,9 @@
 //! OmenDB Library - Pure Learned Index Database
 //! Production hardening: concurrency, testing, monitoring
 
-// New architecture (proper multi-table database)
+// Core embedded database modules
 pub mod cache;
 pub mod catalog;
-pub mod connection_pool;
 pub mod logging;
 pub mod mvcc;
 pub mod row;
@@ -15,10 +14,10 @@ pub mod table_storage;
 pub mod table_wal;
 pub mod value;
 
-// Query routing and temperature tracking archived to omen-core (commit 127a87d)
+// Server modules moved to omen-server (commit fcd8d90):
+// - connection_pool, backup, postgres, rest, server, security, user_store
 
 // Re-exports for common types
-pub use connection_pool::{Connection, ConnectionPool, PoolConfig};
 pub use logging::{init_from_env, init_logging, LogConfig};
 pub use sql_engine::QueryConfig;
 
@@ -33,19 +32,13 @@ pub mod quantization; // Binary quantization (Week 3 - RaBitQ implementation)
 // Existing modules (will be refactored)
 pub mod alex; // ALEX adaptive learned index (replacement for RMI)
 // alex_storage*, redb_storage archived to omen-core (commit 127a87d)
-pub mod datafusion; // DataFusion SQL integration (needed by postgres module)
-pub mod backup;
+pub mod datafusion; // DataFusion SQL integration (used by constraints and benchmarks)
 pub mod concurrent;
 pub mod constraints; // Table constraint management (PRIMARY KEY, etc.)
 pub mod memory_pool;
 pub mod index;
 pub mod metrics;
-pub mod postgres;
 pub mod rocks_storage;
-pub mod rest;
-pub mod security;
-pub mod server;
-pub mod user_store;
 pub mod storage;
 pub mod transaction;
 pub mod wal;

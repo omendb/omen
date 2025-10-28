@@ -26,32 +26,12 @@ name = "scale_test"
 path = "src/bin/scale_test.rs"
 
 [[bin]]
-name = "secure_server"
-path = "src/bin/secure_server.rs"
-
-[[bin]]
 name = "integration_test"
 path = "src/bin/integration_test.rs"
 
 [[bin]]
-name = "backup_tool"
-path = "src/bin/backup_tool.rs"
-
-[[bin]]
-name = "test_backup"
-path = "src/bin/test_backup.rs"
-
-[[bin]]
 name = "sql_demo"
 path = "src/bin/sql_demo.rs"
-
-[[bin]]
-name = "postgres_server"
-path = "src/bin/postgres_server.rs"
-
-[[bin]]
-name = "rest_server"
-path = "src/bin/rest_server.rs"
 
 [[bin]]
 name = "profile_benchmark"
