@@ -1,15 +1,144 @@
 # STATUS
 
-**Last Updated**: October 28, 2025 - Ready for Benchmarks
-**Phase**: Week 7 Day 2+ - 1M Validation In Progress, Infrastructure Ready
+**Last Updated**: October 28, 2025 - Benchmark Infrastructure Complete
+**Phase**: Week 7 Day 2+ - 1M Validation In Progress, Benchmark Ready
 **Repository**: omen (embedded vector database) v0.0.1
 **Status**:
   - ✅ All critical bugs fixed (commits 019aae4, 5450462, c88054e)
   - ✅ 367 tests passing (0 failed, 12 ignored)
   - ✅ Performance review complete - no obvious issues found
-  - ✅ PostgreSQL 14 + pgvector 0.8.1 installed
-  - 🔄 1M validation running (180K/1M, ~10 min remaining)
-**Next**: Complete 1M validation → Verify results → pgvector benchmarks
+  - ✅ PostgreSQL 14 + pgvector 0.8.1 installed (Mac)
+  - ✅ Benchmark infrastructure created (commit aabbf6b)
+  - 🔄 1M validation running (400K/1M, ~35 min remaining)
+**Next**: Complete 1M validation → Setup Fedora → Run pgvector benchmarks
+
+---
+
+## October 28, 2025 Evening - Benchmark Infrastructure ✅ COMPLETE
+
+**Goal**: Prepare for Week 7-8 pgvector benchmarks - create infrastructure and setup guides
+
+### Repository Cleanup ✅ COMPLETE
+
+**Achievement**: Cleaned up repository after reorganization, removed outdated files
+
+**Actions**:
+1. ✅ Removed outdated CONTEXT.md (replaced by CLAUDE.md + ai/STATUS.md)
+2. ✅ Archived 31 pre-vector binaries to `archive/pre-vector-binaries/`
+3. ✅ Reduced Cargo.toml binaries from 46 → 15 (vector-only)
+4. ✅ Fixed 4 unused import warnings in MVCC modules
+5. ✅ Removed duplicate test_extended binary definition
+
+**Commit**: `0f3f906` - chore: clean up repository - archive pre-vector binaries, fix warnings
+
+### Critical Bug Fix ✅ COMPLETE
+
+**Achievement**: Fixed save/load bug that prevented proper vector persistence
+
+**Problem**: `load_from_disk()` created empty vectors array (vectors.len() = 0)
+- Root cause: HNSW graph was loaded but vectors weren't extracted
+- Impact: `get()`, `len()`, verification all broken
+
+**Solution**:
+- Modified `save_to_disk()` to ALWAYS save vectors.bin alongside HNSW files
+- Modified `load_from_disk()` to load vectors.bin when loading HNSW
+- Un-ignored test_save_load_roundtrip
+- All 367 tests now passing
+
+**Commit**: `c88054e` - fix: save/load bug - vectors now extracted from HNSW properly
+
+### Performance Review ✅ COMPLETE
+
+**Achievement**: Comprehensive hot path analysis - production-ready code confirmed
+
+**Created**: `docs/architecture/QUICK_PERF_REVIEW.md` (145 lines)
+
+**Findings**:
+- ✅ Query path: Clean, no unnecessary clones or allocations
+- ⚠️ Batch insert: 61MB clone per 10K chunk (6.1GB total for 1M vectors)
+  - **Verdict**: Acceptable - necessary for hnsw_rs API, one-time cost
+  - HNSW insertion dominates (graph construction is O(log n) per insert)
+  - Clone overhead: ~5-10% of build time (estimate)
+- ✅ Save/load path: Clone necessary for bincode serialization
+- ✅ No obvious performance bugs
+- ✅ Code is production-ready
+
+**Recommendations**:
+- Proceed with pgvector benchmarks as-is
+- Optimize later based on: profiling data, benchmark results, user feedback
+- Premature optimization avoided ✅
+
+### PostgreSQL + pgvector Setup ✅ COMPLETE
+
+**Achievement**: Development environment ready for benchmarking
+
+**Mac Setup** (Development/Testing):
+- ✅ PostgreSQL 14 installed
+- ✅ pgvector 0.8.1 compiled and installed
+- ✅ Test database created and verified
+- ✅ Can run pgvector queries
+
+**Note**: Mac is for development only, Fedora will be primary benchmark platform
+
+### Benchmark Infrastructure ✅ COMPLETE
+
+**Achievement**: Complete benchmark infrastructure for pgvector comparison
+
+**Created Files**:
+1. **`docs/architecture/FEDORA_BENCHMARK_SETUP.md`** (430 lines)
+   - Complete setup guide for Fedora i9-13900KF (24-core)
+   - PostgreSQL 16 + pgvector 0.8.1 installation
+   - System configuration and tuning
+   - Troubleshooting guide
+   - Hardware strategy: Fedora (primary) vs Mac (development)
+
+2. **`src/bin/benchmark_pgvector_comparison.rs`** (305 lines)
+   - Side-by-side OmenDB vs pgvector comparison
+   - Measures: build time, memory usage, query latency, recall
+   - Fair comparison methodology (same dataset, same parameters)
+   - Supports configurable scale (default 1M vectors)
+   - Output format ready for PGVECTOR_BENCHMARK_RESULTS.md
+
+**Cargo.toml Updates**:
+- ✅ Added postgres dependency (moved from dev-dependencies)
+- ✅ Added num_cpus for hardware detection
+- ✅ Registered 3 new binaries:
+  - validate_1m_end_to_end.rs (full validation workflow)
+  - profile_queries.rs (flamegraph analysis)
+  - benchmark_pgvector_comparison.rs (pgvector comparison)
+
+**Build Verification**: ✅ All binaries compile successfully
+
+**Commit**: `aabbf6b` - feat: add pgvector benchmark infrastructure
+
+### 1M Validation ✅ IN PROGRESS
+
+**Status**: Running in background on Mac
+- Progress: 400K/1M (40% complete)
+- Build rate: 307 vec/sec (slowing as expected)
+- ETA: ~35 minutes remaining
+- Purpose: Baseline validation before Fedora benchmarks
+
+**Next Steps**:
+1. Wait for validation to complete
+2. Verify results (query latency, save/load times)
+3. Setup Fedora environment (follow FEDORA_BENCHMARK_SETUP.md)
+4. Run benchmark_pgvector_comparison on Fedora
+5. Document results in PGVECTOR_BENCHMARK_RESULTS.md
+
+**Test Count**: 367 total (maintained from previous session)
+
+**Hardware Strategy** (Validated):
+- **Mac M3 Max (128GB)**: Development, testing, 10M scale (more RAM)
+- **Fedora i9-13900KF (24-core, 32GB)**: Primary benchmarking (16x speedup)
+- **Rationale**: Fedora shows 16.17x parallel building speedup vs Mac's 4.6x
+
+**Success Criteria for Week 7-8**:
+- ✅ Benchmark infrastructure created (this session)
+- ⏳ 1M validation complete (in progress)
+- ⏳ Fedora setup complete (next)
+- ⏳ Honest benchmark results documented (next)
+- ⏳ Can claim "5-10x faster" OR "16x memory savings" (to be verified)
 
 ---
 
