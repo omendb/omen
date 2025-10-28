@@ -1490,3 +1490,60 @@ LIMIT 10;
 **Confidence**: High (industry-standard approach, proven at scale)
 **Focus**: Ship HNSW + BQ in 8 weeks → Customers → Iterate
 **Moat**: PostgreSQL + Memory Efficiency + HTAP
+
+---
+
+## Repository Reorganization Planning (Oct 27 Night)
+
+**Status**: Planning phase complete, awaiting execution
+
+**Context**: Created comprehensive reorganization checklist for OmenDB product suite transformation from single product to multi-database platform.
+
+**Reorganization Plan**:
+- Document: `/Users/nick/Downloads/omendb-reorganization-plan.md`
+- Checklist: `/Users/nick/github/omendb/REORGANIZATION_CHECKLIST.md`
+
+**Planned Changes**:
+1. **omen-lite** → **omen** (embedded vector DB, Elastic License 2.0, public)
+2. **omendb-server** → **omen-server** (hosted vector service, closed source, private)
+3. Clean up old pre-pivot code (100+ binaries, many from ALEX/SQLite era)
+4. (Future) Create **omen-core** for shared server infrastructure
+
+**Key Questions to Resolve**:
+- Is omendb-server the embedded implementation or the server wrapper?
+- Current evidence: omendb-server has full vector DB implementation (HNSW, BQ, MVCC, 142 tests)
+- Reorganization plan suggests omen-server should be thin wrapper around omen library
+- Need architecture clarification before executing rename
+
+**Current State of omendb-server**:
+- Contains: Full vector database (HNSW, Binary Quantization, MVCC, storage)
+- Contains: PostgreSQL wire protocol implementation
+- Contains: 142 tests passing (101 Phase 1 + 41 Phase 2)
+- Contains: 100+ benchmark binaries (many from pre-vector pivot)
+- Package name: `omendb` (not omendb-server)
+- License: Elastic 2.0 (correct for server product)
+
+**Old Code to Archive** (pre-vector pivot benchmarks):
+- ALEX vs B-tree comparisons
+- SQLite comparison benchmarks
+- Multi-level ALEX experiments
+- HTAP demos (not vector-focused)
+- YCSB benchmarks (not vector-focused)
+- Temperature benchmarks
+- Estimated: 25+ binaries to archive
+
+**Estimated Work**:
+- Phase 1 (Renaming): 2-4 hours
+- Phase 2 (Code Cleanup): 2-4 hours
+- Phase 4 (Documentation): 1-2 hours
+- Phase 5 (Testing): 1-2 hours
+- Phase 6 (Git Operations): 30 minutes
+- Total: ~8-12 hours (excluding omen-core creation which is future work)
+
+**Next Steps**:
+1. User reviews reorganization checklist
+2. Resolve architecture question (embedded lib vs server wrapper)
+3. Execute reorganization via Claude Code in parent directory
+4. Continue Phase 2 validation after reorganization complete
+
+**Reference**: See `../REORGANIZATION_CHECKLIST.md` for detailed execution plan
