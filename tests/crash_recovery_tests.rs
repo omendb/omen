@@ -2,7 +2,7 @@
 //!
 //! Verifies that WAL (Write-Ahead Log) correctly recovers data after simulated crashes
 
-use omendb::wal::{RecoveryStats, WalManager, WalOperation};
+use omen::wal::{RecoveryStats, WalManager, WalOperation};
 use std::sync::Arc;
 use tempfile::TempDir;
 

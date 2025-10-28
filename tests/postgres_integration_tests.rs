@@ -9,7 +9,7 @@
 //! - Special commands (SET, SHOW, BEGIN, etc.)
 
 use datafusion::prelude::*;
-use omendb::postgres::PostgresServer;
+use omen::postgres::PostgresServer;
 use std::time::Duration;
 use tokio::time::sleep;
 use tokio_postgres::{Client, NoTls};

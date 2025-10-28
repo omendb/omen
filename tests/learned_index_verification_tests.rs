@@ -8,7 +8,7 @@
 //! 2. Performance difference exists between learned index ON vs OFF
 //! 3. Learned index provides measurable speedup on appropriate datasets
 
-use omendb::redb_storage::RedbStorage;
+use omen::redb_storage::RedbStorage;
 use std::time::Instant;
 use tempfile::tempdir;
 

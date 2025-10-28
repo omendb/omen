@@ -1,8 +1,8 @@
 //! Secure OmenDB monitoring server with authentication
 //! Run with: cargo run --release --bin secure_server
 
-use omendb::security::SecurityContext;
-use omendb::server::start_secure_monitoring_server;
+use omen::security::SecurityContext;
+use omen::server::start_secure_monitoring_server;
 use std::env;
 
 #[tokio::main]

@@ -12,9 +12,9 @@
 //!   cargo run --release --bin stress_test_concurrent 10 100000
 
 use anyhow::Result;
-use omendb::catalog::Catalog;
-use omendb::row::Row;
-use omendb::value::Value;
+use omen::catalog::Catalog;
+use omen::row::Row;
+use omen::value::Value;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;

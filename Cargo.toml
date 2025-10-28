@@ -1,17 +1,20 @@
 [package]
-name = "omendb"
-version = "0.1.0"
+name = "omen"
+version = "0.0.1"
 edition = "2021"
 authors = ["OmenDB Inc."]
-description = "PostgreSQL-compatible vector database that scales"
+description = "Embedded PostgreSQL-compatible vector database for AI applications"
+repository = "https://github.com/omendb/omen"
 license = "Elastic-2.0"
+keywords = ["vector-database", "embedded", "ai", "hnsw", "postgresql"]
+categories = ["database", "embedded"]
 
 [lib]
-name = "omendb"
+name = "omen"
 path = "src/lib.rs"
 
 [[bin]]
-name = "omendb"
+name = "omen"
 path = "src/main.rs"
 
 [[bin]]
@@ -39,24 +42,8 @@ name = "test_backup"
 path = "src/bin/test_backup.rs"
 
 [[bin]]
-name = "benchmark_vs_btree"
-path = "src/bin/benchmark_vs_btree.rs"
-
-[[bin]]
 name = "sql_demo"
 path = "src/bin/sql_demo.rs"
-
-[[bin]]
-name = "benchmark_full_system"
-path = "src/bin/benchmark_full_system.rs"
-
-[[bin]]
-name = "benchmark_redb_learned"
-path = "src/bin/benchmark_redb_learned.rs"
-
-[[bin]]
-name = "benchmark_datafusion_sql"
-path = "src/bin/benchmark_datafusion_sql.rs"
 
 [[bin]]
 name = "postgres_server"
@@ -75,60 +62,8 @@ name = "rest_server"
 path = "src/bin/rest_server.rs"
 
 [[bin]]
-name = "benchmark_vs_sqlite"
-path = "src/bin/benchmark_vs_sqlite.rs"
-
-[[bin]]
-name = "benchmark_honest_comparison"
-path = "src/bin/benchmark_honest_comparison.rs"
-
-[[bin]]
 name = "profile_benchmark"
 path = "src/bin/profile_benchmark.rs"
-
-[[bin]]
-name = "profile_alex_detailed"
-path = "src/bin/profile_alex_detailed.rs"
-
-[[bin]]
-name = "test_1m_alex"
-path = "src/bin/test_1m_alex.rs"
-
-[[bin]]
-name = "benchmark_simd_search"
-path = "src/bin/benchmark_simd_search.rs"
-
-[[bin]]
-name = "benchmark_comprehensive"
-path = "src/bin/benchmark_comprehensive.rs"
-
-[[bin]]
-name = "benchmark_fair_comparison"
-path = "src/bin/benchmark_fair_comparison.rs"
-
-[[bin]]
-name = "benchmark_mmap_validation"
-path = "src/bin/benchmark_mmap_validation.rs"
-
-[[bin]]
-name = "benchmark_alex_storage"
-path = "src/bin/benchmark_alex_storage.rs"
-
-[[bin]]
-name = "benchmark_alex_improvements"
-path = "src/bin/benchmark_alex_improvements.rs"
-
-[[bin]]
-name = "benchmark_temperature"
-path = "src/bin/benchmark_temperature.rs"
-
-[[bin]]
-name = "benchmark_htap"
-path = "src/bin/benchmark_htap.rs"
-
-[[bin]]
-name = "benchmark_table_vs_sqlite"
-path = "src/bin/benchmark_table_vs_sqlite.rs"
 
 
 [dev-dependencies]
@@ -289,22 +224,6 @@ name = "test_edge_cases"
 path = "src/bin/test_edge_cases.rs"
 
 [[bin]]
-name = "benchmark_multi_level_alex"
-path = "src/bin/benchmark_multi_level_alex.rs"
-
-[[bin]]
-name = "test_multi_level"
-path = "src/bin/test_multi_level.rs"
-
-[[bin]]
-name = "debug_multi_level"
-path = "src/bin/debug_multi_level.rs"
-
-[[bin]]
-name = "benchmark_multilevel_vs_sqlite"
-path = "src/bin/benchmark_multilevel_vs_sqlite.rs"
-
-[[bin]]
 name = "stress_test_100m"
 path = "src/bin/stress_test_100m.rs"
 
@@ -317,28 +236,8 @@ name = "test_postgres_compatibility"
 path = "src/bin/test_postgres_compatibility.rs"
 
 [[bin]]
-name = "ycsb_benchmark"
-path = "src/bin/ycsb_benchmark.rs"
-
-[[bin]]
-name = "ycsb_quick_test"
-path = "src/bin/ycsb_quick_test.rs"
-
-[[bin]]
-name = "ycsb_subset"
-path = "src/bin/ycsb_subset.rs"
-
-[[bin]]
-name = "htap_demo"
-path = "src/bin/htap_demo.rs"
-
-[[bin]]
 name = "stress_test_concurrent_advanced"
 path = "src/bin/stress_test_concurrent_advanced.rs"
-
-[[bin]]
-name = "benchmark_memory_optimization"
-path = "src/bin/benchmark_memory_optimization.rs"
 
 [[bin]]
 name = "test_extreme_scale"

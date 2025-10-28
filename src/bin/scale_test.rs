@@ -1,7 +1,7 @@
 //! Standalone scale testing executable for OmenDB
 //! Run with: cargo run --release --bin scale_test
 
-use omendb::scale_tests::{run_concurrent_stress_test, run_scale_test, ScaleTestConfig};
+use omen::scale_tests::{run_concurrent_stress_test, run_scale_test, ScaleTestConfig};
 use std::env;
 use std::time::Instant;
 

@@ -8,7 +8,7 @@
 // - Edge cases and boundary conditions
 // - Stress testing with many concurrent transactions
 
-use omendb::mvcc::{
+use omen::mvcc::{
     MvccStorage, MvccTransactionContext, TransactionMode, TransactionOracle,
 };
 use rocksdb::{Options, DB};

@@ -6,8 +6,8 @@
 //! - Boundary conditions at scale
 //! - Graceful degradation under stress
 
-use omendb::vector::types::Vector;
-use omendb::vector::store::VectorStore;
+use omen::vector::types::Vector;
+use omen::vector::store::VectorStore;
 
 /// Test inserting very large batches
 #[test]

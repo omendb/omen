@@ -6,7 +6,7 @@
 //! 3. Quantization training is stable
 //! 4. Serialization preserves data
 
-use omendb::quantization::{QuantizationModel, QuantizedVector};
+use omen::quantization::{QuantizationModel, QuantizedVector};
 
 /// Compute Pearson correlation coefficient between two vectors
 fn pearson_correlation(x: &[f32], y: &[f32]) -> f32 {

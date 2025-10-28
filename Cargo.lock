@@ -3641,8 +3641,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "omendb"
-version = "0.1.0"
+name = "omen"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "arrow",

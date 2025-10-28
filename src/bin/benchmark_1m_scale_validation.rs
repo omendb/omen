@@ -14,7 +14,7 @@
 //! - Query p95: <15ms
 //! - Memory: <15GB (with quantization)
 
-use omendb::vector::{Vector, VectorStore};
+use omen::vector::{Vector, VectorStore};
 use std::time::Instant;
 
 fn generate_random_vector(dim: usize) -> Vector {

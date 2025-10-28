@@ -11,8 +11,8 @@
 //!
 //! Goal: Validate if PCA-ALEX can achieve >90% recall
 
-use omendb::pca::VectorPCA;
-use omendb::vector::{PCAAlexIndex, Vector, VectorStore};
+use omen::pca::VectorPCA;
+use omen::vector::{PCAAlexIndex, Vector, VectorStore};
 use rand::Rng;
 use std::collections::HashSet;
 use std::time::Instant;

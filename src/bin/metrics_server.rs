@@ -16,7 +16,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use omendb::metrics;
+use omen::metrics;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};

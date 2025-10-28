@@ -3,7 +3,7 @@
 //! Validates that our distance implementations match reference implementations.
 //! These tests are critical for an AI-generated codebase.
 
-use omendb::vector::types::Vector;
+use omen::vector::types::Vector;
 
 /// Test L2 (Euclidean) distance against known values
 #[test]

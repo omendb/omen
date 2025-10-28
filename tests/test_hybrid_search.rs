@@ -1,9 +1,9 @@
 //! Integration tests for hybrid search (vector similarity + SQL predicates)
 
-use omendb::catalog::Catalog;
-use omendb::sql_engine::SqlEngine;
-use omendb::value::Value;
-use omendb::vector::VectorValue;
+use omen::catalog::Catalog;
+use omen::sql_engine::SqlEngine;
+use omen::value::Value;
+use omen::vector::VectorValue;
 use std::sync::Arc;
 
 /// Helper: Create a test catalog with products table
@@ -66,7 +66,7 @@ fn create_products_catalog() -> (Catalog, Arc<tempfile::TempDir>) {
 
 #[test]
 fn test_hybrid_pattern_detection() {
-    use omendb::vector_query_planner::HybridQueryPattern;
+    use omen::vector_query_planner::HybridQueryPattern;
     use sqlparser::ast::{Expr, Ident, OrderByExpr, Value as SqlValue};
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
@@ -282,7 +282,7 @@ fn test_hybrid_filter_first_multiple_predicates() {
 
 #[test]
 fn test_selectivity_estimation() {
-    use omendb::vector_query_planner::VectorQueryPlanner;
+    use omen::vector_query_planner::VectorQueryPlanner;
     use sqlparser::ast::{BinaryOperator, Expr, Ident};
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
@@ -327,9 +327,9 @@ fn test_selectivity_estimation() {
 
 #[test]
 fn test_strategy_selection_filter_first() {
-    use omendb::vector_query_planner::{HybridQueryPattern, HybridQueryStrategy, VectorQueryPattern, VectorQueryPlanner};
-    use omendb::vector::VectorValue;
-    use omendb::vector_operators::VectorOperator;
+    use omen::vector_query_planner::{HybridQueryPattern, HybridQueryStrategy, VectorQueryPattern, VectorQueryPlanner};
+    use omen::vector::VectorValue;
+    use omen::vector_operators::VectorOperator;
     use sqlparser::ast::{BinaryOperator, Expr, Ident};
 
     let planner = VectorQueryPlanner::default();
@@ -366,9 +366,9 @@ fn test_strategy_selection_filter_first() {
 
 #[test]
 fn test_strategy_selection_vector_first() {
-    use omendb::vector_query_planner::{HybridQueryPattern, HybridQueryStrategy, VectorQueryPattern, VectorQueryPlanner};
-    use omendb::vector::VectorValue;
-    use omendb::vector_operators::VectorOperator;
+    use omen::vector_query_planner::{HybridQueryPattern, HybridQueryStrategy, VectorQueryPattern, VectorQueryPlanner};
+    use omen::vector::VectorValue;
+    use omen::vector_operators::VectorOperator;
     use sqlparser::ast::{BinaryOperator, Expr, Ident};
 
     let planner = VectorQueryPlanner::default();

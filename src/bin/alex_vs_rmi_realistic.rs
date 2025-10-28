@@ -3,8 +3,8 @@
 //! Tests the real bottleneck: insert-query interleaving
 //! RMI suffers from O(n) rebuilds, ALEX handles incrementally
 
-use omendb::alex::AlexTree;
-use omendb::index::RecursiveModelIndex;
+use omen::alex::AlexTree;
+use omen::index::RecursiveModelIndex;
 use std::time::Instant;
 
 fn main() {

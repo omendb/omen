@@ -12,10 +12,10 @@
 
 use anyhow::Result;
 use arrow::datatypes::{DataType, Field, Schema};
-use omendb::table::Table;
-use omendb::row::Row;
-use omendb::value::Value;
-use omendb::wal::{WalEntry, WalManager, WalOperation};
+use omen::table::Table;
+use omen::row::Row;
+use omen::value::Value;
+use omen::wal::{WalEntry, WalManager, WalOperation};
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use std::fs;

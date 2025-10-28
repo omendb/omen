@@ -10,7 +10,7 @@
 //! - Durability: Committed data survives system crashes
 
 use anyhow::Result;
-use omendb::wal::{WalManager, WalOperation};
+use omen::wal::{WalManager, WalOperation};
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use std::path::PathBuf;

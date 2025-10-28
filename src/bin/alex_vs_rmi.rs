@@ -6,8 +6,8 @@
 //! - RMI: Fast at small scale, O(n) rebuilds cause 10M degradation
 //! - ALEX: Consistent performance, local splits avoid global rebuilds
 
-use omendb::alex::AlexTree;
-use omendb::index::RecursiveModelIndex;
+use omen::alex::AlexTree;
+use omen::index::RecursiveModelIndex;
 use std::time::Instant;
 
 fn main() {

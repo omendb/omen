@@ -6,13 +6,13 @@
 //! - Query planning and optimization
 //! - MVCC compatibility
 
-use omendb::catalog::Catalog;
-use omendb::row::Row;
-use omendb::sql_engine::{ExecutionResult, SqlEngine};
-use omendb::value::Value;
-use omendb::vector::VectorValue;
-use omendb::vector_operators::VectorOperator;
-use omendb::vector_query_planner::{VectorQueryPattern, VectorQueryPlanner, VectorQueryStrategy};
+use omen::catalog::Catalog;
+use omen::row::Row;
+use omen::sql_engine::{ExecutionResult, SqlEngine};
+use omen::value::Value;
+use omen::vector::VectorValue;
+use omen::vector_operators::VectorOperator;
+use omen::vector_query_planner::{VectorQueryPattern, VectorQueryPlanner, VectorQueryStrategy};
 use tempfile::TempDir;
 
 #[test]

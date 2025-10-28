@@ -3,7 +3,7 @@
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use omendb::backup::{BackupManager, BackupType};
+use omen::backup::{BackupManager, BackupType};
 use std::path::PathBuf;
 
 #[derive(Parser)]

@@ -1,7 +1,7 @@
 //! Quick test at 25M scale to validate before 100M
 
 use anyhow::Result;
-use omendb::alex::MultiLevelAlexTree;
+use omen::alex::MultiLevelAlexTree;
 use rand::prelude::*;
 use std::time::Instant;
 

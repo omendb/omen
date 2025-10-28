@@ -11,7 +11,7 @@
 //!   cargo run --release --bin profile_query_path [num_rows]
 
 use anyhow::Result;
-use omendb::alex::AlexTree;
+use omen::alex::AlexTree;
 use std::time::Instant;
 
 fn main() -> Result<()> {

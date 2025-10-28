@@ -5,8 +5,8 @@
 //! - Search quality (recall unchanged)
 //! - Data integrity (no corruption)
 
-use omendb::vector::types::Vector;
-use omendb::vector::store::VectorStore;
+use omen::vector::types::Vector;
+use omen::vector::store::VectorStore;
 use tempfile::TempDir;
 
 /// Test that graph serialization preserves query results

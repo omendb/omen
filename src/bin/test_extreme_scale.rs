@@ -8,8 +8,8 @@
 //! 5. System stability under sustained extreme load
 
 use anyhow::Result;
-use omendb::alex::multi_level::MultiLevelAlexTree;
-use omendb::memory_pool::{global_buffer_pool, OptimizedBatch};
+use omen::alex::multi_level::MultiLevelAlexTree;
+use omen::memory_pool::{global_buffer_pool, OptimizedBatch};
 use rand::{thread_rng, Rng};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

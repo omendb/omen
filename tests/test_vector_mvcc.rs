@@ -6,11 +6,11 @@
 //! - Transaction rollback
 //! - Crash recovery (when implemented)
 
-use omendb::catalog::Catalog;
-use omendb::row::Row;
-use omendb::value::Value;
-use omendb::vector::VectorValue;
-use omendb::wal::WalManager;
+use omen::catalog::Catalog;
+use omen::row::Row;
+use omen::value::Value;
+use omen::vector::VectorValue;
+use omen::wal::WalManager;
 use std::sync::Arc;
 use tempfile::TempDir;
 

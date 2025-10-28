@@ -6,7 +6,7 @@
 //! 3. Compare query results (should be identical)
 //! 4. Measure speedup (should be 1.5-4x faster)
 
-use omendb::vector::{Vector, VectorStore};
+use omen::vector::{Vector, VectorStore};
 use std::time::Instant;
 
 fn generate_random_vector(dim: usize, seed: u64) -> Vector {

@@ -7,9 +7,9 @@
 //! - Edge cases and error handling
 //! - Performance validation
 
-use omendb::catalog::Catalog;
-use omendb::sql_engine::{ExecutionResult, SqlEngine};
-use omendb::value::Value;
+use omen::catalog::Catalog;
+use omen::sql_engine::{ExecutionResult, SqlEngine};
+use omen::value::Value;
 use tempfile::TempDir;
 
 // ============================================================================

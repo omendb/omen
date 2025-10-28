@@ -11,10 +11,10 @@
 //! 5. Lock contention analysis
 
 use anyhow::Result;
-use omendb::concurrent::MetricsCollector;
-use omendb::row::Row;
-use omendb::table::Table;
-use omendb::value::Value;
+use omen::concurrent::MetricsCollector;
+use omen::row::Row;
+use omen::table::Table;
+use omen::value::Value;
 use rand::{thread_rng, Rng};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier, RwLock};

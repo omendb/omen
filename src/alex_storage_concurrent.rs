@@ -25,7 +25,7 @@ use std::sync::{Arc, RwLock};
 ///
 /// Example:
 /// ```rust
-/// use omendb::alex_storage_concurrent::ConcurrentAlexStorage;
+/// use omen::alex_storage_concurrent::ConcurrentAlexStorage;
 /// use std::sync::Arc;
 /// use std::thread;
 ///

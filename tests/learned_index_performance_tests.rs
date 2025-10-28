@@ -5,8 +5,8 @@
 //! that validate OmenDB's core value proposition.
 
 use datafusion::prelude::*;
-use omendb::datafusion::redb_table::RedbTable;
-use omendb::redb_storage::RedbStorage;
+use omen::datafusion::redb_table::RedbTable;
+use omen::redb_storage::RedbStorage;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use tempfile::tempdir;

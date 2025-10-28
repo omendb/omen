@@ -4,7 +4,7 @@
 //! Run with: cargo build --release && perf record -F 999 -g ./target/release/profile_10m_queries
 
 use anyhow::Result;
-use omendb::rocks_storage::RocksStorage;
+use omen::rocks_storage::RocksStorage;
 use tempfile::TempDir;
 use std::time::Instant;
 

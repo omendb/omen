@@ -9,7 +9,7 @@
 //!
 //! Run with: cargo run --release --bin benchmark_concurrent_alex
 
-use omendb::alex_storage_concurrent::ConcurrentAlexStorage;
+use omen::alex_storage_concurrent::ConcurrentAlexStorage;
 use rand::{Rng, SeedableRng};
 use std::sync::Arc;
 use std::thread;

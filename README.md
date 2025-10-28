@@ -1,8 +1,8 @@
-# OmenDB Server
+# omen
 
-**PostgreSQL-compatible vector database**
+**Embedded PostgreSQL-compatible vector database**
 
-Drop-in replacement for pgvector. 10x faster, 28x more memory efficient. Source-available. Self-hostable.
+Drop-in replacement for pgvector. 10x faster, 28x more memory efficient. Source-available. Embeddable.
 
 ---
 
@@ -27,15 +27,16 @@ LIMIT 10;
 
 ---
 
-## Why OmenDB?
+## Why omen?
 
 ### vs pgvector (Current Standard)
 - **10x faster** at 10M+ vectors
 - **28x more memory efficient** (<2GB vs 60GB for 10M vectors)
 - **Drop-in compatible** (PostgreSQL wire protocol)
+- **Embeddable** (no separate server required)
 
 ### vs Pinecone (Popular Cloud)
-- **90% cheaper** ($99 vs $500/month for 10M vectors)
+- **100% free** (embedded library, no hosting costs)
 - **Self-hostable** (compliance-friendly: HIPAA, SOC2, data sovereignty)
 - **Source-available** (can verify, modify, contribute)
 - **PostgreSQL-compatible** (no new API to learn)
@@ -44,6 +45,7 @@ LIMIT 10;
 - **PostgreSQL compatibility** (use existing tools, drivers, ORMs)
 - **HTAP architecture** (one database for vectors + business data)
 - **Learned indexing** (ALEX - 28x more memory efficient than B-trees)
+- **Embeddable** (runs in your process, no network overhead)
 
 ---
 
@@ -68,19 +70,15 @@ LIMIT 10;
 
 ---
 
-## Pricing
+## License & Pricing
 
-| Tier | Price | Vectors | Queries/mo | Best For |
-|------|-------|---------|------------|----------|
-| **Developer** | **FREE** | 100K | 100K | Prototyping, learning |
-| **Starter** | **$29/mo** | 1M | 1M | Side projects, early startups |
-| **Growth** | **$99/mo** | 10M | 10M | Production apps, scaling startups |
-| **Enterprise** | **Custom** | Unlimited | Unlimited | Large deployments, compliance |
+**omen** is source-available under the Elastic License 2.0:
+- ✅ **Free to use** (embedded in your applications)
+- ✅ **Free to modify** (fork, customize, contribute)
+- ✅ **Free to self-host** (deploy on your infrastructure)
+- ❌ **Cannot resell as managed service** (protects future omen-server business)
 
-**Why this pricing wins**:
-- **Predictable**: No surprise bills (vs Pinecone usage spikes)
-- **Transparent**: Know your costs upfront
-- **Competitive**: 90% cheaper than Pinecone
+**For hosted/managed service**: **omen-server** is planned for the future - a fully managed cloud service built on omen with multi-tenancy, authentication, and enterprise features.
 
 ---
 
@@ -110,20 +108,20 @@ LIMIT 10;
 
 ## Development Status
 
-**Week 1** (Current):
-- Vector data type prototype
-- ALEX indexing for high-dimensional vectors
-- PostgreSQL wire protocol integration
+**Week 7** (Current - October 2025):
+- ✅ HNSW index implementation (99.5% recall, <15ms p95)
+- ✅ Binary Quantization (19.9x memory reduction)
+- ✅ Graph serialization (4175x speedup at 1M scale)
+- ✅ Parallel building (16x speedup)
+- ✅ PostgreSQL wire protocol
+- ✅ MVCC snapshot isolation
+- ✅ 142 tests passing (Phase 2 validation 60% complete)
 
-**Month 1-4**: Vector foundation
-- Distance operators (<->, <#>, <=>)
-- ANN search optimization
-- Benchmark vs pgvector
-
-**Month 5-6**: First production release
-- Cloud deployment (managed service)
-- Self-hosting mode
-- First 10-50 customers
+**Next Steps**:
+- Complete Phase 2 validation (edge cases, resource limits)
+- Performance benchmarks vs pgvector
+- Production hardening
+- Documentation and examples
 
 ---
 
@@ -174,11 +172,11 @@ For now:
 
 ## Related Projects
 
-- **omen-lite**: Embedded vector database (Year 2+ - not yet started)
+- **omen-server**: Planned fully managed cloud service built on omen (future)
 - **pg-learned**: PostgreSQL extension demonstrating learned indexes ([omendb/pg-learned](https://github.com/omendb/pg-learned))
 
 ---
 
-**Status**: 🚧 Early development (Week 1) - Not ready for production use
+**Status**: 🔬 Week 7 - Phase 2 validation (142 tests passing) - Not ready for production use
 
 **Star this repo to follow development** ⭐

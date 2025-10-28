@@ -1,4 +1,4 @@
-use omendb::{
+use omen::{
     catalog::Catalog,
     row::Row,
     table::Table,

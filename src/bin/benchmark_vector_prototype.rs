@@ -9,7 +9,7 @@
 //!
 //! Test scales: 10K, 100K, 1M vectors (1536 dimensions)
 
-use omendb::vector::{Vector, VectorStore};
+use omen::vector::{Vector, VectorStore};
 use rand::Rng;
 use std::time::Instant;
 

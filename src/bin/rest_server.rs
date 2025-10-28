@@ -1,7 +1,7 @@
 //! REST API server binary
 
 use datafusion::prelude::*;
-use omendb::rest::RestServer;
+use omen::rest::RestServer;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]

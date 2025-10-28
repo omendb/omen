@@ -7,7 +7,7 @@
 //! 4. Cache update
 
 use anyhow::Result;
-use omendb::alex::AlexTree;
+use omen::alex::AlexTree;
 use rocksdb::{DB, Options};
 use std::time::Instant;
 use tempfile::TempDir;

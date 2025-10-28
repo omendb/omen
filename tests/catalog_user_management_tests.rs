@@ -2,7 +2,7 @@
 //! Tests the integration of UserStore with Catalog
 
 use anyhow::Result;
-use omendb::catalog::Catalog;
+use omen::catalog::Catalog;
 use tempfile::TempDir;
 
 #[test]

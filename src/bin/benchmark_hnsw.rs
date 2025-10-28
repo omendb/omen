@@ -5,7 +5,7 @@
 //! - Query k=10 nearest neighbors
 //! - Measure latency and validate recall
 
-use omendb::vector::{Vector, VectorStore};
+use omen::vector::{Vector, VectorStore};
 use rand::Rng;
 use std::time::Instant;
 

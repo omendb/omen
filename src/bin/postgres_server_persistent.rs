@@ -6,11 +6,11 @@
 
 use arrow::datatypes::{DataType, Field, Schema};
 use datafusion::prelude::*;
-use omendb::catalog::Catalog;
-use omendb::datafusion::arrow_table_provider::ArrowTableProvider;
-use omendb::postgres::PostgresServer;
-use omendb::row::Row;
-use omendb::value::Value;
+use omen::catalog::Catalog;
+use omen::datafusion::arrow_table_provider::ArrowTableProvider;
+use omen::postgres::PostgresServer;
+use omen::row::Row;
+use omen::value::Value;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use tracing::info;
@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Load table independently for DataFusion (ArrowTableProvider needs Arc<RwLock<Table>>)
-    use omendb::table::Table;
+    use omen::table::Table;
     let df_table = Table::load(
         "users".to_string(),
         PathBuf::from("./omendb_data/users"),

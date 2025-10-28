@@ -43,7 +43,7 @@ use std::simd::{cmp::SimdPartialEq, num::SimdInt, LaneCount, Simd, SupportedLane
 /// # Examples
 ///
 /// ```
-/// use omendb::alex::simd_search::simd_search_exact;
+/// use omen::alex::simd_search::simd_search_exact;
 ///
 /// let keys = vec![Some(10), Some(20), None, Some(30), Some(40)];
 /// assert_eq!(simd_search_exact(&keys, 20), Some(1));
@@ -137,7 +137,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use omendb::alex::simd_search::binary_search_sorted;
+/// use omen::alex::simd_search::binary_search_sorted;
 ///
 /// let keys = vec![Some(10), None, Some(30), None, Some(50)];
 /// assert_eq!(binary_search_sorted(&keys, 30), Some(2));
@@ -229,7 +229,7 @@ pub fn binary_search_sorted(keys: &[Option<i64>], target: i64) -> Option<usize> 
 /// # Examples
 ///
 /// ```
-/// use omendb::alex::simd_search::scalar_search_exact;
+/// use omen::alex::simd_search::scalar_search_exact;
 ///
 /// let keys = vec![Some(10), Some(20), Some(30)];
 /// assert_eq!(scalar_search_exact(&keys, 20), Some(1));
@@ -253,7 +253,7 @@ pub fn scalar_search_exact(keys: &[Option<i64>], target: i64) -> Option<usize> {
 /// # Examples
 ///
 /// ```
-/// use omendb::alex::simd_search::simd_search_insert_pos;
+/// use omen::alex::simd_search::simd_search_insert_pos;
 ///
 /// let keys = vec![Some(10), None, Some(30), None, Some(50)];
 /// assert_eq!(simd_search_insert_pos(&keys, 25), 2); // Before 30

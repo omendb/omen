@@ -1,7 +1,7 @@
 //! OmenDB Integration Test Runner
 //! Run comprehensive integration tests for production validation
 
-use omendb::integration_tests::*;
+use omen::integration_tests::*;
 use std::env;
 use std::process;
 

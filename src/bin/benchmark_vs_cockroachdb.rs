@@ -9,9 +9,9 @@
 //! Workload: Write-heavy OLTP (similar to TPC-C)
 
 use anyhow::Result;
-use omendb::table::Table;
-use omendb::value::Value;
-use omendb::row::Row;
+use omen::table::Table;
+use omen::value::Value;
+use omen::row::Row;
 use arrow::datatypes::{DataType, Field, Schema};
 use std::sync::Arc;
 use std::time::Instant;

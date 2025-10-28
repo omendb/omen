@@ -1,4 +1,4 @@
-use omendb::quantization::{QuantizationModel, QuantizedVector};
+use omen::quantization::{QuantizationModel, QuantizedVector};
 use rand::Rng;
 use std::time::Instant;
 

@@ -7,8 +7,8 @@
 //! - Thread safety of public APIs
 //! - No data races or deadlocks
 
-use omendb::vector::types::Vector;
-use omendb::vector::store::VectorStore;
+use omen::vector::types::Vector;
+use omen::vector::store::VectorStore;
 use std::sync::{Arc, Mutex};
 use std::thread;
 

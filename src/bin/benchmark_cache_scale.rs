@@ -7,9 +7,9 @@
 
 use anyhow::Result;
 use arrow::datatypes::{DataType, Field, Schema};
-use omendb::catalog::Catalog;
-use omendb::row::Row;
-use omendb::value::Value;
+use omen::catalog::Catalog;
+use omen::row::Row;
+use omen::value::Value;
 use std::sync::Arc;
 use std::time::Instant;
 use tempfile::TempDir;

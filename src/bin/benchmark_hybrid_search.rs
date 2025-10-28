@@ -7,8 +7,8 @@
 //!
 //! Tests various selectivity levels (1%, 10%, 50%, 90%)
 
-use omendb::catalog::Catalog;
-use omendb::sql_engine::SqlEngine;
+use omen::catalog::Catalog;
+use omen::sql_engine::SqlEngine;
 use rand::Rng;
 use std::time::Instant;
 

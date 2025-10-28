@@ -3,7 +3,7 @@
 //! Tests the REST API endpoints using real HTTP requests.
 
 use datafusion::prelude::*;
-use omendb::rest::RestServer;
+use omen::rest::RestServer;
 use serde_json::Value;
 use std::time::Duration;
 use tokio::time::sleep;

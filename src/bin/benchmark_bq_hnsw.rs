@@ -1,5 +1,5 @@
-use omendb::quantization::{QuantizationModel, QuantizedVectorStore};
-use omendb::vector::{HNSWIndex, Vector};
+use omen::quantization::{QuantizationModel, QuantizedVectorStore};
+use omen::vector::{HNSWIndex, Vector};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use std::collections::HashSet;

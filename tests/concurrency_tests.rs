@@ -3,8 +3,8 @@
 //! Tests system behavior under concurrent load from multiple clients.
 
 use datafusion::prelude::*;
-use omendb::postgres::PostgresServer;
-use omendb::rest::RestServer;
+use omen::postgres::PostgresServer;
+use omen::rest::RestServer;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;

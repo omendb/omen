@@ -13,8 +13,8 @@ use datafusion::arrow::datatypes::{DataType, Field, Schema};
 use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::datasource::MemTable;
 use datafusion::prelude::*;
-use omendb::alex::MultiLevelAlexTree;
-use omendb::postgres::PostgresServer;
+use omen::alex::MultiLevelAlexTree;
+use omen::postgres::PostgresServer;
 use std::sync::Arc;
 use tracing::info;
 

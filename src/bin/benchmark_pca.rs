@@ -5,7 +5,7 @@
 //! - Measure explained variance (target 80-90%)
 //! - Measure training and projection time
 
-use omendb::pca::VectorPCA;
+use omen::pca::VectorPCA;
 use rand::Rng;
 use std::time::Instant;
 

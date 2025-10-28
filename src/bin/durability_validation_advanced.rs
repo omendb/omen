@@ -15,7 +15,7 @@
 //! - TiDB's fault injection framework
 
 use anyhow::{anyhow, Result};
-use omendb::wal::{WalManager, WalOperation};
+use omen::wal::{WalManager, WalOperation};
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use std::path::PathBuf;

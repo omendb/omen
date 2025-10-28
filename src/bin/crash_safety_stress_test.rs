@@ -9,7 +9,7 @@
 //! This is the stress test version of the WAL unit tests
 
 use anyhow::Result;
-use omendb::rocks_storage::RocksStorage;
+use omen::rocks_storage::RocksStorage;
 use std::collections::HashSet;
 use std::time::Instant;
 use tempfile::TempDir;

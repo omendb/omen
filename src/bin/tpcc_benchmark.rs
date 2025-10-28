@@ -14,9 +14,9 @@
 
 use anyhow::Result;
 use arrow::datatypes::{DataType, Field, Schema};
-use omendb::table::Table;
-use omendb::row::Row;
-use omendb::value::Value;
+use omen::table::Table;
+use omen::row::Row;
+use omen::value::Value;
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

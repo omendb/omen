@@ -1,7 +1,7 @@
 //! Week 3: Arrow Integration and Range Query Benchmarks
 //! Testing our learned index with columnar storage
 
-use omendb::OmenDB;
+use omen::OmenDB;
 use std::collections::BTreeMap;
 use std::time::Instant;
 

@@ -6,8 +6,8 @@
 //! - Metrics accuracy
 
 use datafusion::logical_expr::{col, lit, BinaryExpr, Between, Operator};
-use omendb::cost_estimator::ExecutionPath;
-use omendb::query_router::QueryRouter;
+use omen::cost_estimator::ExecutionPath;
+use omen::query_router::QueryRouter;
 use std::time::Instant;
 
 fn main() {

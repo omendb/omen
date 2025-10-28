@@ -27,7 +27,7 @@
 //! ## Example Usage
 //!
 //! ```rust,ignore
-//! use omendb::alex::AlexTree;
+//! use omen::alex::AlexTree;
 //!
 //! let mut index = AlexTree::new();
 //!

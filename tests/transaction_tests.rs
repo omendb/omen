@@ -3,7 +3,7 @@
 //! Tests ACID properties, transaction isolation, and BEGIN/COMMIT/ROLLBACK semantics.
 
 use datafusion::prelude::*;
-use omendb::postgres::PostgresServer;
+use omen::postgres::PostgresServer;
 use std::time::Duration;
 use tokio::time::sleep;
 use tokio_postgres::NoTls;

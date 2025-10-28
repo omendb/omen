@@ -1,6 +1,6 @@
 // TLS integration tests for PostgreSQL wire protocol
 
-use omendb::postgres::PostgresServer;
+use omen::postgres::PostgresServer;
 use datafusion::prelude::*;
 use std::process::Command;
 use std::time::Duration;

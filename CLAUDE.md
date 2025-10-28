@@ -1,15 +1,15 @@
-# OmenDB Server Development Context
+# omen Development Context
 
-**Repository**: omendb-server (PostgreSQL-compatible Vector Database)
+**Repository**: omen (Embedded PostgreSQL-compatible Vector Database)
 **Last Updated**: October 27, 2025 - Week 7 Day 2+ (Phase 2 Validation 60% Complete)
-**License**: Elastic License 2.0 (source-available, self-hostable)
+**License**: Elastic License 2.0 (source-available, embeddable)
 **Status**: 142 tests passing, HNSW graph serialization working, validation in progress
 
 ## Product Overview
 
-**omendb-server**: PostgreSQL-compatible vector database that scales
+**omen**: Embedded PostgreSQL-compatible vector database for AI applications
 
-**Positioning**: "PostgreSQL-compatible vector database. Drop-in replacement for pgvector. 10x faster, 28x more memory efficient. Source-available. Self-hostable."
+**Positioning**: "Embedded PostgreSQL-compatible vector database. Drop-in replacement for pgvector. 10x faster, 28x more memory efficient. Source-available. Embeddable."
 
 ## OmenDB Product Roadmap (Multi-Database Platform)
 
@@ -210,7 +210,7 @@ Planned (Vector DB):
 
 **Repository Structure** (Standard OSS - agent-contexts v0.1.1):
 ```
-omendb-server/
+omen/
 ├── CLAUDE.md              # This file - AI agent entry point
 ├── docs/                  # Documentation (standard OSS pattern) 📚
 │   ├── README.md          # Documentation index
@@ -255,31 +255,31 @@ omendb-server/
 
 ## Product Roadmap & Code Strategy
 
-**Year 1 Focus** (2025-2026): omendb-server ONLY
-- Build cloud vector database first
-- Validate product-market fit
-- Self-hosting mode covers 95% of "embedded" use cases
-- **Rationale**: Focus beats parallelization in early stage
+**Current (2025)**: omen - Embedded Vector Database
+- Build solid embedded library first (embedded-first architecture)
+- PostgreSQL wire protocol for compatibility
+- Validate technology foundation (HNSW, BQ, MVCC, serialization)
+- **Rationale**: Embedded-first approach (like libSQL→Turso, SQLite→D1)
 
-**Year 2+**: Consider omen-lite (embedded variant)
-- Extract to omen-lite IF demand exists
-- Shares 80% of code (ALEX, vector ops, storage)
-- Only difference: Wire protocol (embedded API vs PostgreSQL)
-- 2-4 weeks of work (not 6 months)
+**Future**: omen-server (Managed Cloud Service)
+- Build managed cloud service on top of omen
+- Add: Multi-tenancy, authentication, billing, monitoring
+- Thin API layer wrapping omen embedded library
+- 2-4 weeks of work after omen is production-ready
 
-**Code organization** (when extracting omen-lite):
-- Extract shared code to **omendb-core** library (Apache 2.0):
-  - `omendb-core/alex` - Multi-level ALEX index
-  - `omendb-core/vector` - Vector types, distance functions
-  - `omendb-core/mvcc` - MVCC snapshot isolation
-  - `omendb-core/storage` - RocksDB abstractions
-- Both products depend on omendb-core
+**Code organization** (when building omen-server):
+- Extract shared code to **omen-core** library (Apache 2.0):
+  - `omen-core/alex` - Multi-level ALEX index
+  - `omen-core/vector` - Vector types, distance functions
+  - `omen-core/mvcc` - MVCC snapshot isolation
+  - `omen-core/storage` - RocksDB abstractions
+- Both omen and omen-server depend on omen-core
 - Standard Rust pattern: Build first, extract when stable
 
 **GitHub Organization:**
-- `omendb/omendb-server` - This repository (Elastic License 2.0)
-- `omendb/omen-lite` - Embedded variant (Elastic License 2.0, Year 2+)
-- `omendb/omendb-core` - Shared library (Apache 2.0, when extracted)
+- `omendb/omen` - This repository - Embedded vector database (Elastic License 2.0)
+- `omendb/omen-server` - Future: Managed cloud service (Private, when built)
+- `omendb/omen-core` - Future: Shared library (Apache 2.0, when extracted)
 - `omendb/pg-learned` - PostgreSQL extension (Elastic License 2.0, marketing/education)
 
 ---
@@ -551,10 +551,10 @@ cargo build --release            # Optimized build
 
 *Last Updated: October 27, 2025 - Week 7 Day 2+ (Phase 2 Validation 60% Complete)*
 
-**Product**: omendb-server - PostgreSQL-compatible vector database (Phase 1 focus)
-**Future Products**: Time series database (2026-2027), Graph database (2027-2028)
+**Product**: omen - Embedded PostgreSQL-compatible vector database (Phase 1 focus)
+**Future Products**: omen-server (managed cloud service), Time series database (2026-2027), Graph database (2027-2028)
 **Platform Vision**: Unified multi-database platform with shared infrastructure
 **Market**: $10.6B vector DB market (23.54% CAGR)
 **Current Phase**: Validation before marketing (142 tests, ASAN clean)
 **Next Milestone**: Complete Phase 2 validation → pgvector benchmarks
-**GitHub**: omendb/omendb-server
+**GitHub**: omendb/omen

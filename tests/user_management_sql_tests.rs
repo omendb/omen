@@ -2,9 +2,9 @@
 //! CREATE USER, DROP USER, ALTER USER
 
 use anyhow::Result;
-use omendb::catalog::Catalog;
-use omendb::postgres::OmenDbAuthSource;
-use omendb::sql_engine::{ExecutionResult, SqlEngine};
+use omen::catalog::Catalog;
+use omen::postgres::OmenDbAuthSource;
+use omen::sql_engine::{ExecutionResult, SqlEngine};
 use std::sync::Arc;
 use tempfile::TempDir;
 

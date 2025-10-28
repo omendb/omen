@@ -4,7 +4,7 @@
 //! Tests build performance, query latency, and memory usage at 100M rows.
 
 use anyhow::Result;
-use omendb::alex::MultiLevelAlexTree;
+use omen::alex::MultiLevelAlexTree;
 use rand::prelude::*;
 use rusqlite::{Connection, params};
 use std::time::Instant;

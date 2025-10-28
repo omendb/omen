@@ -8,8 +8,8 @@
 //! - Medium selectivity (20-50%): Should maintain >90% recall
 //! - Low selectivity (90%+): Should maintain >90% recall
 
-use omendb::catalog::Catalog;
-use omendb::sql_engine::SqlEngine;
+use omen::catalog::Catalog;
+use omen::sql_engine::SqlEngine;
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use std::collections::HashSet;
@@ -319,8 +319,8 @@ fn l2_distance(a: &[f32], b: &[f32]) -> f32 {
 
 /// Extract IDs from ExecutionResult
 fn extract_ids_from_result(result: &omendb::sql_engine::ExecutionResult) -> Vec<i64> {
-    use omendb::sql_engine::ExecutionResult;
-    use omendb::value::Value;
+    use omen::sql_engine::ExecutionResult;
+    use omen::value::Value;
 
     match result {
         ExecutionResult::Selected { data, columns, .. } => {

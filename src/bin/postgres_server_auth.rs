@@ -9,7 +9,7 @@ use arrow::array::{Int64Array, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use datafusion::datasource::MemTable;
 use datafusion::prelude::*;
-use omendb::postgres::{OmenDbAuthSource, PostgresServer};
+use omen::postgres::{OmenDbAuthSource, PostgresServer};
 use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::sync::RwLock;

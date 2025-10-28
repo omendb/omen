@@ -3,7 +3,7 @@
 //! Tests learned index performance on 50K rows WITHOUT DataFusion overhead.
 //! This bypasses the TableProvider layer to measure pure learned index performance.
 
-use omendb::redb_storage::RedbStorage;
+use omen::redb_storage::RedbStorage;
 use std::time::Instant;
 use tempfile::tempdir;
 

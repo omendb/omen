@@ -2,9 +2,9 @@
 //!
 //! Tests concurrent access to Catalog, Table, and ALEX index structures
 
-use omendb::catalog::Catalog;
-use omendb::row::Row;
-use omendb::value::Value;
+use omen::catalog::Catalog;
+use omen::row::Row;
+use omen::value::Value;
 use arrow::datatypes::{DataType, Field, Schema};
 use std::sync::Arc;
 use std::thread;

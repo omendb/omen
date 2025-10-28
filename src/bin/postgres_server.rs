@@ -8,7 +8,7 @@
 
 use clap::Parser;
 use datafusion::prelude::*;
-use omendb::postgres::{PostgresServer, serve_metrics};
+use omen::postgres::{PostgresServer, serve_metrics};
 use tracing::info;
 
 #[derive(Parser, Debug)]

@@ -2,8 +2,8 @@
 //! Validates that learned index optimization actually provides speedup
 
 use anyhow::Result;
-use omendb::catalog::Catalog;
-use omendb::sql_engine::{ExecutionResult, SqlEngine};
+use omen::catalog::Catalog;
+use omen::sql_engine::{ExecutionResult, SqlEngine};
 use std::time::Instant;
 use tempfile::TempDir;
 

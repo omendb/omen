@@ -9,7 +9,7 @@
 //!
 //! Run with: cargo run --release --bin benchmark_compaction
 
-use omendb::alex_storage::AlexStorage;
+use omen::alex_storage::AlexStorage;
 use rand::{Rng, SeedableRng};
 use std::time::Instant;
 use tempfile::tempdir;

@@ -2,8 +2,8 @@
 //! Demonstrates multi-table database with learned indexes and standard SQL interface
 
 use anyhow::Result;
-use omendb::catalog::Catalog;
-use omendb::sql_engine::{ExecutionResult, SqlEngine};
+use omen::catalog::Catalog;
+use omen::sql_engine::{ExecutionResult, SqlEngine};
 use tempfile::TempDir;
 
 fn main() -> Result<()> {

@@ -1,8 +1,8 @@
 // Comprehensive aggregation tests for SQL engine (Phase 3)
 
-use omendb::catalog::Catalog;
-use omendb::sql_engine::SqlEngine;
-use omendb::value::Value;
+use omen::catalog::Catalog;
+use omen::sql_engine::SqlEngine;
+use omen::value::Value;
 use tempfile::TempDir;
 
 // Helper: Create test table with sample data

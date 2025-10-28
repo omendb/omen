@@ -3,8 +3,8 @@
 //! Tests connection limit enforcement, statistics tracking, and cleanup
 
 use datafusion::prelude::*;
-use omendb::connection_pool::{ConnectionPool, PoolConfig};
-use omendb::postgres::PostgresServer;
+use omen::connection_pool::{ConnectionPool, PoolConfig};
+use omen::postgres::PostgresServer;
 use std::time::Duration;
 use tokio::time::timeout;
 use tokio_postgres::{NoTls, Client};

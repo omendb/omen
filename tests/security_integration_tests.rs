@@ -1,8 +1,8 @@
 // Security integration tests: Auth + TLS + Multi-user scenarios (Phase 2 Day 8)
 
-use omendb::catalog::Catalog;
-use omendb::postgres::{OmenDbAuthSource, PostgresServer};
-use omendb::user_store::UserStore;
+use omen::catalog::Catalog;
+use omen::postgres::{OmenDbAuthSource, PostgresServer};
+use omen::user_store::UserStore;
 use datafusion::prelude::*;
 use std::sync::Arc;
 use tokio::sync::RwLock;

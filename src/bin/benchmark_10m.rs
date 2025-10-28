@@ -2,7 +2,7 @@
 //! Validates that optimizations scale linearly beyond 1M
 
 use anyhow::Result;
-use omendb::redb_storage::RedbStorage;
+use omen::redb_storage::RedbStorage;
 use rusqlite::{Connection, params};
 use std::time::Instant;
 use tempfile::TempDir;

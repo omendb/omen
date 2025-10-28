@@ -1,7 +1,7 @@
 //! Test the backup and restore functionality
 
 use anyhow::Result;
-use omendb::backup::BackupManager;
+use omen::backup::BackupManager;
 use std::fs;
 use tempfile::TempDir;
 

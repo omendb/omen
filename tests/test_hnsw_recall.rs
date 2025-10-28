@@ -3,8 +3,8 @@
 //! Validates that HNSW approximate nearest neighbor search
 //! achieves acceptable recall compared to brute-force search.
 
-use omendb::vector::types::Vector;
-use omendb::vector::store::VectorStore;
+use omen::vector::types::Vector;
+use omen::vector::store::VectorStore;
 
 /// Brute-force k-nearest neighbor search for ground truth
 fn brute_force_knn(

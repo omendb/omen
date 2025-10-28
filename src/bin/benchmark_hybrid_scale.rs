@@ -6,8 +6,8 @@
 //! - Measures latency, throughput, and memory usage
 //! - Validates that exact distance computation scales
 
-use omendb::catalog::Catalog;
-use omendb::sql_engine::SqlEngine;
+use omen::catalog::Catalog;
+use omen::sql_engine::SqlEngine;
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 use std::time::Instant;

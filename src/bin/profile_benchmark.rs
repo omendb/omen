@@ -8,8 +8,8 @@
 //!
 //! Run with: cargo flamegraph --bin profile_benchmark
 
-use omendb::alex::AlexTree;
-use omendb::rocks_storage::RocksStorage;
+use omen::alex::AlexTree;
+use omen::rocks_storage::RocksStorage;
 use rocksdb::{DB, Options, WriteBatch};
 use std::time::Instant;
 use tempfile::tempdir;
