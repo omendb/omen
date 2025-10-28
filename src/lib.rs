@@ -15,13 +15,7 @@ pub mod table_storage;
 pub mod table_wal;
 pub mod value;
 
-// Query routing (Phase 9.2)
-pub mod cost_estimator;
-pub mod query_classifier;
-pub mod query_router;
-
-// Temperature tracking (Phase 9.3)
-pub mod temperature;
+// Query routing and temperature tracking archived to omen-core (commit 127a87d)
 
 // Re-exports for common types
 pub use connection_pool::{Connection, ConnectionPool, PoolConfig};
@@ -38,18 +32,14 @@ pub mod quantization; // Binary quantization (Week 3 - RaBitQ implementation)
 
 // Existing modules (will be refactored)
 pub mod alex; // ALEX adaptive learned index (replacement for RMI)
-pub mod alex_storage; // Custom mmap-based storage with ALEX (10x faster queries)
-pub mod alex_storage_wal; // Write-Ahead Log for AlexStorage durability
-pub mod alex_storage_concurrent; // Thread-safe wrapper for AlexStorage
+// alex_storage*, datafusion, redb_storage archived to omen-core (commit 127a87d)
 pub mod backup;
 pub mod concurrent;
 pub mod constraints; // Table constraint management (PRIMARY KEY, etc.)
-pub mod datafusion;
 pub mod memory_pool;
 pub mod index;
 pub mod metrics;
 pub mod postgres;
-pub mod redb_storage;
 pub mod rocks_storage;
 pub mod rest;
 pub mod security;
