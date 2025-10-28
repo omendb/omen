@@ -1,16 +1,15 @@
 # STATUS
 
-**Last Updated**: October 28, 2025 - Repository Reorganization Complete ✅
-**Phase**: Week 7 Day 2+ - Ready to Resume Engine Work
+**Last Updated**: October 28, 2025 - Critical Bug Fixes Complete, 1M Validation Running
+**Phase**: Week 7 Day 2+ - Preparing for pgvector Benchmarks
 **Repository**: omen (embedded vector database) v0.0.1
 **Status**:
-  - ✅ Repository reorganization complete (commit ff02247)
-  - ✅ Pure embedded library (no server dependencies)
-  - ✅ Build succeeds
-  - ✅ 142 tests passing (101 Phase 1 + 41 Phase 2)
-  - ✅ Server code moved to omen-server repository
-  - ✅ Archived code moved to omen-core repository
-**Next**: Continue Phase 2 validation or move to Phase 3 performance benchmarks
+  - ✅ Repository cleanup complete (commit 019aae4)
+  - ✅ Save/load bug fixed (commit 5450462)
+  - ✅ 367 tests passing (0 failed, 12 ignored)
+  - ✅ 1M end-to-end validation running (~30 min)
+  - ✅ pgvector benchmark plan documented
+**Next**: Complete 1M validation → Basic profiling → pgvector benchmarks
 
 ---
 
