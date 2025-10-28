@@ -1,5 +1,5 @@
 #!/bin/bash
-# Docker Resource Exhaustion Tests
+# Docker/Podman Resource Exhaustion Tests
 # Tests graceful degradation under extreme resource constraints
 
 set -e
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "=========================================="
-echo "Docker Resource Exhaustion Test Suite"
+echo "Docker/Podman Resource Exhaustion Test Suite"
 echo "=========================================="
 echo ""
 
@@ -18,9 +18,22 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Detect docker or podman
+if command -v docker &> /dev/null; then
+    CONTAINER_CMD="docker"
+elif command -v podman &> /dev/null; then
+    CONTAINER_CMD="podman"
+else
+    echo -e "${RED}✗ Neither docker nor podman found${NC}"
+    exit 1
+fi
+
+echo "Using: $CONTAINER_CMD"
+echo ""
+
 # Build the test binary once (no resource constraints for compilation)
-echo "Building test binary in Docker (no memory constraints)..."
-BUILD_EXIT=$(docker run --rm \
+echo "Building test binary in $CONTAINER_CMD (no memory constraints)..."
+BUILD_EXIT=$($CONTAINER_CMD run --rm \
     -v "$PROJECT_ROOT:/workspace" \
     -w /workspace \
     rust:latest \
@@ -39,7 +52,7 @@ echo ""
 # Test 1: Memory Limit (512MB)
 echo "Test 1: Memory Limit (512MB)"
 echo "Testing behavior under memory pressure..."
-docker run --rm \
+$CONTAINER_CMD run --rm \
     --memory="512m" \
     --memory-swap="512m" \
     -v "$PROJECT_ROOT:/workspace" \
@@ -58,7 +71,7 @@ echo ""
 # Test 2: Memory Limit (256MB) - More extreme
 echo "Test 2: Memory Limit (256MB) - Extreme pressure"
 echo "Testing behavior under severe memory pressure..."
-docker run --rm \
+$CONTAINER_CMD run --rm \
     --memory="256m" \
     --memory-swap="256m" \
     -v "$PROJECT_ROOT:/workspace" \
@@ -77,7 +90,7 @@ echo ""
 # Test 3: CPU Limit (0.5 cores)
 echo "Test 3: CPU Limit (0.5 cores)"
 echo "Testing behavior under CPU constraints..."
-docker run --rm \
+$CONTAINER_CMD run --rm \
     --cpus="0.5" \
     -v "$PROJECT_ROOT:/workspace" \
     -w /workspace \
@@ -95,7 +108,7 @@ echo ""
 # Test 4: File Descriptor Limit
 echo "Test 4: File Descriptor Limit (100 open files)"
 echo "Testing behavior with limited file descriptors..."
-docker run --rm \
+$CONTAINER_CMD run --rm \
     --ulimit nofile=100:100 \
     -v "$PROJECT_ROOT:/workspace" \
     -w /workspace \
@@ -113,7 +126,7 @@ echo ""
 # Test 5: Combined Constraints
 echo "Test 5: Combined Constraints (256MB RAM + 0.5 CPU + 100 FD)"
 echo "Testing behavior under multiple resource constraints..."
-docker run --rm \
+$CONTAINER_CMD run --rm \
     --memory="256m" \
     --memory-swap="256m" \
     --cpus="0.5" \
