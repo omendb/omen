@@ -1547,3 +1547,11 @@ LIMIT 10;
 4. Continue Phase 2 validation after reorganization complete
 
 **Reference**: See `../REORGANIZATION_CHECKLIST.md` for detailed execution plan
+
+**Architecture Decision Finalized** (Oct 27 Night):
+- omendb-server IS the embedded library (the real implementation)
+- Will be renamed: omendb-server → omen (embedded PostgreSQL-compatible vector database)
+- omen-lite → archived/deprecated (was experimental)
+- Future: NEW omen-server as thin wrapper for hosted service
+- Pattern: Embedded first (like libSQL→Turso, PostgreSQL→Neon)
+- Updated checklist with complete execution plan at ../REORGANIZATION_CHECKLIST.md
