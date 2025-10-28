@@ -4,6 +4,43 @@ _Architectural decisions with context and rationale_
 
 ---
 
+## 2025-10-28: Separate Embedded Library from Server
+
+**Context**: Repository reorganization to transform from single product to multi-database platform
+
+**Decision**: Split into three repositories:
+1. **omen** (this repo): Pure embedded vector database library
+2. **omen-server**: Managed service layer built on omen
+3. **omen-core**: Private archive of well-developed but unused code
+
+**Rationale**:
+- **Embedded-first architecture**: Build solid library first, add hosted layer later
+- **Industry pattern**: libSQL→Turso, PostgreSQL→Neon, SQLite→D1
+- **Clean public repo**: Separate unused/experimental code from production code
+- **Clear boundaries**: Embedded concerns vs server concerns (auth, REST, PostgreSQL protocol)
+- **Easier to maintain**: Each repo has focused purpose
+
+**What Lives Where**:
+- **omen**: Core database (HNSW, BQ, MVCC, storage, ALEX, transactions, SQL engine)
+- **omen-server**: Wire protocols (PostgreSQL, REST), auth, connection pooling, backup tools
+- **omen-core**: Archived modules (alex_storage, redb_storage, temperature, cost_estimator, query_router)
+
+**Tradeoffs**:
+- More repos to manage (3 instead of 1)
+- Server development requires dependency on omen library
+- **Benefit**: Clean separation, clearer architecture, easier to understand
+
+**Implementation** (6 commits):
+- be6e0b8: Rename + archive 26 pre-pivot binaries
+- 127a87d: Archive 8 modules to omen-core
+- 408d8e9, 6d7661f: Fix dependencies, archive 8 more binaries
+- fcd8d90: Create omen-server, move server code
+- 02cffb0, ff02247: Remove server dependencies from omen
+
+**Result**: ✅ Clean embedded library, builds successfully, 142 tests passing
+
+---
+
 ## 2025-10-21: Use Multi-Level ALEX over DiskANN
 
 **Context**: Choosing learned index structure for 100M+ row scalability
