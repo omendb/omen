@@ -11,7 +11,6 @@
 // 3. Can always see own writes (read-your-own-writes)
 
 use crate::mvcc::{TransactionState, VersionedValue};
-use anyhow::Result;
 
 /// Visibility engine for snapshot isolation
 ///

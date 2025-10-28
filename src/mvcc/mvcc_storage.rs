@@ -13,7 +13,7 @@
 use crate::alex::AlexTree;
 use crate::mvcc::{TransactionOracle, VersionedKey, VersionedValue};
 use anyhow::{anyhow, Result};
-use rocksdb::{IteratorMode, WriteBatch, DB};
+use rocksdb::{WriteBatch, DB};
 use std::sync::{Arc, RwLock};
 use tracing::{debug, info};
 

@@ -21,17 +21,6 @@ path = "src/main.rs"
 name = "bench_arrow"
 path = "src/bench_arrow.rs"
 
-[[bin]]
-name = "scale_test"
-path = "src/bin/scale_test.rs"
-
-[[bin]]
-name = "sql_demo"
-path = "src/bin/sql_demo.rs"
-
-[[bin]]
-name = "profile_benchmark"
-path = "src/bin/profile_benchmark.rs"
 
 
 [dev-dependencies]
@@ -179,77 +168,7 @@ lto = true
 codegen-units = 1
 opt-level = 3
 
-[[bin]]
-name = "stress_test_concurrent"
-path = "src/bin/stress_test_concurrent.rs"
-
-[[bin]]
-name = "profile_query_path"
-path = "src/bin/profile_query_path.rs"
-
-[[bin]]
-name = "test_edge_cases"
-path = "src/bin/test_edge_cases.rs"
-
-[[bin]]
-name = "stress_test_100m"
-path = "src/bin/stress_test_100m.rs"
-
-[[bin]]
-name = "test_25m_quick"
-path = "src/bin/test_25m_quick.rs"
-
-[[bin]]
-name = "test_postgres_compatibility"
-path = "src/bin/test_postgres_compatibility.rs"
-
-[[bin]]
-name = "stress_test_concurrent_advanced"
-path = "src/bin/stress_test_concurrent_advanced.rs"
-
-[[bin]]
-name = "test_extreme_scale"
-path = "src/bin/test_extreme_scale.rs"
-
-[[bin]]
-name = "crash_recovery_test"
-path = "src/bin/crash_recovery_test.rs"
-
-[[bin]]
-name = "durability_validation"
-path = "src/bin/durability_validation.rs"
-
-[[bin]]
-name = "durability_validation_advanced"
-path = "src/bin/durability_validation_advanced.rs"
-
-[[bin]]
-name = "metrics_server"
-path = "src/bin/metrics_server.rs"
-
-[[bin]]
-name = "tpch_framework"
-path = "src/bin/tpch_framework.rs"
-
-[[bin]]
-name = "tpch_benchmark"
-path = "src/bin/tpch_benchmark_real.rs"
-
-[[bin]]
-name = "test_extended"
-path = "tests/test_extended.rs"
-
-[[bin]]
-name = "benchmark_cache_effectiveness"
-path = "src/bin/benchmark_cache_effectiveness.rs"
-
-[[bin]]
-name = "test_cache_simple"
-path = "src/bin/test_cache_simple.rs"
-
-[[bin]]
-name = "benchmark_cache_scale"
-path = "src/bin/benchmark_cache_scale.rs"
+# Vector-related benchmarks and tests
 
 [[bin]]
 name = "benchmark_hnsw"
