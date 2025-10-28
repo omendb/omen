@@ -45,7 +45,7 @@ fn test_count_star() {
 
     let result = engine.execute("SELECT COUNT(*) FROM sales").unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(data[0].get(0).unwrap(), &Value::Int64(6));
     } else {
@@ -61,7 +61,7 @@ fn test_count_column() {
         .execute("SELECT COUNT(product) FROM sales")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(data[0].get(0).unwrap(), &Value::Int64(6));
     } else {
@@ -77,7 +77,7 @@ fn test_sum_integer() {
         .execute("SELECT SUM(quantity) FROM sales")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         // 10 + 50 + 5 + 20 + 15 + 30 = 130
         assert_eq!(data[0].get(0).unwrap(), &Value::Float64(130.0));
@@ -92,7 +92,7 @@ fn test_sum_float() {
 
     let result = engine.execute("SELECT SUM(price) FROM sales").unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         // 999.99 + 29.99 + 299.99 + 149.99 + 399.99 + 79.99 = 1959.94
         if let Value::Float64(sum) = data[0].get(0).unwrap() {
@@ -113,7 +113,7 @@ fn test_avg_integer() {
         .execute("SELECT AVG(quantity) FROM sales")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         // (10 + 50 + 5 + 20 + 15 + 30) / 6 = 21.666...
         if let Value::Float64(avg) = data[0].get(0).unwrap() {
@@ -132,7 +132,7 @@ fn test_avg_float() {
 
     let result = engine.execute("SELECT AVG(price) FROM sales").unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         // 1959.94 / 6 = 326.656666...
         if let Value::Float64(avg) = data[0].get(0).unwrap() {
@@ -153,7 +153,7 @@ fn test_min_integer() {
         .execute("SELECT MIN(quantity) FROM sales")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(data[0].get(0).unwrap(), &Value::Int64(5));
     } else {
@@ -169,7 +169,7 @@ fn test_max_integer() {
         .execute("SELECT MAX(quantity) FROM sales")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(data[0].get(0).unwrap(), &Value::Int64(50));
     } else {
@@ -183,7 +183,7 @@ fn test_min_float() {
 
     let result = engine.execute("SELECT MIN(price) FROM sales").unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         if let Value::Float64(min) = data[0].get(0).unwrap() {
             assert!((min - 29.99).abs() < 0.01);
@@ -201,7 +201,7 @@ fn test_max_float() {
 
     let result = engine.execute("SELECT MAX(price) FROM sales").unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         if let Value::Float64(max) = data[0].get(0).unwrap() {
             assert!((max - 999.99).abs() < 0.01);
@@ -221,7 +221,7 @@ fn test_multiple_aggregates() {
         .execute("SELECT COUNT(*), SUM(quantity), AVG(price), MIN(price), MAX(price) FROM sales")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, columns, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, columns, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(columns.len(), 5);
         
@@ -258,7 +258,7 @@ fn test_group_by_single_column() {
         .execute("SELECT category, COUNT(*), SUM(quantity) FROM sales GROUP BY category")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, columns, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, columns, .. } = result {
         assert_eq!(rows, 2); // Electronics and Furniture
         assert_eq!(columns.len(), 3);
         
@@ -295,7 +295,7 @@ fn test_group_by_multiple_columns() {
         .execute("SELECT category, region, COUNT(*) FROM sales GROUP BY category, region")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, columns, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, columns, .. } = result {
         assert_eq!(rows, 4); // Electronics-North, Electronics-East, Furniture-South, etc
         assert_eq!(columns.len(), 3);
     } else {
@@ -315,35 +315,35 @@ fn test_empty_table_aggregates() {
 
     // COUNT should return 0
     let result = engine.execute("SELECT COUNT(*) FROM empty_table").unwrap();
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(data[0].get(0).unwrap(), &Value::Int64(0));
     }
 
     // SUM should return 0
     let result = engine.execute("SELECT SUM(value) FROM empty_table").unwrap();
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(data[0].get(0).unwrap(), &Value::Float64(0.0));
     }
 
     // AVG should return NULL
     let result = engine.execute("SELECT AVG(value) FROM empty_table").unwrap();
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(data[0].get(0).unwrap(), &Value::Null);
     }
 
     // MIN should return NULL
     let result = engine.execute("SELECT MIN(value) FROM empty_table").unwrap();
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(data[0].get(0).unwrap(), &Value::Null);
     }
 
     // MAX should return NULL
     let result = engine.execute("SELECT MAX(value) FROM empty_table").unwrap();
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(data[0].get(0).unwrap(), &Value::Null);
     }
@@ -367,25 +367,25 @@ fn test_null_values_in_aggregates() {
 
     // COUNT(*) should count all rows including NULLs
     let result = engine.execute("SELECT COUNT(*) FROM nullable").unwrap();
-    if let omendb::sql_engine::ExecutionResult::Selected { data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { data, .. } = result {
         assert_eq!(data[0].get(0).unwrap(), &Value::Int64(4));
     }
 
     // COUNT(column) should skip NULL values
     let result = engine.execute("SELECT COUNT(value) FROM nullable").unwrap();
-    if let omendb::sql_engine::ExecutionResult::Selected { data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { data, .. } = result {
         assert_eq!(data[0].get(0).unwrap(), &Value::Int64(3));
     }
 
     // SUM should skip NULL values
     let result = engine.execute("SELECT SUM(value) FROM nullable").unwrap();
-    if let omendb::sql_engine::ExecutionResult::Selected { data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { data, .. } = result {
         assert_eq!(data[0].get(0).unwrap(), &Value::Float64(60.0)); // 10+20+30
     }
 
     // AVG should skip NULL values
     let result = engine.execute("SELECT AVG(value) FROM nullable").unwrap();
-    if let omendb::sql_engine::ExecutionResult::Selected { data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { data, .. } = result {
         assert_eq!(data[0].get(0).unwrap(), &Value::Float64(20.0)); // 60/3
     }
 }
@@ -400,7 +400,7 @@ fn test_having_count() {
         .execute("SELECT category, COUNT(*) FROM sales GROUP BY category HAVING COUNT(*) > 1")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         // Both Electronics (4) and Furniture (2) have count > 1
         assert_eq!(rows, 2);
         
@@ -422,7 +422,7 @@ fn test_having_sum() {
         .execute("SELECT category, SUM(quantity) FROM sales GROUP BY category HAVING SUM(quantity) >= 50")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         // Only Electronics has SUM(quantity) >= 50 (10+50+15+30 = 105)
         assert_eq!(rows, 1);
         
@@ -446,7 +446,7 @@ fn test_having_avg() {
         .execute("SELECT category, AVG(price) FROM sales GROUP BY category HAVING AVG(price) > 300")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         // Only Electronics should pass (avg price > 300)
         assert_eq!(rows, 1);
         
@@ -467,7 +467,7 @@ fn test_having_with_multiple_conditions() {
         .execute("SELECT category, COUNT(*), SUM(quantity) FROM sales GROUP BY category HAVING COUNT(*) > 1 AND SUM(quantity) > 30")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, .. } = result {
         // Electronics: count=4, sum=105 ✓
         // Furniture: count=2, sum=25 ✗ (sum not > 30)
         assert_eq!(rows, 1);
@@ -485,7 +485,7 @@ fn test_having_all_filtered_out() {
         .execute("SELECT category, COUNT(*) FROM sales GROUP BY category HAVING COUNT(*) > 100")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, .. } = result {
         assert_eq!(rows, 0, "HAVING should filter out all rows");
     } else {
         panic!("Expected Selected result");
@@ -501,7 +501,7 @@ fn test_having_without_group_by() {
         .execute("SELECT COUNT(*) FROM sales HAVING COUNT(*) > 5")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 1);
         assert_eq!(data[0].get(0).unwrap(), &Value::Int64(6));
     } else {
@@ -513,7 +513,7 @@ fn test_having_without_group_by() {
         .execute("SELECT COUNT(*) FROM sales HAVING COUNT(*) > 100")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, .. } = result {
         assert_eq!(rows, 0, "HAVING should filter out single group");
     } else {
         panic!("Expected Selected result");
@@ -542,7 +542,7 @@ fn test_cross_join_basic() {
         .execute("SELECT * FROM colors CROSS JOIN sizes")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, .. } = result {
         assert_eq!(rows, 4, "CROSS JOIN should produce Cartesian product (2x2=4)");
     } else {
         panic!("Expected Selected result");
@@ -569,7 +569,7 @@ fn test_cross_join_different_sizes() {
         .execute("SELECT * FROM table1 CROSS JOIN table2")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, data, .. } = result {
         assert_eq!(rows, 6, "CROSS JOIN 3x2 should produce 6 rows");
         
         // All combinations should exist
@@ -596,7 +596,7 @@ fn test_cross_join_with_empty_table() {
         .execute("SELECT * FROM table1 CROSS JOIN empty_table")
         .unwrap();
 
-    if let omendb::sql_engine::ExecutionResult::Selected { rows, .. } = result {
+    if let omen::sql_engine::ExecutionResult::Selected { rows, .. } = result {
         assert_eq!(rows, 0, "CROSS JOIN with empty table should produce 0 rows");
     } else {
         panic!("Expected Selected result");

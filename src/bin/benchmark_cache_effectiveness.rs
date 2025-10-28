@@ -94,7 +94,7 @@ fn benchmark_without_cache() -> Result<f64> {
 
     // Create table without cache
     let table_dir = temp_dir.path().join("test_table");
-    let mut table = omendb::table::Table::new(
+    let mut table = omen::table::Table::new(
         "test".to_string(),
         schema,
         "id".to_string(),
@@ -160,7 +160,7 @@ fn benchmark_with_cache() -> Result<(f64, f64)> {
 
     // Create table WITH cache
     let table_dir = temp_dir.path().join("test_table");
-    let mut table = omendb::table::Table::new_with_cache(
+    let mut table = omen::table::Table::new_with_cache(
         "test".to_string(),
         schema,
         "id".to_string(),

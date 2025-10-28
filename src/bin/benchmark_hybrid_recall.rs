@@ -318,7 +318,7 @@ fn l2_distance(a: &[f32], b: &[f32]) -> f32 {
 }
 
 /// Extract IDs from ExecutionResult
-fn extract_ids_from_result(result: &omendb::sql_engine::ExecutionResult) -> Vec<i64> {
+fn extract_ids_from_result(result: &omen::sql_engine::ExecutionResult) -> Vec<i64> {
     use omen::sql_engine::ExecutionResult;
     use omen::value::Value;
 

@@ -129,7 +129,7 @@ enum TestPhase {
 /// Extreme scale test controller
 struct ExtremeScaleTest {
     monitor: Arc<ExtremeScaleMonitor>,
-    buffer_pool: Arc<omendb::memory_pool::ByteBufferPool>,
+    buffer_pool: Arc<omen::memory_pool::ByteBufferPool>,
 }
 
 impl ExtremeScaleTest {

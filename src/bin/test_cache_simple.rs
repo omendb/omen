@@ -17,7 +17,7 @@ fn main() -> Result<()> {
     ]));
 
     let table_dir = temp_dir.path().join("test_table");
-    let mut table = omendb::table::Table::new_with_cache(
+    let mut table = omen::table::Table::new_with_cache(
         "test".to_string(),
         schema,
         "id".to_string(),

@@ -1,7 +1,6 @@
 //! OmenDB Library - Pure Learned Index Database
 //! Production hardening: concurrency, testing, monitoring
 
-// Core embedded database modules
 pub mod cache;
 pub mod catalog;
 pub mod logging;
@@ -14,27 +13,20 @@ pub mod table_storage;
 pub mod table_wal;
 pub mod value;
 
-// Server modules moved to omen-server (commit fcd8d90):
-// - connection_pool, backup, postgres, rest, server, security, user_store
-
-// Re-exports for common types
 pub use logging::{init_from_env, init_logging, LogConfig};
 pub use sql_engine::QueryConfig;
 
-// Vector database module (NEW - Week 1-2 prototype)
 pub mod vector;
-pub mod vector_operators; // Distance operators for SQL (<->, <#>, <=>)
-pub mod vector_index; // Index metadata and management for HNSW+BQ
-pub mod vector_query_planner; // Query planning and optimization for vector queries
-pub mod pca; // PCA dimensionality reduction for vectors (resuming development)
-pub mod quantization; // Binary quantization (Week 3 - RaBitQ implementation)
+pub mod vector_operators;
+pub mod vector_index;
+pub mod vector_query_planner;
+pub mod pca;
+pub mod quantization;
 
-// Existing modules (will be refactored)
-pub mod alex; // ALEX adaptive learned index (replacement for RMI)
-// alex_storage*, redb_storage archived to omen-core (commit 127a87d)
-pub mod datafusion; // DataFusion SQL integration (used by constraints and benchmarks)
+pub mod alex;
+pub mod datafusion;
 pub mod concurrent;
-pub mod constraints; // Table constraint management (PRIMARY KEY, etc.)
+pub mod constraints;
 pub mod memory_pool;
 pub mod index;
 pub mod metrics;
@@ -46,13 +38,8 @@ pub mod wal;
 #[cfg(test)]
 mod tests;
 
-// Scale testing module available for benchmarking
 pub mod scale_tests;
 
-// Integration testing module
-pub mod integration_tests;
-
-// Comprehensive multi-table integration tests
 #[cfg(test)]
 mod multi_table_tests;
 

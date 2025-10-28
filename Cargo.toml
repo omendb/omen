@@ -26,10 +26,6 @@ name = "scale_test"
 path = "src/bin/scale_test.rs"
 
 [[bin]]
-name = "integration_test"
-path = "src/bin/integration_test.rs"
-
-[[bin]]
 name = "sql_demo"
 path = "src/bin/sql_demo.rs"
 

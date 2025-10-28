@@ -1,16 +1,14 @@
-//! Database catalog - manages multiple tables and users
-//! Provides table creation, lookup, metadata persistence, and user management
+//! Database catalog - manages multiple tables
+//! Provides table creation, lookup, and metadata persistence
 
 use crate::table::Table;
 use crate::table_wal::TableWalManager;
-use crate::user_store::{User, UserStore};
 use anyhow::{anyhow, Result};
 use arrow::datatypes::SchemaRef;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 /// Table metadata for persistence
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,7 +17,7 @@ struct TableMetadata {
     primary_key: String,
 }
 
-/// Catalog manages all tables and users in the database
+/// Catalog manages all tables in the database
 pub struct Catalog {
     /// All tables by name
     tables: HashMap<String, Table>,
@@ -32,9 +30,6 @@ pub struct Catalog {
 
     /// Write-ahead log for durability (optional)
     wal: Option<TableWalManager>,
-
-    /// User store for authentication and authorization
-    user_store: Arc<UserStore>,
 }
 
 impl Catalog {
@@ -58,31 +53,11 @@ impl Catalog {
             None
         };
 
-        // Initialize user store
-        let user_store_path = data_dir.join("users");
-        let user_store = Arc::new(UserStore::new(user_store_path)?);
-
-        // Create default admin user if no users exist
-        if user_store.user_count()? == 0 {
-            eprintln!("⚠️  No users found. Creating default admin user.");
-            eprintln!("⚠️  Username: admin");
-            eprintln!("⚠️  Password: changeme");
-            eprintln!("⚠️  CHANGE THIS PASSWORD IMMEDIATELY!");
-
-            let admin_user = User::new_with_password(
-                "admin".to_string(),
-                "changeme",
-                4096,
-            )?;
-            user_store.create_user(&admin_user)?;
-        }
-
         let mut catalog = Self {
             tables: HashMap::new(),
             data_dir,
             metadata_file,
             wal,
-            user_store,
         };
 
         // Load existing metadata if present
@@ -191,40 +166,6 @@ impl Catalog {
     /// Check if table exists
     pub fn table_exists(&self, name: &str) -> bool {
         self.tables.contains_key(name)
-    }
-
-    // User management methods
-
-    /// Get reference to user store
-    pub fn user_store(&self) -> &Arc<UserStore> {
-        &self.user_store
-    }
-
-    /// Create a new user
-    pub fn create_user(&self, username: &str, password: &str) -> Result<()> {
-        let user = User::new_with_password(username, password, 4096)?;
-        self.user_store.create_user(&user)?;
-        Ok(())
-    }
-
-    /// Drop (delete) a user
-    pub fn drop_user(&self, username: &str) -> Result<bool> {
-        self.user_store.delete_user(username)
-    }
-
-    /// List all usernames
-    pub fn list_users(&self) -> Result<Vec<String>> {
-        self.user_store.list_users()
-    }
-
-    /// Check if user exists
-    pub fn user_exists(&self, username: &str) -> bool {
-        self.user_store.user_exists(username).unwrap_or(false)
-    }
-
-    /// Get user count
-    pub fn user_count(&self) -> usize {
-        self.user_store.user_count().unwrap_or(0)
     }
 
     /// Save catalog metadata to disk

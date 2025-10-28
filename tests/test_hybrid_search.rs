@@ -103,7 +103,7 @@ fn test_hybrid_filter_first_pk_equality() {
 
     // Should return exactly 1 row (id=5)
     match result {
-        omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } => {
+        omen::sql_engine::ExecutionResult::Selected { rows, data, .. } => {
             assert_eq!(rows, 1, "Should return 1 row after filtering by id=5");
             assert_eq!(data.len(), 1);
 
@@ -137,7 +137,7 @@ fn test_hybrid_filter_first_category_filter() {
 
     // Should return 10 results, all from electronics category
     match result {
-        omendb::sql_engine::ExecutionResult::Selected { rows, data, columns } => {
+        omen::sql_engine::ExecutionResult::Selected { rows, data, columns } => {
             assert_eq!(rows, 10, "Should return 10 nearest neighbors");
             assert_eq!(data.len(), 10);
 
@@ -179,7 +179,7 @@ fn test_hybrid_filter_first_price_range() {
 
     // Should return up to 5 results within price range
     match result {
-        omendb::sql_engine::ExecutionResult::Selected { rows, data, columns } => {
+        omen::sql_engine::ExecutionResult::Selected { rows, data, columns } => {
             assert!(rows <= 5, "Should return at most 5 results");
             assert_eq!(data.len(), rows);
 
@@ -223,7 +223,7 @@ fn test_hybrid_filter_first_empty_result() {
 
     // Should return 0 rows
     match result {
-        omendb::sql_engine::ExecutionResult::Selected { rows, data, .. } => {
+        omen::sql_engine::ExecutionResult::Selected { rows, data, .. } => {
             assert_eq!(rows, 0, "Should return 0 rows when filter matches nothing");
             assert_eq!(data.len(), 0);
         }
@@ -252,7 +252,7 @@ fn test_hybrid_filter_first_multiple_predicates() {
 
     // Should return filtered + ranked results
     match result {
-        omendb::sql_engine::ExecutionResult::Selected { rows, data, columns } => {
+        omen::sql_engine::ExecutionResult::Selected { rows, data, columns } => {
             assert!(rows <= 10, "Should return at most 10 results");
 
             let category_idx = columns.iter().position(|c| c == "category").unwrap();
