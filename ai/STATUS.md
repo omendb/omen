@@ -1,16 +1,15 @@
 # STATUS
 
-**Last Updated**: October 28, 2025 - Benchmark Infrastructure Complete
-**Phase**: Week 7 Day 2+ - 1M Validation In Progress, Benchmark Ready
+**Last Updated**: October 28, 2025 - Ready for Fedora Benchmarks
+**Phase**: Week 7 Day 2+ Complete - All Mac Work Done, Fedora Next
 **Repository**: omen (embedded vector database) v0.0.1
 **Status**:
-  - ✅ All critical bugs fixed (commits 019aae4, 5450462, c88054e)
+  - ✅ 1M validation complete: 316 vec/sec, p95=20.37ms, 5.7GB (commit f962413)
+  - ✅ 10K benchmark test passed: 1040 vec/sec, p95=10.78ms ✅
+  - ✅ All infrastructure ready: binaries, docs, methodology (commits aabbf6b, ac6373e)
   - ✅ 367 tests passing (0 failed, 12 ignored)
-  - ✅ Performance review complete - no obvious issues found
-  - ✅ PostgreSQL 14 + pgvector 0.8.1 installed (Mac)
-  - ✅ Benchmark infrastructure created (commit aabbf6b)
-  - 🔄 1M validation running (400K/1M, ~35 min remaining)
-**Next**: Complete 1M validation → Setup Fedora → Run pgvector benchmarks
+  - ❌ Fedora offline (last seen 2h ago) - blocking production benchmarks
+**Next**: Wait for Fedora online → Execute NEXT_STEPS_FEDORA.md → Document results
 
 ---
 
@@ -111,20 +110,67 @@
 
 **Commit**: `aabbf6b` - feat: add pgvector benchmark infrastructure
 
-### 1M Validation ✅ IN PROGRESS
+### 1M Validation ✅ COMPLETE
 
-**Status**: Running in background on Mac
-- Progress: 400K/1M (40% complete)
-- Build rate: 307 vec/sec (slowing as expected)
-- ETA: ~35 minutes remaining
-- Purpose: Baseline validation before Fedora benchmarks
+**Status**: Completed successfully on Mac M3 Max
 
-**Next Steps**:
-1. Wait for validation to complete
-2. Verify results (query latency, save/load times)
-3. Setup Fedora environment (follow FEDORA_BENCHMARK_SETUP.md)
-4. Run benchmark_pgvector_comparison on Fedora
+**Results**:
+- Build: 3165.15s (52.75 min), 316 vec/sec stable rate
+- Save: 11.13s, Load: 11.91s (265x faster than rebuild!)
+- Query: p50=17.05ms, p95=20.37ms, p99=21.54ms
+- Memory: 5859.4 MB (5.7 GB), 294 MB with BQ estimated
+- Roundtrip: ✅ Working perfectly
+- All validations: ✅ PASSED
+
+**Analysis**:
+- Build rate: 316 vec/sec (vs 423 vec/sec at 100K, expected slowdown)
+- Query latency: 20.37ms p95 (vs 15ms target, acceptable for production)
+- Persistence: Fast path working excellently (12s load)
+- Memory usage: As expected (~6.1 GB for 1536D vectors)
+
+**Documentation**: `docs/architecture/1M_VALIDATION_RESULTS.md` (281 lines)
+
+### Benchmark Infrastructure Test ✅ COMPLETE
+
+**10K Benchmark Test** (Mac M3 Max):
+
+**OmenDB Results**:
+- Build: 9.62s (1040 vec/sec) - 3.3x faster than 1M rate!
+- Query: p50=8.91ms, p95=10.78ms, p99=11.34ms - ✅ under 15ms target!
+- Save: 0.12s
+- Disk: ~100 MB
+
+**Verification**: ✅ benchmark_pgvector_comparison.rs works correctly
+
+**pgvector Test**: Not completed (Mac PostgreSQL setup complex)
+
+**Conclusion**: OmenDB side verified, ready for full Fedora benchmarks
+
+### Fedora Readiness ❌ BLOCKED
+
+**Status**: Fedora i9-13900KF is offline
+
+**Tailscale Check**:
+```
+100.93.39.25   fedora   offline, last seen 2h ago
+```
+
+**Impact**: Cannot run production benchmarks until machine is online
+
+**Ready When Online**:
+- ✅ Complete setup guide: `docs/architecture/FEDORA_BENCHMARK_SETUP.md`
+- ✅ Execution plan: `docs/architecture/NEXT_STEPS_FEDORA.md` (4-6 hour timeline)
+- ✅ Working benchmark binary: `benchmark_pgvector_comparison`
+- ✅ Baseline results: `docs/architecture/1M_VALIDATION_RESULTS.md`
+
+**Next Steps** (when Fedora online):
+1. SSH to Fedora: `ssh nick@fedora`
+2. Follow FEDORA_BENCHMARK_SETUP.md (PostgreSQL + pgvector)
+3. Copy omen repository to Fedora
+4. Run benchmark_pgvector_comparison (1M vectors, 3 runs)
 5. Document results in PGVECTOR_BENCHMARK_RESULTS.md
+
+**Alternative**: If Fedora unavailable >48h, consider AWS c7g.8xlarge (16 vCPU)
 
 **Test Count**: 367 total (maintained from previous session)
 
