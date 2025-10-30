@@ -41,9 +41,9 @@ impl<'a> HNSWIndex<'a> {
     /// - max_elements: Maximum number of vectors (e.g., 1_000_000)
     /// - dimensions: Vector dimensionality (e.g., 1536)
     pub fn new(max_elements: usize, dimensions: usize) -> Self {
-        // Parameters for high-dimensional vectors (based on research)
-        let max_nb_connection = 48; // M=48 for high-dim embeddings
-        let ef_construction = 200; // Balanced quality/speed
+        // Parameters matching pgvector defaults for fair comparison
+        let max_nb_connection = 16; // M=16 (pgvector default)
+        let ef_construction = 64; // ef_construction=64 (pgvector default)
 
         // CRITICAL: nb_layer MUST be 16 for graph serialization to work
         // hnsw_rs requires nb_layer == NB_LAYER_MAX (16) for file_dump()

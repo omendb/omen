@@ -196,9 +196,10 @@ fn benchmark_pgvector(
                     .collect::<Vec<_>>()
                     .join(",")
             );
+            // Use inline SQL with cast to avoid type conversion issues
             transaction.execute(
-                "INSERT INTO embeddings (embedding) VALUES ($1)",
-                &[&embedding_str],
+                &format!("INSERT INTO embeddings (embedding) VALUES ('{}'::vector)", embedding_str),
+                &[],
             )?;
         }
 
@@ -226,11 +227,11 @@ fn benchmark_pgvector(
         insert_rate
     );
 
-    // Build HNSW index
-    println!("🔨 Building HNSW index (M=48, ef_construction=200)...");
+    // Build HNSW index (using pgvector defaults for fair comparison)
+    println!("🔨 Building HNSW index (M=16, ef_construction=64)...");
     let index_start = Instant::now();
     client.execute(
-        "CREATE INDEX ON embeddings USING hnsw (embedding vector_l2_ops) WITH (m = 48, ef_construction = 200)",
+        "CREATE INDEX ON embeddings USING hnsw (embedding vector_l2_ops) WITH (m = 16, ef_construction = 64)",
         &[],
     )?;
     let index_time = index_start.elapsed();
