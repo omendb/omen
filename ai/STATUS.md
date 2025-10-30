@@ -2095,3 +2095,72 @@ opt-level = 3            # Already configured ✅
 📋 **Details**: `ai/research/PROFILING_ANALYSIS_WEEK8.md`
 
 ---
+
+## Week 8 Complete: Optimization Analysis ✅ (Oct 30, 2025)
+
+**Goal**: Optimize beyond SIMD (target: beat Qdrant's 626 QPS)
+
+### Strategic Findings
+
+**Allocation Analysis** (heaptrack):
+- **Total allocations**: 7,325,297 (10K benchmark)
+- **hnsw_rs library internal**: 5,601,871 (76%) ❌ **Cannot optimize**
+- **OmenDB code**: ~1,7250,000 (24%) ✅ Can optimize
+- **Realistic improvement**: 5-10% (not 10-20% as hoped)
+
+**Cache Optimization Analysis**:
+- **23.41% LLC cache misses** occur in hnsw_rs graph traversal ❌ **Cannot optimize**
+- Requires control over HNSW memory layout ❌ **Library blocks this**
+
+**Critical Conclusion**: Both cache AND allocation optimizations require **custom HNSW**
+
+---
+
+### Week 8 Achievements ✅
+
+| Optimization | Improvement | Status |
+|--------------|-------------|--------|
+| **SIMD** | 162 → 581 QPS (3.6x) | ✅ **COMPLETE** |
+| Cache optimization | 15-25% potential | ❌ Blocked by hnsw_rs |
+| Allocation optimization | 10-20% potential | ❌ Blocked by hnsw_rs (76% of allocations) |
+
+**Result**: 581 QPS (93% of Qdrant's 626 QPS)
+
+---
+
+### Strategic Decision: Move to Custom HNSW
+
+**Why Custom HNSW Now**:
+1. **76% of allocations** in hnsw_rs library (can't optimize)
+2. **23.41% cache misses** in hnsw_rs traversal (can't optimize)
+3. **Both optimizations blocked** by library limitations
+4. **5-10% marginal gains** not worth 2-3 days vs **46%+ gains** from custom HNSW
+
+**What Custom HNSW Unlocks**:
+- ✅ Cache optimization (15-25%): Memory layout, prefetching
+- ✅ Allocation optimization (10-20%): Arena allocators, buffer reuse
+- ✅ SOTA features: Extended RaBitQ, HNSW-IF, MN-RU
+- ✅ **Cumulative target**: 1000+ QPS (72% improvement, 60% faster than Qdrant)
+
+**Timeline**:
+- Weeks 9-10: Custom HNSW core → 850 QPS
+- Weeks 11-12: SOTA features → 1000+ QPS
+
+---
+
+### Week 8 Documentation
+
+📋 **Analysis Documents Created**:
+- `ai/research/PROFILING_ANALYSIS_WEEK8.md` - Complete profiling results
+- `ai/research/WEEK8_DAY2_CACHE_ANALYSIS.md` - Cache optimization blocked by library
+- `ai/research/ALLOCATION_HOTSPOTS_ANALYSIS.md` - 76% allocations in hnsw_rs
+
+**Key Learning**: Library abstractions limit performance optimization at scale
+
+---
+
+**Week 8 Status**: ✅ **COMPLETE** - SIMD delivered 3.6x improvement (581 QPS)
+**Next Phase**: Custom HNSW implementation (Weeks 9-22, 10-15 weeks)
+**Target**: 1000+ QPS (60% faster than Qdrant market leader)
+
+---
