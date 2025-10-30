@@ -13,17 +13,10 @@ use serde::{Deserialize, Serialize};
 /// Only fetch neighbors when traversing the graph.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NeighborLists {
-    /// Flattened neighbor storage
+    /// Neighbor storage: neighbors[node_id][level] = Vec<neighbor_ids>
     ///
-    /// All neighbors for all nodes at all levels concatenated:
-    /// [node0_level0, node0_level1, ..., node1_level0, node1_level1, ...]
-    neighbors: Vec<u32>,
-
-    /// Offsets into neighbors vec
-    ///
-    /// offsets[node_id * MAX_LEVELS + level] = start offset in neighbors vec
-    /// offsets[node_id * MAX_LEVELS + level + 1] = end offset (or next start)
-    offsets: Vec<usize>,
+    /// Simple 2D structure: first index is node_id, second is level
+    neighbors: Vec<Vec<Vec<u32>>>,
 
     /// Maximum levels supported
     max_levels: usize,
@@ -34,7 +27,6 @@ impl NeighborLists {
     pub fn new(max_levels: usize) -> Self {
         Self {
             neighbors: Vec::new(),
-            offsets: Vec::new(),
             max_levels,
         }
     }
@@ -42,83 +34,91 @@ impl NeighborLists {
     /// Create with pre-allocated capacity
     pub fn with_capacity(num_nodes: usize, max_levels: usize) -> Self {
         Self {
-            neighbors: Vec::new(),
-            offsets: vec![0; num_nodes * max_levels],
+            neighbors: Vec::with_capacity(num_nodes),
             max_levels,
         }
     }
 
     /// Get neighbors for a node at a specific level
     pub fn get_neighbors(&self, node_id: u32, level: u8) -> &[u32] {
-        let idx = (node_id as usize) * self.max_levels + (level as usize);
+        let node_idx = node_id as usize;
+        let level_idx = level as usize;
 
-        if idx >= self.offsets.len() {
+        if node_idx >= self.neighbors.len() {
             return &[];
         }
 
-        let start = self.offsets[idx];
-        let end = if idx + 1 < self.offsets.len() {
-            self.offsets[idx + 1]
-        } else {
-            self.neighbors.len()
-        };
-
-        if start <= end && end <= self.neighbors.len() {
-            &self.neighbors[start..end]
-        } else {
-            &[]
+        if level_idx >= self.neighbors[node_idx].len() {
+            return &[];
         }
+
+        &self.neighbors[node_idx][level_idx]
     }
 
     /// Set neighbors for a node at a specific level
-    pub fn set_neighbors(&mut self, node_id: u32, level: u8, neighbors: Vec<u32>) {
-        let idx = (node_id as usize) * self.max_levels + (level as usize);
+    pub fn set_neighbors(&mut self, node_id: u32, level: u8, neighbors_list: Vec<u32>) {
+        let node_idx = node_id as usize;
+        let level_idx = level as usize;
 
-        // Ensure offsets vec is large enough
-        if idx >= self.offsets.len() {
-            self.offsets.resize(idx + 1, self.neighbors.len());
+        // Ensure we have enough nodes
+        while self.neighbors.len() <= node_idx {
+            self.neighbors.push(vec![Vec::new(); self.max_levels]);
         }
 
-        // Append new neighbors
-        let start = self.neighbors.len();
-        self.neighbors.extend_from_slice(&neighbors);
-        let end = self.neighbors.len();
-
-        // Update offsets
-        self.offsets[idx] = start;
-        if idx + 1 < self.offsets.len() {
-            self.offsets[idx + 1] = end;
-        } else {
-            self.offsets.push(end);
-        }
+        // Set the neighbors at this level
+        self.neighbors[node_idx][level_idx] = neighbors_list;
     }
 
     /// Add a bidirectional link between two nodes at a level
     pub fn add_bidirectional_link(&mut self, node_a: u32, node_b: u32, level: u8) {
-        // Add node_b to node_a's neighbors
-        let mut neighbors_a = self.get_neighbors(node_a, level).to_vec();
-        if !neighbors_a.contains(&node_b) {
-            neighbors_a.push(node_b);
-            self.set_neighbors(node_a, level, neighbors_a);
+        let node_a_idx = node_a as usize;
+        let node_b_idx = node_b as usize;
+        let level_idx = level as usize;
+
+        // Ensure we have enough nodes
+        let max_idx = node_a_idx.max(node_b_idx);
+        while self.neighbors.len() <= max_idx {
+            self.neighbors.push(vec![Vec::new(); self.max_levels]);
         }
 
-        // Add node_a to node_b's neighbors
-        let mut neighbors_b = self.get_neighbors(node_b, level).to_vec();
-        if !neighbors_b.contains(&node_a) {
-            neighbors_b.push(node_a);
-            self.set_neighbors(node_b, level, neighbors_b);
+        // Add node_b to node_a's neighbors (if not already present)
+        if !self.neighbors[node_a_idx][level_idx].contains(&node_b) {
+            self.neighbors[node_a_idx][level_idx].push(node_b);
+        }
+
+        // Add node_a to node_b's neighbors (if not already present)
+        if !self.neighbors[node_b_idx][level_idx].contains(&node_a) {
+            self.neighbors[node_b_idx][level_idx].push(node_a);
         }
     }
 
     /// Get total number of neighbor entries
     pub fn total_neighbors(&self) -> usize {
-        self.neighbors.len()
+        self.neighbors
+            .iter()
+            .flat_map(|node| node.iter())
+            .map(|level| level.len())
+            .sum()
     }
 
     /// Get memory usage in bytes (approximate)
     pub fn memory_usage(&self) -> usize {
-        self.neighbors.len() * std::mem::size_of::<u32>()
-            + self.offsets.len() * std::mem::size_of::<usize>()
+        let mut total = 0;
+
+        // Size of outer Vec
+        total += self.neighbors.capacity() * std::mem::size_of::<Vec<Vec<u32>>>();
+
+        // Size of each node's level vecs
+        for node in &self.neighbors {
+            total += node.capacity() * std::mem::size_of::<Vec<u32>>();
+
+            // Size of actual neighbor data
+            for level in node {
+                total += level.len() * std::mem::size_of::<u32>();
+            }
+        }
+
+        total
     }
 }
 

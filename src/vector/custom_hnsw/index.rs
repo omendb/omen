@@ -84,6 +84,21 @@ impl HNSWIndex {
         self.vectors.dimensions()
     }
 
+    /// Get entry point
+    pub fn entry_point(&self) -> Option<u32> {
+        self.entry_point
+    }
+
+    /// Get node level
+    pub fn node_level(&self, node_id: u32) -> Option<u8> {
+        self.nodes.get(node_id as usize).map(|n| n.level)
+    }
+
+    /// Get neighbor count for a node at a level
+    pub fn neighbor_count(&self, node_id: u32, level: u8) -> usize {
+        self.neighbors.get_neighbors(node_id, level).len()
+    }
+
     /// Assign random level to new node
     ///
     /// Uses exponential decay: P(level = l) = (1/M)^l
@@ -140,8 +155,15 @@ impl HNSWIndex {
             return Ok(node_id);
         }
 
-        // Insert into graph (simplified for now - full algorithm in next iteration)
+        // Insert into graph
         self.insert_into_graph(node_id, &vector, level)?;
+
+        // Update entry point if this node has higher level than current entry point
+        let entry_point_id = self.entry_point.unwrap();
+        let entry_level = self.nodes[entry_point_id as usize].level;
+        if level > entry_level {
+            self.entry_point = Some(node_id);
+        }
 
         Ok(node_id)
     }
@@ -164,7 +186,7 @@ impl HNSWIndex {
             nearest = self.search_layer(vector, &nearest, 1, lc);
         }
 
-        // Insert at levels 0..=level
+        // Insert at levels 0..=level (iterate from top to bottom)
         for lc in (0..=level).rev() {
             // Find ef_construction nearest neighbors at this level
             let candidates = self.search_layer(vector, &nearest, self.params.ef_construction, lc);
