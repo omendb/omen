@@ -10,6 +10,9 @@ use super::types::{Candidate, DistanceFunction, HNSWNode, HNSWParams, SearchResu
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashSet};
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Path;
 
 /// HNSW Index
 ///
@@ -397,6 +400,208 @@ impl HNSWIndex {
 
         nodes_size + neighbors_size + vectors_size
     }
+
+    /// Save index to disk
+    ///
+    /// Format:
+    /// - Magic: b"HNSWIDX\0" (8 bytes)
+    /// - Version: u32 (4 bytes)
+    /// - Dimensions: u32 (4 bytes)
+    /// - Num nodes: u32 (4 bytes)
+    /// - Entry point: Option<u32> (1 + 4 bytes)
+    /// - Distance function: DistanceFunction (bincode)
+    /// - Params: HNSWParams (bincode)
+    /// - RNG state: u64 (8 bytes)
+    /// - Nodes: Vec<HNSWNode> (raw bytes, 64 * num_nodes)
+    /// - Neighbors: NeighborLists (bincode)
+    /// - Vectors: VectorStorage (bincode)
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
+        let file = File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
+        let mut writer = BufWriter::new(file);
+
+        // Write magic bytes
+        writer
+            .write_all(b"HNSWIDX\0")
+            .map_err(|e| format!("Failed to write magic: {}", e))?;
+
+        // Write version
+        writer
+            .write_all(&1u32.to_le_bytes())
+            .map_err(|e| format!("Failed to write version: {}", e))?;
+
+        // Write dimensions
+        writer
+            .write_all(&(self.dimensions() as u32).to_le_bytes())
+            .map_err(|e| format!("Failed to write dimensions: {}", e))?;
+
+        // Write num nodes
+        writer
+            .write_all(&(self.nodes.len() as u32).to_le_bytes())
+            .map_err(|e| format!("Failed to write num_nodes: {}", e))?;
+
+        // Write entry point
+        match self.entry_point {
+            Some(ep) => {
+                writer
+                    .write_all(&[1u8])
+                    .map_err(|e| format!("Failed to write entry_point flag: {}", e))?;
+                writer
+                    .write_all(&ep.to_le_bytes())
+                    .map_err(|e| format!("Failed to write entry_point: {}", e))?;
+            }
+            None => {
+                writer
+                    .write_all(&[0u8])
+                    .map_err(|e| format!("Failed to write entry_point flag: {}", e))?;
+            }
+        }
+
+        // Write distance function
+        bincode::serialize_into(&mut writer, &self.distance_fn)
+            .map_err(|e| format!("Failed to serialize distance_fn: {}", e))?;
+
+        // Write params
+        bincode::serialize_into(&mut writer, &self.params)
+            .map_err(|e| format!("Failed to serialize params: {}", e))?;
+
+        // Write RNG state
+        writer
+            .write_all(&self.rng_state.to_le_bytes())
+            .map_err(|e| format!("Failed to write rng_state: {}", e))?;
+
+        // Write nodes (raw bytes for fast I/O)
+        if !self.nodes.is_empty() {
+            let nodes_bytes = unsafe {
+                std::slice::from_raw_parts(
+                    self.nodes.as_ptr() as *const u8,
+                    self.nodes.len() * std::mem::size_of::<HNSWNode>(),
+                )
+            };
+            writer
+                .write_all(nodes_bytes)
+                .map_err(|e| format!("Failed to write nodes: {}", e))?;
+        }
+
+        // Write neighbor lists
+        bincode::serialize_into(&mut writer, &self.neighbors)
+            .map_err(|e| format!("Failed to serialize neighbors: {}", e))?;
+
+        // Write vectors
+        bincode::serialize_into(&mut writer, &self.vectors)
+            .map_err(|e| format!("Failed to serialize vectors: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Load index from disk
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, String> {
+        let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+        let mut reader = BufReader::new(file);
+
+        // Read and verify magic bytes
+        let mut magic = [0u8; 8];
+        reader
+            .read_exact(&mut magic)
+            .map_err(|e| format!("Failed to read magic: {}", e))?;
+        if &magic != b"HNSWIDX\0" {
+            return Err(format!("Invalid magic bytes: {:?}", magic));
+        }
+
+        // Read version
+        let mut version_bytes = [0u8; 4];
+        reader
+            .read_exact(&mut version_bytes)
+            .map_err(|e| format!("Failed to read version: {}", e))?;
+        let version = u32::from_le_bytes(version_bytes);
+        if version != 1 {
+            return Err(format!("Unsupported version: {}", version));
+        }
+
+        // Read dimensions
+        let mut dimensions_bytes = [0u8; 4];
+        reader
+            .read_exact(&mut dimensions_bytes)
+            .map_err(|e| format!("Failed to read dimensions: {}", e))?;
+        let dimensions = u32::from_le_bytes(dimensions_bytes) as usize;
+
+        // Read num nodes
+        let mut num_nodes_bytes = [0u8; 4];
+        reader
+            .read_exact(&mut num_nodes_bytes)
+            .map_err(|e| format!("Failed to read num_nodes: {}", e))?;
+        let num_nodes = u32::from_le_bytes(num_nodes_bytes) as usize;
+
+        // Read entry point
+        let mut entry_point_flag = [0u8; 1];
+        reader
+            .read_exact(&mut entry_point_flag)
+            .map_err(|e| format!("Failed to read entry_point flag: {}", e))?;
+        let entry_point = if entry_point_flag[0] == 1 {
+            let mut ep_bytes = [0u8; 4];
+            reader
+                .read_exact(&mut ep_bytes)
+                .map_err(|e| format!("Failed to read entry_point: {}", e))?;
+            Some(u32::from_le_bytes(ep_bytes))
+        } else {
+            None
+        };
+
+        // Read distance function
+        let distance_fn: DistanceFunction = bincode::deserialize_from(&mut reader)
+            .map_err(|e| format!("Failed to deserialize distance_fn: {}", e))?;
+
+        // Read params
+        let params: HNSWParams = bincode::deserialize_from(&mut reader)
+            .map_err(|e| format!("Failed to deserialize params: {}", e))?;
+
+        // Read RNG state
+        let mut rng_state_bytes = [0u8; 8];
+        reader
+            .read_exact(&mut rng_state_bytes)
+            .map_err(|e| format!("Failed to read rng_state: {}", e))?;
+        let rng_state = u64::from_le_bytes(rng_state_bytes);
+
+        // Read nodes (raw bytes for fast I/O)
+        let mut nodes = vec![HNSWNode::default(); num_nodes];
+        if num_nodes > 0 {
+            let nodes_bytes = unsafe {
+                std::slice::from_raw_parts_mut(
+                    nodes.as_mut_ptr() as *mut u8,
+                    nodes.len() * std::mem::size_of::<HNSWNode>(),
+                )
+            };
+            reader
+                .read_exact(nodes_bytes)
+                .map_err(|e| format!("Failed to read nodes: {}", e))?;
+        }
+
+        // Read neighbor lists
+        let neighbors: NeighborLists = bincode::deserialize_from(&mut reader)
+            .map_err(|e| format!("Failed to deserialize neighbors: {}", e))?;
+
+        // Read vectors
+        let vectors: VectorStorage = bincode::deserialize_from(&mut reader)
+            .map_err(|e| format!("Failed to deserialize vectors: {}", e))?;
+
+        // Verify dimensions match
+        if vectors.dimensions() != dimensions {
+            return Err(format!(
+                "Dimension mismatch: header says {}, vectors have {}",
+                dimensions,
+                vectors.dimensions()
+            ));
+        }
+
+        Ok(Self {
+            nodes,
+            neighbors,
+            vectors,
+            entry_point,
+            params,
+            distance_fn,
+            rng_state,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -657,5 +862,177 @@ mod tests {
         let ids: Vec<u32> = results.iter().map(|r| r.id).collect();
         assert!(ids.contains(&4));
         assert!(ids.contains(&6));
+    }
+
+    #[test]
+    fn test_save_load_empty() {
+        use tempfile::NamedTempFile;
+
+        let params = HNSWParams::default();
+        let index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Save empty index
+        let temp_file = NamedTempFile::new().unwrap();
+        index.save(temp_file.path()).unwrap();
+
+        // Load it back
+        let loaded = HNSWIndex::load(temp_file.path()).unwrap();
+
+        assert_eq!(loaded.dimensions(), 3);
+        assert_eq!(loaded.len(), 0);
+        assert!(loaded.is_empty());
+        assert_eq!(loaded.entry_point, None);
+    }
+
+    #[test]
+    fn test_save_load_small() {
+        use tempfile::NamedTempFile;
+
+        let params = HNSWParams::default();
+        let mut index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Insert 10 vectors
+        for i in 0..10 {
+            let vec = vec![i as f32, 0.0, 0.0];
+            index.insert(vec).unwrap();
+        }
+
+        // Save index
+        let temp_file = NamedTempFile::new().unwrap();
+        index.save(temp_file.path()).unwrap();
+
+        // Load it back
+        let loaded = HNSWIndex::load(temp_file.path()).unwrap();
+
+        // Verify basic properties
+        assert_eq!(loaded.dimensions(), 3);
+        assert_eq!(loaded.len(), 10);
+        assert!(!loaded.is_empty());
+        assert_eq!(loaded.entry_point, index.entry_point);
+
+        // Verify vectors are preserved
+        for i in 0..10 {
+            let orig = index.vectors.get(i).unwrap();
+            let load = loaded.vectors.get(i).unwrap();
+            assert_eq!(orig, load);
+        }
+
+        // Verify search works on loaded index
+        let query = vec![5.0, 0.0, 0.0];
+        let results = loaded.search(&query, 3, 20).unwrap();
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0].id, 5); // Should still find exact match
+    }
+
+    #[test]
+    fn test_save_load_preserves_graph() {
+        use tempfile::NamedTempFile;
+
+        let params = HNSWParams::default();
+        let mut index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Insert vectors
+        for i in 0..20 {
+            let vec = vec![i as f32, (i * 2) as f32, (i * 3) as f32];
+            index.insert(vec).unwrap();
+        }
+
+        // Get search results before saving
+        let query = vec![10.0, 20.0, 30.0];
+        let results_before = index.search(&query, 5, 20).unwrap();
+
+        // Save and load
+        let temp_file = NamedTempFile::new().unwrap();
+        index.save(temp_file.path()).unwrap();
+        let loaded = HNSWIndex::load(temp_file.path()).unwrap();
+
+        // Get search results after loading
+        let results_after = loaded.search(&query, 5, 20).unwrap();
+
+        // Results should be identical
+        assert_eq!(results_before.len(), results_after.len());
+        for (before, after) in results_before.iter().zip(results_after.iter()) {
+            assert_eq!(before.id, after.id);
+            assert!((before.distance - after.distance).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn test_save_load_with_quantization() {
+        use tempfile::NamedTempFile;
+
+        let params = HNSWParams::default();
+        let mut index = HNSWIndex::new(8, params, DistanceFunction::L2, true).unwrap();
+
+        // Train quantization
+        let samples: Vec<Vec<f32>> = (0..10).map(|i| vec![i as f32; 8]).collect();
+        if let VectorStorage::BinaryQuantized {
+            ref mut thresholds, ..
+        } = index.vectors
+        {
+            for (i, threshold) in thresholds.iter_mut().enumerate() {
+                *threshold = i as f32 + 0.5;
+            }
+        }
+
+        // Insert vectors
+        for i in 0..10 {
+            let vec = vec![i as f32; 8];
+            index.insert(vec).unwrap();
+        }
+
+        // Save and load
+        let temp_file = NamedTempFile::new().unwrap();
+        index.save(temp_file.path()).unwrap();
+        let loaded = HNSWIndex::load(temp_file.path()).unwrap();
+
+        // Verify quantization is preserved
+        match (&index.vectors, &loaded.vectors) {
+            (
+                VectorStorage::BinaryQuantized {
+                    thresholds: t1, ..
+                },
+                VectorStorage::BinaryQuantized {
+                    thresholds: t2, ..
+                },
+            ) => {
+                assert_eq!(t1, t2);
+            }
+            _ => panic!("Expected BinaryQuantized storage"),
+        }
+
+        // Search should work
+        let query = vec![5.0; 8];
+        let results = loaded.search(&query, 3, 20).unwrap();
+        assert_eq!(results.len(), 3);
+    }
+
+    #[test]
+    fn test_load_invalid_magic() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(b"INVALID\0").unwrap();
+        temp_file.flush().unwrap();
+
+        let result = HNSWIndex::load(temp_file.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid magic"));
+    }
+
+    #[test]
+    fn test_load_unsupported_version() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(b"HNSWIDX\0").unwrap(); // Magic
+        temp_file.write_all(&99u32.to_le_bytes()).unwrap(); // Unsupported version
+        temp_file.flush().unwrap();
+
+        let result = HNSWIndex::load(temp_file.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported version"));
     }
 }
