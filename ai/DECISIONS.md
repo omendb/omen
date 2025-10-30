@@ -589,3 +589,128 @@ Enterprise: Custom (unlimited, SLA, support)
 → HNSW implementation: (to be created)
 
 ---
+
+## Decision 17: Hybrid Graph Approach (Graph Links → Time-Series → Full Graph)
+
+**Date**: October 30, 2025
+**Status**: ✅ APPROVED
+**Context**: Product roadmap sequencing - should graph be integrated into vector DB or separate?
+
+### The Question
+After vector DB + full-text (Week 24), what comes next?
+- Original plan: Time-Series (Phase 2) → Graph (Phase 3)
+- Alternative: Graph before time-series?
+- Alternative: Integrate graph into vector DB?
+
+### The Decision
+**Hybrid approach - graph links in vector DB first, separate full graph DB only if needed**
+
+**Phase 2a: Graph Links in Vector DB** (Weeks 25-28, 2-4 weeks):
+- Lightweight relationships between vectors (edges with properties)
+- Simple traversal queries (1-2 hops: "find neighbors", "get citations")
+- Graph RAG support (vector similarity + graph relationships)
+- Knowledge graphs (entities + embeddings + links)
+- **Architecture**: Simple `HashMap<VectorId, Vec<Edge>>` added to VectorStore
+- **Covers**: 80% of vector+graph use cases
+
+**Phase 2b: Time-Series Database** (Weeks 29-44, 12-16 weeks):
+- ALEX learned indexes (28x memory efficiency)
+- Sequential write optimization
+- Time-based partitioning
+- IoT, observability, monitoring workloads
+
+**Phase 3: Full Graph Database** (2027+, OPTIONAL):
+- **Build ONLY IF** Phase 2a shows 10%+ of customers need heavy graph features
+- Full Cypher query language
+- Complex graph algorithms (PageRank, centrality, community detection)
+- Multi-hop traversals (5+ hops, variable-length paths)
+- Graph-specific optimizations
+
+### Rationale
+
+**Why Graph Links (Not Full Integration)**:
+1. **80% of use cases** with 20% of effort (2-4 weeks vs 16-20 weeks)
+2. **Test market demand** before building full graph DB
+3. **Clean architecture** - lightweight addition, not massive complexity
+4. **Marketing differentiation** - "Vector DB with graph capabilities" (unique vs Pinecone, Qdrant)
+
+**What Graph Links Enables**:
+- ✅ **Graph RAG** - Find similar documents + their citations (hot trend)
+- ✅ **Knowledge graphs** - Entities with embeddings + relationships
+- ✅ **Citation networks** - Papers + references + similarity
+- ✅ **Recommendation graphs** - Users/items + similarities + interactions
+
+**What Graph Links Doesn't Enable** (needs full omen-graph):
+- ❌ Complex traversals (5+ hops, variable-length paths)
+- ❌ Graph algorithms (PageRank, betweenness, community detection)
+- ❌ Full Cypher query language
+- ❌ Graph-specific optimizations (specialized traversal indexes)
+
+**Industry Precedent**:
+- **Weaviate**: Vector-first, added lightweight "graph links" (same approach)
+- **PostgreSQL**: Separate extensions (pgvector + Apache AGE) not integrated
+- **Neo4j**: Adding vectors as extension (not integrated)
+
+**Decision Gate** (After Phase 2a):
+- If 10%+ of customers need complex graph features → Build omen-graph (Phase 3)
+- If graph links are sufficient → Skip full graph DB, invest elsewhere
+
+**Why Time-Series After Graph Links**:
+1. Graph links is 2-4 weeks (quick validation)
+2. Time-series is 12-16 weeks (different customer segment)
+3. Both provide value, graph links tests demand first
+
+### Alternatives Considered
+
+**Alternative 1: Time-Series First (Original Plan)**
+- Pros: ALEX showcase (28x memory), simpler implementation
+- Cons: Misses Graph RAG trend, no customer synergy with vector users
+
+**Alternative 2: Full Graph DB as Phase 2**
+- Pros: Complete graph solution
+- Cons: 16-20 weeks, high risk if customers don't need it
+
+**Alternative 3: No Graph Features**
+- Pros: Focus on time-series
+- Cons: Misses Graph RAG opportunity, less differentiation
+
+### Implementation Notes
+
+**Graph Links Architecture**:
+```rust
+// omen/src/vector/store.rs
+pub struct VectorStore {
+    vectors: HNSWIndex,                      // Existing
+    edges: HashMap<VectorId, Vec<Edge>>,     // NEW (simple)
+}
+
+pub struct Edge {
+    from: VectorId,
+    to: VectorId,
+    relationship: String,                    // "CITES", "SIMILAR_TO", etc.
+    properties: HashMap<String, Value>,
+}
+
+// Example query
+SELECT v.*, e.*
+FROM vectors v
+WHERE v.embedding <-> $1 < 0.3             -- Vector similarity
+  AND EXISTS (
+    SELECT 1 FROM edges e
+    WHERE e.from = v.id
+      AND e.relationship = 'CITES'
+  )
+LIMIT 10;
+```
+
+**Result**: Hybrid graph approach approved ✅
+
+**Next Steps**:
+1. Complete vector DB + full-text (Weeks 9-24)
+2. Implement graph links (Weeks 25-28)
+3. Monitor usage, decide on full omen-graph based on demand
+
+→ Strategic planning: ../omen-org/strategy/PRODUCT_ROADMAP_EVALUATION.md (Section: "Why Hybrid Graph Approach?")
+→ Business plan: ../omen-org/strategy/BUSINESS_PLAN_2025_2028.md (Phase 2a section)
+
+---
