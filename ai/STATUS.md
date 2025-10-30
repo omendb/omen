@@ -21,7 +21,7 @@
 - ✅ Performance projections: Current 162 QPS → Week 1: 400-500 QPS → Week 10: 1000 QPS (Qdrant-competitive)
 - ✅ Timeline: 3-6 months to full competitive parity with SOTA features
 
-📋 **Details**: ai/research/STRATEGIC_COMPETITIVE_POSITIONING.md, ai/CUSTOM_HNSW_DECISION.md, ai/OPTIMIZATION_STRATEGY.md, ai/COMPETITIVE_ANALYSIS_VECTOR_DBS.md
+📋 **Details**: ai/research/STRATEGIC_COMPETITIVE_POSITIONING.md, ai/research/CUSTOM_HNSW_DECISION.md, ai/research/OPTIMIZATION_STRATEGY.md, ai/research/COMPETITIVE_ANALYSIS_VECTOR_DBS.md
 
 ---
 

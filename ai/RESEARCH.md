@@ -13,9 +13,9 @@
 ### Strategic Competitive Analysis (Oct 30, 2025)
 **Documents**:
 - `ai/research/STRATEGIC_COMPETITIVE_POSITIONING.md` (6400+ words, comprehensive)
-- `ai/COMPETITIVE_ANALYSIS_VECTOR_DBS.md` (market landscape, testing strategy)
-- `ai/OPTIMIZATION_STRATEGY.md` (engine-first optimization roadmap)
-- `ai/CUSTOM_HNSW_DECISION.md` (custom vs library analysis, 10-15 week plan)
+- `ai/research/COMPETITIVE_ANALYSIS_VECTOR_DBS.md` (market landscape, testing strategy)
+- `ai/research/OPTIMIZATION_STRATEGY.md` (engine-first optimization roadmap)
+- `ai/research/CUSTOM_HNSW_DECISION.md` (custom vs library analysis, 10-15 week plan)
 
 **Scope**:
 - Analyzed 8 competitors (Qdrant, Milvus, Weaviate, LanceDB, ChromaDB, Pinecone, pgvector, pgvecto.rs)

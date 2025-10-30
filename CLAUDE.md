@@ -177,17 +177,17 @@
   - PostgreSQL compatibility value analysis
   - Can we reach Qdrant performance? Billion scale? (answers: YES, YES)
   - Feature matrix, performance projections, strategic positioning
-- `ai/COMPETITIVE_ANALYSIS_VECTOR_DBS.md` - Market landscape & testing strategy
+- `ai/research/COMPETITIVE_ANALYSIS_VECTOR_DBS.md` - Market landscape & testing strategy
   - Competitor priorities (Qdrant → LanceDB → Milvus/Weaviate)
   - Testing methodology, benchmarking approach
   - Profiling plan, optimization roadmap
-- `ai/OPTIMIZATION_STRATEGY.md` - Engine-first optimization plan
+- `ai/research/OPTIMIZATION_STRATEGY.md` - Engine-first optimization plan
   - **CRITICAL**: SIMD available but NOT ENABLED (2-4x free win)
   - Phase 1: Quick wins (SIMD, LTO, opt-level) - Week 1
   - Phase 2: Profiling & optimization - Week 1-2
   - Phase 3: Algorithmic improvements - Week 3-4
   - Phase 4: Scale validation - Week 5-8
-- `ai/CUSTOM_HNSW_DECISION.md` - Custom vs library analysis
+- `ai/research/CUSTOM_HNSW_DECISION.md` - Custom vs library analysis
   - **Decision**: Build custom HNSW for SOTA features
   - ALL serious competitors use custom implementations
   - hnsw_rs limitations documented
@@ -276,10 +276,16 @@ omen/
 │       ├── phases/        # Phase planning docs
 │       └── PHASE_*_COMPLETE.md
 ├── ai/                    # AI working context ⭐
-│   ├── TODO.md            # Current tasks (UPDATED - vector roadmap)
-│   ├── STATUS.md          # Current state (UPDATED - vector pivot)
-│   ├── DECISIONS.md       # Working decision log (UPDATED - pivot decision)
-│   └── RESEARCH.md        # Research index
+│   ├── TODO.md            # Current tasks
+│   ├── STATUS.md          # Current state
+│   ├── DECISIONS.md       # Architectural decisions
+│   ├── RESEARCH.md        # Research index
+│   └── research/          # Detailed research & analysis
+│       ├── STRATEGIC_COMPETITIVE_POSITIONING.md
+│       ├── COMPETITIVE_ANALYSIS_VECTOR_DBS.md
+│       ├── OPTIMIZATION_STRATEGY.md
+│       ├── CUSTOM_HNSW_DECISION.md
+│       └── [8 research docs total]
 ├── src/                   # Source code
 │   ├── alex/              # Multi-level ALEX implementation
 │   ├── postgres/          # PostgreSQL wire protocol + auth
