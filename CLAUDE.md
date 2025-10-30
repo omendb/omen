@@ -1,43 +1,38 @@
-# omen Development Context
+# omen - Vector Database
 
 **Repository**: omen (Embedded PostgreSQL-compatible Vector Database)
-**Last Updated**: October 30, 2025 - Week 8 Day 1 (SIMD Optimization Complete)
+**Last Updated**: October 30, 2025 - Week 8 Complete
 **License**: Elastic License 2.0 (source-available, embeddable)
-**Status**: SIMD enabled (2-3x improvement, 581 QPS, approaching Qdrant's 626 QPS), profiling in progress
+**Status**: 581 QPS (93% of Qdrant), 142 tests passing, custom HNSW in progress
+
+---
 
 ## Product Overview
 
 **omen**: Embedded PostgreSQL-compatible vector database for AI applications
 
-**Positioning**: "Embedded PostgreSQL-compatible vector database. Drop-in replacement for pgvector. 10x faster, 28x more memory efficient. Source-available. Embeddable."
+**What It Is**:
+- Vector search (HNSW + Binary Quantization)
+- SQL queries (PostgreSQL wire protocol)
+- Transactions (MVCC snapshot isolation)
+- Full-text search (Week 20-24, in progress)
 
-## OmenDB Product Roadmap (Multi-Database Platform)
+**Positioning**: "Embedded PostgreSQL-compatible vector database. Drop-in replacement for pgvector. 10x faster, 28x more memory efficient."
 
-**Phase 1 - Vector Database** (Current - 2025-2026):
-- Core: PostgreSQL-compatible vector database (HNSW + Binary Quantization)
-- Target: AI/ML workloads (RAG, semantic search, embeddings)
-- Market: $10.6B by 2032 (23.54% CAGR)
-- Delivery: Server mode + self-hosted
+**Market**: $10.6B by 2032 (23.54% CAGR)
 
-**Phase 2 - Time Series Database** (2026-2027):
-- Core: Embedded time series database optimized for edge/IoT
-- Target: Metrics, logs, sensor data, monitoring
-- Focus: Low memory footprint, high write throughput
-- Delivery: Embedded library + server mode
+---
 
-**Phase 3 - Graph Database** (2027-2028):
-- Core: Graph database for relationship-heavy workloads
-- Target: Social networks, knowledge graphs, recommendations
-- Focus: Traversal performance, memory efficiency
-- Delivery: Embedded library + server mode
+## 🔗 Related Repositories
 
-**Unified Platform** (2028+):
-- Single server supporting all 3 database types
-- Shared infrastructure (MVCC, storage, wire protocol)
-- Multi-model queries (vector + time series + graph)
-- Target: "One database for all your data"
+**This repo**: `omen/` - Vector database implementation
+**Shared code**: `../omen-core/` - MVCC, storage, protocol, cache, auth
+**Managed service**: `../omen-server/` - Multi-tenancy, billing, monitoring (future)
+**Business/strategy**: `../omen-org/` - Business plans, funding, roadmap (PRIVATE)
 
-**Current Focus**: Vector DB validation and performance optimization
+**For platform roadmap** (time-series, graph, unified): See `../omen-org/strategy/`
+
+**Current Focus**: Vector database only (Weeks 9-24)
 
 ## Quick Start for AI Agents
 
@@ -58,26 +53,27 @@
 
 ---
 
-## STRATEGIC PIVOT (October 22, 2025)
+## Week 8 Status (Oct 30, 2025)
 
-**New Positioning**: PostgreSQL-Compatible Vector Database That Scales
+**Current Performance**:
+- 581 QPS (93% of market leader Qdrant's 626 QPS)
+- Query latency: 1.72ms avg, 2.08ms p95 (3x improvement from baseline)
+- Build speed: 6540 vec/sec (2x improvement)
+- 142 tests passing (101 Phase 1 + 41 Phase 2)
 
-**Old Focus** (Abandoned):
-- ❌ "Fast Embedded PostgreSQL"
-- ❌ Embedded/edge/IoT markets
-- ❌ "Faster SQLite" positioning
+**Completed**:
+- ✅ SIMD optimization (3.6x performance improvement)
+- ✅ Comprehensive profiling (identified bottlenecks)
+- ✅ SOTA research (12,500-word analysis)
+- ✅ 10-week roadmap to 1000+ QPS validated
 
-**New Focus**:
-- ✅ Vector database for AI applications
-- ✅ pgvector drop-in replacement (10x faster at scale)
-- ✅ $10.6B market growing at 23.54% CAGR
-- ✅ Target: RAG, semantic search, AI platforms
+**Next** (Weeks 9-19):
+- Custom HNSW implementation (cache optimization, arena allocators)
+- Target: 1000+ QPS (60% faster than Qdrant)
 
-**Why the Pivot**:
-1. Vector DB market: $10.6B by 2032 (vs $2-3B embedded DB)
-2. Clear pain point: pgvector doesn't scale, Pinecone expensive
-3. Perfect tech fit: ALEX + PostgreSQL protocol + memory efficiency
-4. High willingness to pay: $29-499/month (validated by Pinecone)
+**Then** (Weeks 20-24):
+- Full-text search (BM25, inverted index)
+- Complete "Embedded AI Database"
 
 ---
 
@@ -105,16 +101,9 @@
 **Priority**: 🔍 Optimize engine → Build custom HNSW for SOTA (10-15 week roadmap)
 **Next**: Enable SIMD (5 min, 2-4x) → Profile → Custom HNSW planning
 
-## Technical Core
+## Technical Architecture
 
-**Multi-Level ALEX (Ready for Vectors)**:
-- Hierarchical learned index structure (height 2-3)
-- 1.50 bytes/key memory (28x more efficient than PostgreSQL)
-- Linear scaling validated to 100M+ rows
-- **Hypothesis**: Perfect for high-dimensional vector indexing
-- **Validation needed**: Prototype for 1536-dim vectors (OpenAI embeddings)
-
-**Competitive Advantages for Vector DB**:
+**Core Components**:
 - ✅ **PostgreSQL wire protocol**: Drop-in pgvector replacement
 - ✅ **Memory efficiency (28x)**: Critical for 100M+ vector scale
 - ✅ **MVCC + transactions**: Unique vs pure vector DBs (Pinecone, Weaviate)
@@ -196,35 +185,17 @@
 
 ---
 
-## Licensing & Business Model
+## License
 
-**License**: Elastic License 2.0 (source-available)
+**Elastic License 2.0** (source-available)
 
 **What this means**:
 - ✅ Free to use, modify, and self-host
-- ✅ Source code publicly available (can verify PostgreSQL compatibility)
+- ✅ Source code publicly available
 - ✅ Community can contribute (bug fixes, features)
-- ✅ Enterprises can deploy on their infrastructure
-- ❌ Cannot resell as managed service (protects cloud revenue)
+- ❌ Cannot resell as managed service
 
-**Revenue Model** (Hybrid: Flat + Caps):
-
-| Tier | Price | Vectors | Queries/mo | Target Customer |
-|------|-------|---------|------------|-----------------|
-| **Developer** | **FREE** | 100K | 100K | Hobbyists, prototyping |
-| **Starter** | **$29/mo** | 1M | 1M | Early startups, side projects |
-| **Growth** | **$99/mo** | 10M | 10M | Production apps, scaling startups |
-| **Enterprise** | **Custom** | Unlimited | Unlimited | Large deployments, compliance |
-
-**Why this pricing wins**:
-- **Predictable**: No surprise bills (vs Pinecone usage spikes)
-- **Transparent**: Know your costs upfront
-- **Competitive**: 90% cheaper than Pinecone at Growth tier
-
-**Customer Focus (Year 1)**:
-- **Primary (70%)**: AI startups (RAG, LangChain users, semantic search)
-- **Secondary (30%)**: Enterprise (healthcare, finance, legal - compliance-driven)
-- **Channel**: Self-serve (Free → Starter → Growth) + direct sales (Enterprise)
+**For business model and pricing**: See `../omen-org/strategy/`
 
 ## Architecture (Vector DB - October 22, 2025)
 
