@@ -13,6 +13,7 @@ pub mod store;
 pub mod hnsw_index;
 pub mod pca_alex_index;
 pub mod vector_value;
+pub mod custom_hnsw;
 
 // Re-export main types
 pub use types::Vector;

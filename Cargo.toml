@@ -156,6 +156,9 @@ ndarray = "0.16"
 # HNSW for vector search (Week 2 implementation)
 hnsw_rs = "0.3"
 
+# Ordered floats for HNSW (custom implementation)
+ordered-float = "4.0"
+
 # System information (CPU count, etc)
 num_cpus = "1.16"
 
