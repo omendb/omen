@@ -1,16 +1,71 @@
 # STATUS
 
-**Last Updated**: October 30, 2025 - Week 9 Day 2 (Custom HNSW Foundation Implementation)
-**Phase**: Week 9 Day 2 - Custom HNSW Foundation
+**Last Updated**: October 30, 2025 - Week 9 Day 3 (Full HNSW Algorithms Complete)
+**Phase**: Week 9 Day 3 - Full HNSW Algorithms
 **Repository**: omen (embedded vector database) v0.0.1
 **Status**:
   - ✅ **Week 9 Day 1 COMPLETE**: Custom HNSW architecture designed (1,539 line design doc)
   - ✅ **Week 9 Day 2 COMPLETE**: Custom HNSW foundation implemented (types, storage, index)
-  - ✅ **22 tests passing**: Core structures, distance calculations, vector storage
-  - ✅ **Architecture**: Cache-line aligned (64 bytes), flattened index, separate neighbors
-  - ✅ **Ready for**: Full algorithm implementation (greedy search, neighbor selection)
-  - 🎯 **Next**: Implement full HNSW algorithms (insert/search) (Week 9 Day 3)
-**Next**: Complete HNSW algorithm implementation, then port tests (Week 9 Day 3-5)
+  - ✅ **Week 9 Day 3 COMPLETE**: Full HNSW algorithms implemented (insert, search, neighbor selection)
+  - ✅ **27 tests passing**: Core structures, algorithms, recall validation
+  - ✅ **Architecture**: Cache-line aligned (64 bytes), multi-level graph, heuristic neighbor selection
+  - ✅ **Algorithms**: Complete insertion (with pruning), multi-level greedy search, beam search
+  - 🎯 **Next**: Implement serialization (save/load) (Week 9 Day 4-5)
+**Next**: Implement serialization and port existing tests from hnsw_rs (Week 9 Day 4-5)
+
+---
+
+**Session Summary** (October 30, 2025 - Week 9 Day 3: Full HNSW Algorithms):
+
+**Full HNSW Algorithm Implementation** ✅:
+- ✅ **insert_into_graph()** (Malkov & Yashunin 2018):
+  - Multi-level neighbor search (from top to target level)
+  - Diversity heuristic: Select neighbors closer to query than to each other
+  - Bidirectional link creation
+  - Neighbor pruning to enforce M connections per node
+  - Level 0: M*2 connections, Higher levels: M connections
+
+- ✅ **search()** (Multi-level greedy + beam search):
+  - Start from entry point at top level
+  - Greedy search at higher levels (find 1 nearest, fast descent)
+  - Beam search at level 0 (find ef nearest, explore wider)
+  - Return k nearest sorted by distance
+
+- ✅ **search_layer()** (Core greedy search):
+  - Priority queue-based exploration (min-heap + max-heap)
+  - Visited set prevents cycles
+  - Prune candidates to ef size (beam width)
+  - Early termination when current > farthest in working set
+
+- ✅ **select_neighbors_heuristic()** (Diversity selection):
+  - Sort candidates by distance to query
+  - Prioritize neighbors closer to query than to each other
+  - Fallback to closest candidates if diversity threshold not met
+  - Prevents clustering, improves graph connectivity
+
+**New Tests** (+5 tests, 27 total):
+- test_hnsw_index_search_multiple: Multi-vector search with k=3
+- test_hnsw_index_search_with_ef: Different ef values (5 vs 10)
+- test_hnsw_levels: Exponential decay level distribution
+- test_neighbor_count_limits: M enforcement (no node exceeds M*2 at level 0)
+- test_search_recall_simple: Exact neighbor recall validation
+
+**Graph Properties Validated**:
+- Multi-level structure with exponential decay (most nodes at level 0)
+- Neighbor count limits enforced (M connections per level)
+- Bidirectional links properly maintained
+- Search finds correct nearest neighbors
+
+**Performance Characteristics**:
+- Greedy search at higher levels: Fast descent to level 0
+- Beam search at level 0: Trade-off between recall and speed (ef parameter)
+- Neighbor diversity: Better connectivity, fewer dead ends
+
+**Next**: Implement serialization (Week 9 Day 4-5):
+1. save() method (write nodes, neighbors, vectors to disk)
+2. load() method (reconstruct index from disk)
+3. Binary format with version header
+4. Compatibility tests (save/load round-trip)
 
 ---
 
