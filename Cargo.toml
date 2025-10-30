@@ -162,7 +162,7 @@ num_cpus = "1.16"
 [features]
 default = []
 simd = []  # Enable std::simd (requires nightly Rust)
-hnsw-simd = ["hnsw_rs/simdeez_f"]  # Enable SIMD for HNSW (x86_64 only)
+hnsw-simd = ["hnsw_rs/simdeez_f"]  # Enable SIMD for HNSW (x86_64 only, not compatible with ARM/M3)
 
 [profile.release]
 lto = true
