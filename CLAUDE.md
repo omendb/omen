@@ -26,7 +26,7 @@
 ## 🔗 Related Repositories
 
 **This repo**: `omen/` - Vector database implementation
-**Shared code**: `../omen-core/` - MVCC, storage, protocol, cache, auth
+**Shared code**: `../omen-core/` - Future shared library (empty until Phase 2b)
 **Managed service**: `../omen-server/` - Multi-tenancy, billing, monitoring (future)
 **Business/strategy**: `../omen-org/` - Business plans, funding, roadmap (PRIVATE)
 
@@ -295,19 +295,22 @@ omen/
 - Thin API layer wrapping omen embedded library
 - 2-4 weeks of work after omen is production-ready
 
-**Code organization** (when building omen-server):
-- Extract shared code to **omen-core** library (Apache 2.0):
-  - `omen-core/alex` - Multi-level ALEX index
-  - `omen-core/vector` - Vector types, distance functions
+**Code organization** (Phase 2b - when building omen-time):
+- All code stays in omen/ for now (don't extract yet)
+- Phase 2b: Extract shared code to **omen-core** library (Apache 2.0):
   - `omen-core/mvcc` - MVCC snapshot isolation
   - `omen-core/storage` - RocksDB abstractions
-- Both omen and omen-server depend on omen-core
-- Standard Rust pattern: Build first, extract when stable
+  - `omen-core/protocol` - PostgreSQL wire protocol
+  - `omen-core/cache` - LRU cache
+  - `omen-core/security` - Auth, SSL/TLS
+- Both omen and omen-time will depend on omen-core
+- Standard Rust pattern: Build first, extract when needed
 
 **GitHub Organization:**
 - `omendb/omen` - This repository - Embedded vector database (Elastic License 2.0)
+- `omendb/omen-core` - Empty placeholder - Future shared library (Apache 2.0, Phase 2b)
 - `omendb/omen-server` - Future: Managed cloud service (Private, when built)
-- `omendb/omen-core` - Future: Shared library (Apache 2.0, when extracted)
+- `omendb/omen-org` - Private: Business strategy, experimental code archive
 - `omendb/pg-learned` - PostgreSQL extension (Elastic License 2.0, marketing/education)
 
 ---
