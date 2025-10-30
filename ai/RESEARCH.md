@@ -2,13 +2,42 @@
 
 **Status**: ✅ **RESEARCH COMPLETE**
 **Created**: October 22, 2025
-**Completed**: October 22, 2025 (Evening)
+**Completed**: October 30, 2025 (Week 8 SOTA Research)
 **Goal**: Determine optimal vector indexing algorithm before Week 2 implementation
-**Decision**: HNSW (hnsw_rs implementation)
+**Decision**: HNSW (hnsw_rs implementation) → Custom HNSW (Week 8 strategic pivot)
 
 ---
 
 ## Research Completed
+
+### ⭐ Custom HNSW SOTA Research (Oct 30, 2025 - Week 8 Day 3)
+**Document**: `ai/research/CUSTOM_HNSW_SOTA_RESEARCH_2025.md` (12,500 words, comprehensive)
+
+**Scope**:
+- Analyzed 4 competitors: Qdrant (Rust, Delta Encoding, GPU), Milvus (C++, AVX512), LanceDB (Rust), Weaviate (Go)
+- SOTA algorithms: Extended RaBitQ (SIGMOD 2025, 3-9 bit quantization), Delta Encoding (30% memory reduction)
+- Implementation techniques: Cache-line alignment, prefetching, arena allocators, graph reordering (BFS/DFS)
+- Performance projections: 581 QPS → 1000+ QPS (10-week roadmap)
+
+**Key Findings**:
+- **ALL serious competitors use custom HNSW** (not libraries like hnsw_rs)
+- **40% of query time in memory fetches** (NeurIPS 2022 paper)
+- **Qdrant innovations**: Delta Encoding (30% memory), GPU indexing (10x build speed)
+- **Milvus**: AVX512 20-30% faster than AVX2, query batching
+- **Cache optimization techniques**: Software prefetching (_mm_prefetch), 64-byte alignment, BFS/DFS layout (1.15-1.18x speedup)
+- **Allocation optimization**: Arena allocators (typed-arena), thread-local buffers
+
+**10-Week Roadmap**:
+- Weeks 9-10: Custom HNSW foundation (500-600 QPS baseline)
+- Weeks 11-12: Cache optimization (650-700 QPS, beat Qdrant)
+- Week 13: Allocation optimization (750-800 QPS)
+- Week 14: AVX512 support (850-900 QPS, +46% cumulative)
+- Weeks 15-17: Extended RaBitQ + Delta Encoding (900-950 QPS)
+- Weeks 18-19: HNSW-IF billion-scale (1000+ QPS, +72% cumulative)
+
+**Risk Assessment**: Medium (custom implementation complexity, but research-backed)
+
+**Strategic Justification**: Week 8 profiling showed 76% allocations + 23.41% cache misses in hnsw_rs library (cannot optimize without custom implementation)
 
 ### Strategic Competitive Analysis (Oct 30, 2025)
 **Documents**:
