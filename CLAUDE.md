@@ -1,9 +1,9 @@
 # omen Development Context
 
 **Repository**: omen (Embedded PostgreSQL-compatible Vector Database)
-**Last Updated**: October 27, 2025 - Week 7 Day 2+ (Phase 2 Validation 60% Complete)
+**Last Updated**: October 30, 2025 - Week 7 Day 3 (Strategic Analysis & Optimization Planning Complete)
 **License**: Elastic License 2.0 (source-available, embeddable)
-**Status**: 142 tests passing, HNSW graph serialization working, validation in progress
+**Status**: 142 tests passing, pgvector benchmark complete (97x faster), strategic roadmap validated
 
 ## Product Overview
 
@@ -84,7 +84,7 @@
 ## Current Status
 
 **Product**: PostgreSQL-compatible vector database (HNSW + Binary Quantization)
-**Achievement**: Week 7 Day 2+ COMPLETE - Phase 2 Validation 60% Complete
+**Achievement**: Week 7 Day 3 COMPLETE - Strategic Analysis & Optimization Planning
   - Week 6: Graph serialization (4175x) + Parallel building (16x) + SOTA research ✅
   - Week 7 Day 1: Comprehensive correctness validation ✅
     - Distance calculations: 10 tests, 100% passing
@@ -94,10 +94,16 @@
     - Resource limits: 12 tests, all passing (large batches, high dimensions, boundaries)
     - ASAN validation: 40 tests, ZERO memory safety issues
     - Phase 2 validation: 60% complete
+  - Week 7 Day 3: pgvector benchmark + Competitive analysis + Strategic roadmap ✅
+    - **pgvector comparison**: 97x faster builds, 2.2x faster queries (100K vectors)
+    - **Competitive analysis**: 8 competitors analyzed (Qdrant, Milvus, Weaviate, LanceDB, ChromaDB, Pinecone, pgvector, pgvecto.rs)
+    - **Custom HNSW decision**: ALL serious competitors use custom implementations for SOTA features
+    - **Optimization strategy**: Engine-first approach (optimize → profile → then benchmark competitors)
+    - **Critical finding**: SIMD available but NOT ENABLED (2-4x free win)
 **Stack**: Rust (HNSW + Binary Quantization + PostgreSQL protocol + RocksDB + MVCC)
 **Phase**: Week 7 (Validation Phase) - 142 tests passing (101 Phase 1 + 41 Phase 2)
-**Priority**: 🔍 Validation before marketing (12-18 month timeline per VALIDATION_PLAN.md)
-**Next**: Complete Phase 2 validation → Performance benchmarks vs pgvector
+**Priority**: 🔍 Optimize engine → Build custom HNSW for SOTA (10-15 week roadmap)
+**Next**: Enable SIMD (5 min, 2-4x) → Profile → Custom HNSW planning
 
 ## Technical Core
 
@@ -121,17 +127,33 @@
 - **vs Weaviate/Qdrant**: PostgreSQL-compatible (no new API to learn)
 - **Unique**: Only PostgreSQL-compatible vector DB that scales efficiently
 
-**SOTA Positioning** (Post-Implementation):
+**SOTA Positioning**:
 
-*Current State (Week 7 Day 2+ Complete):*
+*Current State (Week 7 Day 3 Complete):*
 - ✅ HNSW: 99.5% recall, <15ms p95 (industry standard)
 - ✅ Binary Quantization: 19.9x memory reduction (competitive)
 - ✅ **16x parallel building** (UNIQUE - undocumented by competitors)
 - ✅ **4175x serialization** (UNIQUE - undocumented by competitors)
+- ✅ **97x faster builds vs pgvector** (100K vectors: 31s vs 3026s)
+- ✅ **2.2x faster queries vs pgvector** (p95: 6.16ms vs 13.60ms)
 - ✅ PostgreSQL compatible (UNIQUE vs pure vector DBs)
 - ✅ **142 tests passing** (101 Phase 1 + 41 Phase 2)
 - ✅ **ASAN validated** (40 tests, ZERO memory safety issues)
 - ✅ **Phase 2 validation** (60% complete - edge cases, boundaries, resource limits)
+
+*After Engine Optimization (Week 8):*
+- ✅ All above +
+- ✅ **SIMD enabled** (2-4x query improvement, ~400-500 QPS)
+- ✅ Profiling complete (bottlenecks identified)
+- ✅ Quick wins implemented (LTO, opt-level, allocations)
+- **Target**: 4-8x cumulative improvement from current baseline
+
+*After Custom HNSW Core (Weeks 9-10):*
+- ✅ All above +
+- ✅ Custom HNSW implementation (full control, no library limitations)
+- ✅ Match or beat hnsw_rs + SIMD performance
+- ✅ Foundation for SOTA features (Extended RaBitQ, HNSW-IF, MN-RU)
+- **Target**: 6-10x cumulative improvement, Qdrant-competitive
 
 *After HNSW-IF (Weeks 9-10):*
 - ✅ All above +
@@ -148,6 +170,29 @@
 - **Differentiator**: SOTA vector DB with PostgreSQL compatibility
 
 **Research Reference**: See `ai/research/SOTA_ALGORITHMS_INVESTIGATION_OCT2025.md` for full analysis of 6 algorithms (MN-RU, SPANN, SPFresh, HNSW-IF, Extended RaBitQ, NGT-QG) and strategic roadmap.
+
+**Strategic Documents** (Week 7 Day 3 - Oct 30, 2025):
+- `ai/research/STRATEGIC_COMPETITIVE_POSITIONING.md` (6400+ words) - Comprehensive competitive analysis
+  - 8 competitors analyzed (Qdrant, Milvus, Weaviate, LanceDB, ChromaDB, Pinecone, pgvector, pgvecto.rs)
+  - PostgreSQL compatibility value analysis
+  - Can we reach Qdrant performance? Billion scale? (answers: YES, YES)
+  - Feature matrix, performance projections, strategic positioning
+- `ai/COMPETITIVE_ANALYSIS_VECTOR_DBS.md` - Market landscape & testing strategy
+  - Competitor priorities (Qdrant → LanceDB → Milvus/Weaviate)
+  - Testing methodology, benchmarking approach
+  - Profiling plan, optimization roadmap
+- `ai/OPTIMIZATION_STRATEGY.md` - Engine-first optimization plan
+  - **CRITICAL**: SIMD available but NOT ENABLED (2-4x free win)
+  - Phase 1: Quick wins (SIMD, LTO, opt-level) - Week 1
+  - Phase 2: Profiling & optimization - Week 1-2
+  - Phase 3: Algorithmic improvements - Week 3-4
+  - Phase 4: Scale validation - Week 5-8
+- `ai/CUSTOM_HNSW_DECISION.md` - Custom vs library analysis
+  - **Decision**: Build custom HNSW for SOTA features
+  - ALL serious competitors use custom implementations
+  - hnsw_rs limitations documented
+  - 10-15 week implementation plan
+  - Performance projections: 162 QPS → 400-500 QPS (Week 1) → 1000 QPS (Week 10)
 
 ---
 
