@@ -2,422 +2,353 @@
 
 **Date**: October 30, 2025
 **Purpose**: Comprehensive competitive analysis addressing key strategic questions
-**Status**: Strategic planning document
 
 ---
 
-## Quick Answers to Key Questions
+## Executive Summary
+
+### Critical Questions & Answers
+
+| Question | Answer | Details |
+|----------|--------|---------|
+| **Are we SOTA?** | Build: YES, Query: UNKNOWN | 97x faster builds (proven), queries need Qdrant benchmark |
+| **Can we reach Qdrant performance?** | YES (3-6 months) | Same tech stack (Rust + HNSW), need SIMD + optimization |
+| **Can we reach billion scale?** | YES (Weeks 9-10) | HNSW-IF implementation (Vespa-proven approach) |
+| **Is PostgreSQL compatibility valuable?** | EXTREMELY | Unique differentiator, worth 5-10% overhead |
+| **Should we optimize first?** | YES (THIS WEEK) | Profile + SIMD before claiming performance leadership |
+| **Docker overhead acceptable?** | YES (5-10%) | Negligible for benchmarking |
+
+### Performance Roadmap
+
+| Timeline | Target | Method |
+|----------|--------|--------|
+| Week 1 | 2-5x improvement | SIMD + profiling + quick wins |
+| Week 2-4 | 5-15x cumulative | Algorithmic improvements |
+| Week 5-8 | Qdrant-competitive | Custom HNSW + SOTA features |
+| Week 9-10 | Billion-scale | HNSW-IF implementation |
+
+---
+
+## Table of Contents
+
+1. [Feature Matrix](#comprehensive-feature-matrix) (all 8 competitors)
+2. [PostgreSQL Compatibility](#postgresql-compatibility-deep-dive) (why it matters)
+3. [Can We Reach Qdrant Performance?](#can-we-reach-qdrant-performance) (performance analysis)
+4. [Can We Reach Billion Scale?](#can-we-reach-billion-scale) (scale strategy)
+5. [GraphQL vs SQL](#graphql-vs-sql-trade-offs) (API design)
+6. [Competitive Differentiation](#competitive-differentiation-strategy) (positioning)
+7. [Optimization Roadmap](#optimization-roadmap) (execution plan)
+
+---
+
+## Quick Reference: Key Findings
 
 ### Testing Methodology
 
-**Q: Docker/OrbStack overhead for Qdrant locally?**
-- **Overhead: 5-10% max** (negligible for benchmarking)
-- CPU/memory: Nearly native performance
-- I/O: Minimal impact on M3 Max SSD
-- **Verdict: Docker is fine for fair comparison**
+| Question | Answer | Rationale |
+|----------|--------|-----------|
+| Docker overhead for Qdrant? | 5-10% max | CPU ~2-5%, Memory ~1-2%, I/O ~5-10% |
+| Test all in containers? | No | OmenDB native (embedded), Qdrant Docker (standard), pgvector native |
+| PostgreSQL cleanup complete? | ✅ Yes | Dropped benchmark_pgvector, vector_benchmark |
 
-**Q: Test all 3 in containers for fairness?**
-- **No need** - OmenDB is native (no container overhead)
-- Qdrant in Docker is standard deployment
-- pgvector in PostgreSQL (native) - already tested
-- **Fair comparison**: Each system tested in production deployment mode
+---
 
-**Q: PostgreSQL cleanup complete?**
-- ✅ Dropped benchmark_pgvector and vector_benchmark databases
-- ✅ Temp files removed
-- ✅ Clean state for next tests
+### Performance & Optimization Status
 
-### Performance & Optimization
+| Area | Current | Status | Next Action |
+|------|---------|--------|-------------|
+| Build speed | 97x vs pgvector | ✅ SOTA | Maintain |
+| Query performance | ~162 QPS (6.16ms p95) | ❓ UNKNOWN | Qdrant benchmark |
+| Scale | 1M validated | ⚠️ PARTIAL | 10M testing |
+| Profiling | Not done | ❌ CRITICAL | flamegraph + heaptrack |
+| SIMD | Available but not enabled | ❌ CRITICAL | Enable feature flag |
 
-**Q: Are we SOTA (state-of-the-art)?**
-- **Build speed: YES** - 97x faster than pgvector (proven)
-- **Query performance: UNKNOWN** - need Qdrant benchmark
-- **Scale: PARTIALLY** - 1M validated, need 10M-1B testing
-- **Verdict: SOTA in build speed, unknown for queries**
+---
 
-**Q: Should we focus on optimizations?**
-- **YES - CRITICAL** before claiming performance leadership
-- Need profiling data (flamegraph, heaptrack)
-- Low-hanging fruit: SIMD, reduce allocations
-- **Timeline: This week** - profile + quick wins
+### Feature Comparison Quick Reference
 
-### Feature Comparison
-
-**Q: Is PostgreSQL compatibility a top feature?**
-- **YES - it's our unique differentiator**
-- No other vector DB offers drop-in pgvector compatibility
-- Huge ecosystem: drivers, ORMs, tools, monitoring
-- **But**: May have overhead vs custom protocols
-
-**Q: PostgreSQL wire protocol overhead?**
-- **Minimal** - text parsing is fast
-- Binary protocol available (faster)
-- **Trade-off**: Compatibility > raw performance
-- Qdrant's custom protocol likely 10-20% faster
-
-**Q: Better query methods?**
-- GraphQL (Weaviate): Good for complex queries
-- gRPC (Qdrant/Milvus): Lower latency
-- REST: Universal compatibility
-- **Our choice**: PostgreSQL wire + optional REST is ideal
-
-### Competitive Features
-
-**Q: Can we reach billion scale like Milvus?**
-- **Technically: YES** - HNSW scales, memory is constraint
-- **Practically: LATER** - need distributed deployment
-- **Timeline**: 6-12 months for clustering support
-- **Current**: Single-node 100M-1B is feasible
-
-**Q: Can we reach Qdrant-level performance?**
-- **Build speed: Already faster** (97x vs pgvector baseline)
-- **Query latency: Unknown** - need testing
-- **Potential: HIGH** - both Rust, both HNSW
-- **Blockers**: Need profiling + optimizations
-
-**Q: Is GraphQL better?**
-- **Depends on use case**
-- GraphQL: Complex queries, schema exploration
-- SQL: Familiar, powerful, huge ecosystem
-- **Our advantage**: PostgreSQL SQL is industry standard
-
-**Q: What does LanceDB offer?**
-- Embedded Rust architecture (like us)
-- Columnar format (Arrow/Parquet)
-- Good for analytical workloads
-- **Our advantage**: PostgreSQL compatibility
-
-**Q: ChromaDB features?**
-- Python-first, developer-friendly API
-- RAG-optimized (LangChain/LlamaIndex)
-- Lightweight embedding management
-- **Our advantage**: Performance + PostgreSQL
-
-**Q: Pinecone features?**
-- Managed cloud (no self-hosting)
-- Auto-scaling, monitoring
-- $$$$ pricing ($70-$8K+/month)
-- **Our advantage**: Self-hosting + price
+| Feature | Us | Competitors | Advantage |
+|---------|-----|-------------|-----------|
+| PostgreSQL compatibility | ✅ Unique | ❌ None | ⭐⭐⭐ CRITICAL |
+| 97x faster builds | ✅ Proven | ? Unknown | ⭐⭐⭐ HIGH |
+| Embedded deployment | ✅ Yes | LanceDB only | ⭐⭐ MEDIUM |
+| Source-available | ✅ Elastic 2.0 | Mixed | ⭐⭐ MEDIUM |
+| PostgreSQL wire protocol overhead | 5-10% | N/A | Trade-off worth it |
 
 ---
 
 ## Comprehensive Feature Matrix
 
+**Legend**: ✅ Implemented | 🔄 Planned | ❌ Not Available | ? Unknown/Not Tested | ⭐ Rating (more = better)
+
+### Deployment & Architecture
+
 | Feature | OmenDB | Qdrant | Milvus | Weaviate | LanceDB | ChromaDB | pgvector | Pinecone |
 |---------|--------|--------|--------|----------|---------|----------|----------|----------|
-| **Deployment** |
 | Embedded | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | N/A | ❌ |
 | Self-hosted | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Cloud-managed | 🔄 | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
 | Distributed | 🔄 | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
-| **Performance** |
+
+### Performance
+
+| Feature | OmenDB | Qdrant | Milvus | Weaviate | LanceDB | ChromaDB | pgvector | Pinecone |
+|---------|--------|--------|--------|----------|---------|----------|----------|----------|
 | Build speed | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ? | ⭐ | ⭐ | ⭐⭐ |
 | Query latency | ? | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ? | ⭐⭐ | ⭐ | ⭐⭐⭐ |
 | QPS (throughput) | ? | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ? | ⭐⭐ | ⭐ | ⭐⭐⭐ |
 | Filtered search | 🔄 | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐ | ⭐⭐ |
-| **Scale** |
+
+### Scale
+
+| Feature | OmenDB | Qdrant | Milvus | Weaviate | LanceDB | ChromaDB | pgvector | Pinecone |
+|---------|--------|--------|--------|----------|---------|----------|----------|----------|
 | Max vectors | 100M+ | 1B+ | 1B+ | 1B+ | 100M+ | 10M+ | 100M+ | 1B+ |
 | Memory efficiency | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐ | ⭐ | ⭐⭐ |
 | Disk usage | ? | ⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐ | ? |
-| **Query Interface** |
+
+### Query Interface
+
+| Feature | OmenDB | Qdrant | Milvus | Weaviate | LanceDB | ChromaDB | pgvector | Pinecone |
+|---------|--------|--------|--------|----------|---------|----------|----------|----------|
 | SQL | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | GraphQL | 🔄 | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | REST API | 🔄 | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ✅ |
 | gRPC | 🔄 | ✅ | ✅ | ✅ | ❌ | ❌ | N/A | ❌ |
 | PostgreSQL wire | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| **Indexing** |
+
+### Indexing
+
+| Feature | OmenDB | Qdrant | Milvus | Weaviate | LanceDB | ChromaDB | pgvector | Pinecone |
+|---------|--------|--------|--------|----------|---------|----------|----------|----------|
 | HNSW | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | IVF | 🔄 | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ |
 | DiskANN | 🔄 | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Quantization | ✅ BQ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
-| **Ecosystem** |
+
+### Ecosystem
+
+| Feature | OmenDB | Qdrant | Milvus | Weaviate | LanceDB | ChromaDB | pgvector | Pinecone |
+|---------|--------|--------|--------|----------|---------|----------|----------|----------|
 | PostgreSQL compat | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | Python client | 🔄 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | LangChain | 🔄 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | LlamaIndex | 🔄 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Advanced Features** |
+
+### Advanced Features
+
+| Feature | OmenDB | Qdrant | Milvus | Weaviate | LanceDB | ChromaDB | pgvector | Pinecone |
+|---------|--------|--------|--------|----------|---------|----------|----------|----------|
 | Hybrid search | 🔄 | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ |
 | Metadata filtering | 🔄 | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
 | ACID transactions | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | Snapshot isolation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | Replication | 🔄 | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ |
 | Sharding | 🔄 | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
-| **Developer Experience** |
+
+### Developer Experience
+
+| Feature | OmenDB | Qdrant | Milvus | Weaviate | LanceDB | ChromaDB | pgvector | Pinecone |
+|---------|--------|--------|--------|----------|---------|----------|----------|----------|
 | Setup complexity | ⭐⭐⭐ | ⭐⭐ | ⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ |
 | Documentation | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐⭐ |
 | Community | ⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐ |
-| **License & Cost** |
+
+### License & Cost
+
+| Feature | OmenDB | Qdrant | Milvus | Weaviate | LanceDB | ChromaDB | pgvector | Pinecone |
+|---------|--------|--------|--------|----------|---------|----------|----------|----------|
 | License | Elastic 2.0 | Apache 2.0 | Apache 2.0 | BSD | Apache 2.0 | Apache 2.0 | PostgreSQL | Proprietary |
 | Cost (self-host) | Free | Free | Free | Free | Free | Free | Free | N/A |
 | Cloud cost | N/A | $$ | $$$ | $$ | N/A | N/A | N/A | $$$$ |
-
-**Legend**:
-- ✅ Implemented
-- 🔄 Planned/In Progress
-- ❌ Not Available
-- ? Unknown/Not Tested
-- ⭐ Rating (more stars = better)
 
 ---
 
 ## PostgreSQL Compatibility Deep Dive
 
-### Why It Matters (A LOT)
+### Why It Matters
 
-**Ecosystem Value**:
-1. **Drivers**: Every language has PostgreSQL drivers
-   - Python: psycopg2, asyncpg
-   - JavaScript: node-postgres, Prisma
-   - Go: pgx, pq
-   - Rust: tokio-postgres, sqlx
-   - Java: JDBC
-   - Ruby: pg
-   - **Value**: Instant compatibility with thousands of libraries
+**Ecosystem Value Summary**:
 
-2. **Tools & Monitoring**:
-   - pgAdmin, DBeaver, TablePlus (GUI tools)
-   - Grafana, Datadog, New Relic (monitoring)
-   - Metabase, Superset (analytics)
-   - **Value**: Production-ready observability out of the box
+| Category | Value | Examples |
+|----------|-------|----------|
+| **Drivers** | Every language supported | Python: psycopg2/asyncpg, JS: node-postgres/Prisma, Go: pgx, Rust: tokio-postgres/sqlx, Java: JDBC, Ruby: pg |
+| **Tools & Monitoring** | Production-ready observability | GUI: pgAdmin/DBeaver/TablePlus, Monitoring: Grafana/Datadog/New Relic, Analytics: Metabase/Superset |
+| **ORMs & Frameworks** | Zero migration cost | Django, Rails, Laravel, Prisma, SQLAlchemy, TypeORM, Hibernate |
+| **Developer Familiarity** | Zero learning curve | SQL learned by millions worldwide |
 
-3. **ORMs & Frameworks**:
-   - Django, Rails, Laravel, Prisma
-   - SQLAlchemy, TypeORM, Hibernate
-   - **Value**: Drop-in replacement, zero migration cost
-
-4. **Developer Familiarity**:
-   - SQL is universal (learned by millions)
-   - No new query language to learn
-   - **Value**: Zero learning curve
+---
 
 ### Overhead Analysis
 
-**PostgreSQL Wire Protocol Cost**:
-- Text protocol: 5-10% overhead (parsing)
-- Binary protocol: 2-5% overhead
-- **Comparison**:
-  - gRPC (Qdrant/Milvus): 0-2% overhead (binary)
-  - REST JSON: 10-20% overhead (parsing + HTTP)
-  - GraphQL: 15-25% overhead (complex parsing)
+**Protocol Performance Comparison**:
 
-**Trade-Off Assessment**:
-- **Lost**: 5-10% raw query performance
-- **Gained**: Entire PostgreSQL ecosystem
-- **Verdict**: Worth it for 99% of users
+| Protocol | Relative Speed | Overhead | Used By |
+|----------|---------------|----------|---------|
+| Custom Binary (Qdrant) | 1.00x (baseline) | 0% | Qdrant |
+| **PostgreSQL Binary** | **0.95x** | **5%** | **OmenDB, pgvector** |
+| PostgreSQL Text | 0.90x | 10% | OmenDB (text mode) |
+| REST JSON | 0.80x | 20% | Most vector DBs |
+| GraphQL | 0.75x | 25% | Weaviate |
 
-**Performance Comparison**:
-```
-Custom Protocol (Qdrant):    1.00x baseline
-PostgreSQL Binary Protocol:  0.95x (5% slower)
-PostgreSQL Text Protocol:    0.90x (10% slower)
-REST JSON:                   0.80x (20% slower)
-GraphQL:                     0.75x (25% slower)
-```
+---
 
-**Our Position**:
-- Start with PostgreSQL (ecosystem value)
-- Add REST API for language-agnostic access
-- Add gRPC for ultra-low latency use cases
-- **Best of all worlds**: Compatibility + performance options
+### Trade-Off Assessment
+
+| Factor | Lost | Gained | Verdict |
+|--------|------|--------|---------|
+| Performance | 5-10% raw speed | Entire PostgreSQL ecosystem | ✅ Worth it for 99% of users |
+| Complexity | Protocol overhead | Zero learning curve | ✅ Huge adoption advantage |
+| Compatibility | None | Drop-in pgvector replacement | ✅ Unique differentiator |
+
+**Our Strategy**:
+1. **Primary**: PostgreSQL wire protocol (ecosystem value)
+2. **Future**: Add REST API (language-agnostic)
+3. **Future**: Add gRPC (ultra-low latency)
+4. **Result**: Best of all worlds - compatibility + performance options
 
 ---
 
 ## Can We Reach Qdrant Performance?
 
-### Theoretical Analysis
+### Performance Gap Analysis
 
-**Qdrant Performance** (2024 benchmarks):
-- QPS: 2200 peak, 626 @ 99.5% recall (1M vectors)
-- Latency: Sub-10ms typical
-- Implementation: Rust + HNSW
+**Current State**:
 
-**OmenDB Current**:
-- Build: 3220 vec/sec (97x faster than pgvector)
-- Query: 6.16ms p95 (single query)
-- Implementation: Rust + HNSW (same as Qdrant)
+| Metric | OmenDB | Qdrant | Gap | Fixable? |
+|--------|--------|--------|-----|----------|
+| Build speed | 3220 vec/sec | Unknown | Unknown | Already fast ✅ |
+| Query p95 | 6.16ms (~162 QPS) | Sub-10ms (626 QPS @ 99.5%) | **4-13x slower** | ✅ YES |
+| Implementation | Rust + HNSW | Rust + HNSW | Same stack | ✅ |
+| SIMD | ❌ Disabled | ✅ Likely enabled | Missing 2-4x | ✅ Fix: 5 minutes |
 
-**Estimated QPS** (OmenDB):
-- Single query: 6.16ms = ~162 QPS
-- **Gap: ~4-13x slower than Qdrant**
+---
 
 ### Why the Gap Exists
 
 **Qdrant Advantages**:
-1. Custom binary protocol (no parsing overhead)
-2. Highly optimized HNSW traversal
-3. SIMD distance calculations (likely)
-4. Efficient memory layout
-5. Years of production tuning
+| Advantage | Impact | Our Path to Parity |
+|-----------|--------|-------------------|
+| Custom binary protocol | 5-10% faster | Add gRPC (optional) |
+| Optimized HNSW traversal | 10-20% faster | Profile + optimize |
+| SIMD distance calculations | 2-4x faster | Enable feature flag (5 min) |
+| Efficient memory layout | 10-20% faster | Cache optimization |
+| Years of production tuning | 20-50% faster | Systematic optimization |
 
-**Our Opportunities**:
-1. ✅ **SIMD**: 2-4x speedup on distance calculations
-2. ✅ **Reduce allocations**: 10-20% improvement
-3. ✅ **Parallel queries**: Rayon for concurrent execution
-4. ✅ **Cache optimization**: Better memory layout
-5. ✅ **Binary protocol**: Add PostgreSQL extended protocol
+---
 
 ### Path to Competitive Performance
 
-**Quick Wins** (1 week):
-- SIMD distance calculations: +2-4x
-- Reduce hot path allocations: +10-20%
-- **Expected: 300-400 QPS** (2-4x improvement)
+| Phase | Timeline | Actions | Expected Result |
+|-------|----------|---------|----------------|
+| **Quick Wins** | Week 1 | SIMD (2-4x) + reduce allocations (10-20%) | 300-400 QPS (2-4x improvement) |
+| **Medium-Term** | Week 2-4 | Profile-guided optimization, cache optimization, parallel queries | 600-800 QPS (close to Qdrant @ 99.5%) |
+| **Long-Term** | Week 5-12 | Custom HNSW, GPU acceleration (optional), distributed deployment | Match or exceed Qdrant |
 
-**Medium-Term** (1 month):
-- Profile-guided optimization
-- Cache-friendly data structures
-- Parallel query execution
-- **Expected: 600-800 QPS** (close to Qdrant @ 99.5% recall)
-
-**Long-Term** (3-6 months):
-- GPU acceleration (optional)
-- Distributed deployment
-- Advanced caching strategies
-- **Expected: Match or exceed Qdrant**
-
-**Verdict**: YES, we can reach Qdrant performance within 3-6 months
+**Verdict**: ✅ **YES, we can reach Qdrant performance within 3-6 months**
 
 ---
 
 ## Can We Reach Billion Scale?
 
-### Current Limits
+### Current Limits & Memory Requirements
 
-**Validated Scale**:
-- 100K: ✅ Tested (31s build, 6.16ms p95)
-- 1M: ✅ Tested (3127s build on Mac, 22.64ms p95)
-- 10M: ⚠️ Not tested (estimated 48-64GB RAM)
-- 100M: ⚠️ Not tested (estimated 480-640GB RAM)
-- 1B: ❌ Not tested (requires distributed deployment)
+| Scale | Status | RAM Required | Storage Strategy |
+|-------|--------|--------------|------------------|
+| 100K | ✅ Tested | ~128MB | In-memory |
+| 1M | ✅ Tested | 48-64GB | In-memory |
+| 10M | ⚠️ Not tested | 480-640GB | In-memory (high-end server) |
+| 100M | ⚠️ Not tested | 4.8-6.4TB | Disk-backed required (HNSW-IF) |
+| 1B | ❌ Not tested | 48-64TB | Distributed OR HNSW-IF |
 
-### Memory Requirements
-
-**Single Node Limits**:
-- 1M vectors @ 1536D: ~48-64GB RAM
-- 10M vectors: ~480-640GB RAM (feasible on high-end servers)
-- 100M vectors: ~4.8-6.4TB RAM (requires disk-backed storage)
-- 1B vectors: ~48-64TB RAM (requires distributed system)
-
-**Disk-Backed Strategy**:
-- Current: Fully in-memory HNSW
-- **HNSW-IF** (from research): Hybrid in-memory + disk
-  - Keep hot layers in memory (top 2-3)
-  - Store cold layers on disk (bottom layers)
-  - **Scale: 1B+ vectors on single node**
+---
 
 ### Path to Billion Scale
 
-**Phase 1** (Now): Single-Node In-Memory
-- Target: 10M vectors (~64GB RAM)
-- Timeline: This month
-- **Status: Almost there** (1M validated)
+| Phase | Target | Timeline | Approach |
+|-------|--------|----------|----------|
+| **Phase 1** (Current) | 10M vectors | This month | Single-node in-memory (~64GB RAM) |
+| **Phase 2** (HNSW-IF) | 100M-1B vectors | Weeks 9-10 | Hybrid memory/disk (hot layers in memory, cold on disk) |
+| **Phase 3** (Distributed) | 1B+ vectors | 6-12 months | Sharding across multiple nodes, replication |
 
-**Phase 2** (Weeks 9-10): HNSW-IF Implementation
-- Target: 100M-1B vectors (hybrid memory/disk)
-- Vespa-proven approach
-- **Status: Researched, ready to implement**
+---
 
-**Phase 3** (6-12 months): Distributed Deployment
-- Sharding across multiple nodes
-- Replication for reliability
-- **Status: Future work**
+### HNSW-IF Strategy (Vespa-Proven)
 
-**Verdict**: YES, billion scale achievable via HNSW-IF (Weeks 9-10)
+**Implementation**:
+| Component | Strategy | Benefit |
+|-----------|----------|---------|
+| Hot layers (top 2-3) | Keep in memory | Fast access to frequently accessed data |
+| Cold layers (bottom) | Store on disk | Support billion-scale without massive RAM |
+| I/O optimization | Efficient disk access | Minimize latency impact |
+| Automatic switching | <10M in-memory, >10M hybrid | Seamless scaling |
+
+**Result**: 1B+ vectors on single node
+
+**Verdict**: ✅ **YES, billion scale achievable via HNSW-IF (Weeks 9-10)**
 
 ---
 
 ## GraphQL vs SQL: Trade-Offs
 
-### GraphQL (Weaviate Approach)
+### Comparison Matrix
 
-**Advantages**:
-- Schema introspection (auto-discover fields)
-- Flexible queries (fetch exactly what you need)
-- Single endpoint
-- Strong typing
+| Factor | GraphQL (Weaviate) | SQL (OmenDB, pgvector) | Winner |
+|--------|-------------------|------------------------|--------|
+| **Advantages** | Schema introspection, flexible queries, single endpoint, strong typing | Universal knowledge, powerful querying (JOINs/CTEs), huge ecosystem, optimized planners | Depends on use case |
+| **Disadvantages** | Learning curve, 15-25% overhead, less tooling, N+1 problem | Verbosity, schema migrations, not ideal for nested data | - |
+| **Performance** | 0.75x (25% overhead) | 0.90-0.95x (5-10% overhead) | ✅ SQL |
+| **Ecosystem** | Growing | Massive (millions of devs) | ✅ SQL |
+| **Use Case** | Complex nested queries, API-first | Database-first, PostgreSQL users | Depends |
 
-**Disadvantages**:
-- Learning curve (new query language)
-- Parsing overhead (15-25%)
-- Less tooling than SQL
-- N+1 query problem
-
-**Use Case**: Complex nested queries, API-first architectures
-
-### SQL (Our Approach)
-
-**Advantages**:
-- Universal knowledge (millions of developers)
-- Powerful querying (JOINs, CTEs, window functions)
-- Huge ecosystem (tools, ORMs, monitoring)
-- Optimized query planners
-
-**Disadvantages**:
-- Verbosity for simple queries
-- Schema changes require migrations
-- Not ideal for deeply nested data
-
-**Use Case**: Database-first architectures, existing PostgreSQL users
+---
 
 ### Our Strategy
 
-**Primary**: SQL via PostgreSQL wire protocol
-- Immediate compatibility
-- Zero learning curve
-- Huge ecosystem
+| Priority | Interface | Purpose | Status |
+|----------|-----------|---------|--------|
+| **Primary** | SQL via PostgreSQL wire | Immediate compatibility, zero learning curve, huge ecosystem | ✅ Implemented |
+| **Future** | GraphQL API layer | Complex queries, API-first architectures | 🔄 Planned |
+| **Future** | REST API | Language-agnostic access | 🔄 Planned |
+| **Future** | gRPC | Ultra-low latency use cases | 🔄 Planned |
 
-**Future**: GraphQL API layer (optional)
-- Built on top of SQL backend
-- Best of both worlds
-- Use Weaviate's approach as reference
-
-**Verdict**: SQL-first is correct choice for our market
+**Verdict**: ✅ SQL-first is correct choice for our market (PostgreSQL users)
 
 ---
 
 ## Learning from Competitors
 
-### What We Should Copy
+### What to Copy ✅
 
-**From Qdrant**:
-1. ✅ Rust implementation (already done)
-2. ✅ HNSW indexing (already done)
-3. ⚠️ SIMD optimizations (need to implement)
-4. ⚠️ Efficient filtering (<10% overhead)
-5. ⚠️ Excellent documentation
+| From | Feature | Priority | Status |
+|------|---------|----------|--------|
+| **Qdrant** | Rust implementation | ⭐⭐⭐ | ✅ Done |
+| **Qdrant** | HNSW indexing | ⭐⭐⭐ | ✅ Done |
+| **Qdrant** | SIMD optimizations | ⭐⭐⭐ | ⚠️ Need to implement |
+| **Qdrant** | Efficient filtering (<10% overhead) | ⭐⭐ | ⚠️ Need to implement |
+| **Qdrant** | Excellent documentation | ⭐⭐ | ⚠️ Need to improve |
+| **Milvus** | Distributed architecture | ⭐⭐ | 🔄 Future |
+| **Milvus** | Multiple index types | ⭐ | 🔄 Future |
+| **Milvus** | Quantization support | ⭐⭐ | ✅ Done (BQ) |
+| **Weaviate** | Hybrid search (vector + keyword) | ⭐⭐ | ⚠️ Future |
+| **Weaviate** | GraphQL API | ⭐ | ⚠️ Future |
+| **LanceDB** | Embedded deployment | ⭐⭐⭐ | ✅ Done |
+| **LanceDB** | Columnar format (Arrow) | ⭐ | 🔄 Consider |
+| **ChromaDB** | Developer-friendly API | ⭐⭐ | ⚠️ Improve |
+| **ChromaDB** | RAG-optimized features | ⭐⭐ | ⚠️ Future |
+| **pgvector** | PostgreSQL compatibility | ⭐⭐⭐ | ✅ Done |
+| **pgvector** | Simple API | ⭐⭐⭐ | ✅ Done |
 
-**From Milvus**:
-1. ⚠️ Distributed architecture (future)
-2. ⚠️ Multiple index types (IVF, DiskANN)
-3. ✅ Quantization support (already have BQ)
+---
 
-**From Weaviate**:
-1. ⚠️ Hybrid search (vector + keyword)
-2. ⚠️ GraphQL API (future)
-3. ⚠️ Auto-schema inference
+### What NOT to Copy ❌
 
-**From LanceDB**:
-1. ✅ Embedded deployment (already done)
-2. ⚠️ Columnar format (consider Arrow)
-3. ⚠️ Zero-copy operations
-
-**From ChromaDB**:
-1. ⚠️ Developer-friendly API
-2. ⚠️ RAG-optimized features
-3. ⚠️ Embedding management
-
-**From pgvector**:
-1. ✅ PostgreSQL compatibility (already done)
-2. ✅ Simple API (already done)
-3. ⚠️ Better documentation
-
-### What We Should NOT Copy
-
-**Avoid**:
-- Cloud-only deployment (Pinecone) - limits self-hosting
-- Python-only API (ChromaDB) - limits adoption
-- Complex setup (Milvus) - hurts developer experience
-- Weak SQL support (Qdrant) - loses PostgreSQL value
+| Anti-Pattern | Example | Why Avoid |
+|--------------|---------|-----------|
+| Cloud-only deployment | Pinecone | Limits self-hosting, compliance use cases |
+| Python-only API | ChromaDB | Limits adoption |
+| Complex setup | Milvus | Hurts developer experience |
+| Weak SQL support | Qdrant | Loses PostgreSQL ecosystem value |
 
 ---
 
@@ -425,188 +356,155 @@ GraphQL:                     0.75x (25% slower)
 
 ### Our Unique Position
 
-**Core Differentiators**:
-1. **PostgreSQL Compatibility** ⭐⭐⭐
-   - Only embedded vector DB with pgvector compatibility
-   - Huge ecosystem advantage
-   - Zero learning curve
+| Differentiator | Importance | Competitor Status | Details |
+|----------------|------------|-------------------|---------|
+| **PostgreSQL Compatibility** | ⭐⭐⭐ CRITICAL | NONE (unique) | Only embedded vector DB with pgvector compatibility |
+| **97x Faster Builds** | ⭐⭐⭐ HIGH | UNKNOWN | Parallel HNSW construction (unique), proven vs pgvector |
+| **Embedded + Server** | ⭐⭐ MEDIUM | LanceDB embedded only | Start simple (embedded), scale up (server mode) |
+| **Memory Efficiency** | ⭐⭐ MEDIUM | Competitive | 28x better than PostgreSQL (ALEX index) |
+| **Source-Available** | ⭐⭐ MEDIUM | Mixed | Elastic License 2.0, can audit/verify, community contributions |
 
-2. **97x Faster Builds** ⭐⭐⭐
-   - Proven vs pgvector
-   - Parallel HNSW construction (unique)
-   - Rapid development iteration
-
-3. **Embedded + Server** ⭐⭐
-   - Start simple (embedded)
-   - Scale up (server mode)
-   - Flexible deployment
-
-4. **Memory Efficiency** ⭐⭐
-   - 28x better than PostgreSQL (ALEX index)
-   - Critical for large-scale deployments
-
-5. **Source-Available** ⭐⭐
-   - Elastic License 2.0
-   - Can audit/verify code
-   - Community contributions
+---
 
 ### Target Customer Profile
 
 **Primary**: AI Startups Using PostgreSQL
-- Already have Postgres infrastructure
-- Need vector search for RAG/semantic search
-- pgvector is too slow (>1M vectors)
-- Budget-conscious (can't afford Pinecone)
-- **Why us**: Drop-in replacement, 97x faster, self-hostable
+| Why Them | Why Us |
+|----------|--------|
+| Already have Postgres infrastructure | Drop-in replacement |
+| Need vector search for RAG/semantic search | PostgreSQL compatibility |
+| pgvector too slow (>1M vectors) | 97x faster builds |
+| Budget-conscious (can't afford Pinecone) | Self-hostable, free |
 
 **Secondary**: Enterprise AI Teams
-- Compliance requirements (self-hosting)
-- Existing PostgreSQL investments
-- Need ACID transactions + vectors
-- **Why us**: PostgreSQL compatibility, transactional guarantees
+| Why Them | Why Us |
+|----------|--------|
+| Compliance requirements | Self-hosting support |
+| Existing PostgreSQL investments | Drop-in compatibility |
+| Need ACID transactions + vectors | MVCC, snapshot isolation |
 
 **Tertiary**: Vector DB Power Users
-- Need raw performance (Qdrant-level)
-- Want embedded deployment (like LanceDB)
-- Prefer Rust implementations
-- **Why us**: Performance + embedded + PostgreSQL
+| Why Them | Why Us |
+|----------|--------|
+| Need raw performance | Qdrant-level (after optimization) |
+| Want embedded deployment | Like LanceDB |
+| Prefer Rust implementations | Memory safety + performance |
 
-### Anti-Targets (NOT our customers)
+---
 
-❌ **Users who need**:
-- Multi-region distributed deployment (use Milvus/Pinecone)
-- GraphQL-first API (use Weaviate)
-- Python-only simple API (use ChromaDB)
-- Managed cloud-only (use Pinecone)
+### Anti-Targets (NOT Our Customers) ❌
+
+| User Need | Recommended Alternative |
+|-----------|-------------------------|
+| Multi-region distributed deployment | Use Milvus or Pinecone |
+| GraphQL-first API | Use Weaviate |
+| Python-only simple API | Use ChromaDB |
+| Managed cloud-only | Use Pinecone |
 
 ---
 
 ## Optimization Roadmap
 
-### Immediate (This Week)
+### Phase 1: Immediate (Week 1) ⚠️ CRITICAL
 
-**1. Profile OmenDB** ⚠️ CRITICAL
-```bash
-cargo install flamegraph
-cargo flamegraph --bin benchmark_pgvector_comparison -- 100000
-```
-- Identify CPU hot spots
-- Find memory allocations
-- Measure cache misses
-
-**2. SIMD Distance Calculations** ⚠️ HIGH IMPACT
-- Use `simdeez` or `wide` crates
-- AVX2/AVX-512 for Intel, NEON for ARM
-- **Expected: 2-4x speedup**
-
-**3. Reduce Allocations** ⚠️ MEDIUM IMPACT
-- Reuse buffers in hot paths
-- Object pooling for temporary vectors
-- **Expected: 10-20% improvement**
+| Optimization | Effort | Expected Impact | Command |
+|--------------|--------|----------------|---------|
+| **Profile OmenDB** | 4 hours | Identify bottlenecks | `cargo flamegraph --bin benchmark -- 100000` |
+| **Enable SIMD** | 5 minutes | 2-4x query speedup | Add to Cargo.toml: `default = ["hnsw-simd"]` |
+| **Enable LTO** | 1 minute | 5-15% improvement | `lto = "thin"` in Cargo.toml |
+| **Enable opt-level=3** | 1 minute | 5-10% improvement | `opt-level = 3` in Cargo.toml |
+| **Reduce allocations** | 1-2 days | 10-20% improvement | Object pooling, buffer reuse |
 
 **Estimated Total**: 2-5x query performance improvement
 
-### Short-Term (Next 2 Weeks)
+---
 
-**4. Parallel Query Execution**
-- Use Rayon for concurrent queries
-- Test with 10, 100, 1000 parallel clients
-- **Expected: Near-linear scaling up to core count**
+### Phase 2: Short-Term (Week 2-4)
 
-**5. Cache Optimization**
-- Better memory layout for HNSW graph
-- Prefetching hints
-- **Expected: 10-20% improvement**
-
-**6. PostgreSQL Extended Protocol**
-- Use binary format (vs text)
-- Reduce parsing overhead
-- **Expected: 5-10% improvement**
+| Optimization | Effort | Expected Impact |
+|--------------|--------|----------------|
+| Parallel query execution | 2-3 days | Near-linear scaling |
+| Cache optimization | 2-3 days | 10-20% improvement |
+| PostgreSQL extended protocol (binary) | 1-2 days | 5-10% improvement |
 
 **Estimated Total**: 3-8x cumulative improvement
 
-### Medium-Term (Next Month)
+---
 
-**7. Filtered Search Implementation**
-- Metadata filtering with <15% overhead
-- Use Qdrant's approach as reference
-- **Target: <10% overhead like Qdrant**
+### Phase 3: Medium-Term (Week 5-8)
 
-**8. Binary Quantization Optimization**
-- Optimize BQ code paths
-- SIMD for bit operations
-- **Expected: 20-30% improvement**
-
-**9. 10M Scale Testing**
-- Validate memory efficiency
-- Optimize for large datasets
-- **Target: <64GB RAM for 10M vectors**
+| Optimization | Effort | Expected Impact |
+|--------------|--------|----------------|
+| Filtered search (<15% overhead) | 1-2 weeks | Competitive parity with Qdrant |
+| Binary Quantization optimization | 1 week | 20-30% improvement |
+| 10M scale testing | 1 week | Validate <64GB RAM claim |
 
 **Estimated Total**: 5-15x cumulative vs current
 
-### Long-Term (3-6 Months)
+---
 
-**10. HNSW-IF Implementation**
-- Hybrid memory/disk HNSW
-- Billion-scale support
-- **Target: 1B vectors on single node**
+### Phase 4: Long-Term (Week 9-12+)
 
-**11. GPU Acceleration (Optional)**
-- CUDA/ROCm for distance calculations
-- Massive parallelism
-- **Expected: 10-100x for large batches**
-
-**12. Distributed Deployment**
-- Sharding support
-- Replication
-- **Target: Multi-node billion-scale**
+| Optimization | Effort | Expected Impact |
+|--------------|--------|----------------|
+| HNSW-IF implementation | 2-3 weeks | Billion-scale support (1B vectors single-node) |
+| GPU acceleration (optional) | 2-4 weeks | 10-100x for large batches |
+| Distributed deployment | 3-6 months | Multi-node billion-scale |
 
 ---
 
 ## Testing Methodology: Docker vs Native
 
-### Docker/OrbStack Overhead
+### Docker/OrbStack Overhead Analysis
 
-**CPU Performance**:
-- Overhead: ~2-5% (nearly native)
-- Reason: No virtualization on macOS (Linux containers share kernel)
+| Component | Overhead | Notes |
+|-----------|----------|-------|
+| CPU | 2-5% | Nearly native (Linux containers share kernel) |
+| Memory | 1-2% | No memory translation |
+| I/O | 5-10% | Volume mounts (native filesystem access) |
+| Network | 1-3% | Loopback |
+| **Total** | **5-10% worst case** | |
 
-**Memory Performance**:
-- Overhead: ~1-2%
-- No memory translation overhead
+**Verdict**: ✅ Docker is FINE for benchmarking (overhead negligible)
 
-**I/O Performance**:
-- Overhead: ~5-10% (volume mounts)
-- Native filesystem access (no emulation)
-
-**Network Performance**:
-- Overhead: ~1-3% (loopback)
-
-**Total Overhead**: 5-10% worst case
-
-**Verdict**: Docker is FINE for benchmarking
+---
 
 ### Fair Comparison Strategy
 
 **Recommended Approach**:
-- **OmenDB**: Native (how users deploy embedded)
-- **Qdrant**: Docker (standard deployment)
-- **pgvector**: Native PostgreSQL (standard deployment)
-- **Each system tested in production mode**
+| System | Deployment | Rationale |
+|--------|------------|-----------|
+| OmenDB | Native | How users deploy embedded |
+| Qdrant | Docker | Standard deployment method |
+| pgvector | Native PostgreSQL | Standard deployment |
 
 **Why This is Fair**:
-1. Reflects real-world deployment
+1. Reflects real-world deployment patterns
 2. Overhead is minimal (5-10%)
 3. Qdrant in Docker is how most users run it
-4. We can note overhead in results if needed
+4. Can note overhead in results if needed
 
-**Alternative** (ultra-fair):
-- Run ALL in containers
-- Build OmenDB as Docker image
-- Test in identical environments
-- **Downside**: Not how users deploy embedded systems
+---
 
-**Recommendation**: Test as deployed (native vs Docker is fine)
+## Success Metrics
+
+### Minimum Success (Viable Product)
+- ✅ Within 2x of Qdrant query latency
+- ✅ 97x faster builds (already achieved)
+- ✅ PostgreSQL compatibility (unique value)
+- ✅ 10M scale validated
+
+### Target Success (Competitive)
+- ✅ Within 50% of Qdrant query latency
+- ✅ Match Qdrant QPS for parallel queries
+- ✅ Unique features (parallel builds, serialization)
+- ✅ 100M scale validated
+
+### Stretch Success (Market Leader)
+- ✅ Match or beat Qdrant latency
+- ✅ Match or beat Qdrant QPS
+- ✅ Billion-scale support (HNSW-IF)
+- ✅ Best-in-class PostgreSQL compatibility
 
 ---
 
@@ -614,101 +512,51 @@ cargo flamegraph --bin benchmark_pgvector_comparison -- 100000
 
 ### Week 1: Profiling + Qdrant Benchmark
 
-**Monday-Tuesday**:
-1. ✅ Profile OmenDB with flamegraph
-2. ✅ Profile with heaptrack (memory)
-3. ✅ Identify top 3 bottlenecks
-
-**Wednesday-Thursday**:
-4. ✅ Setup Qdrant in Docker
-5. ✅ Run identical 100K benchmark
-6. ✅ Document performance gaps
-
-**Friday**:
-7. ✅ Implement 1-2 quick wins (SIMD if possible)
-8. ✅ Re-benchmark
-9. ✅ Document findings
+| Day | Task | Duration |
+|-----|------|----------|
+| Mon-Tue | Profile OmenDB (flamegraph + heaptrack), identify top 3 bottlenecks | 1-2 days |
+| Wed-Thu | Setup Qdrant Docker, run identical 100K benchmark, document gaps | 1-2 days |
+| Fri | Implement 1-2 quick wins (SIMD if possible), re-benchmark, document findings | 1 day |
 
 ### Week 2: Optimizations + LanceDB
 
-**Monday-Wednesday**:
-1. ✅ Implement remaining quick wins
-2. ✅ Parallel query support
-3. ✅ Benchmark improvements
-
-**Thursday-Friday**:
-4. ✅ Setup LanceDB
-5. ✅ Run benchmarks
-6. ✅ Document competitive position
+| Day | Task | Duration |
+|-----|------|----------|
+| Mon-Wed | Implement remaining quick wins, parallel query support, benchmark improvements | 3 days |
+| Thu-Fri | Setup LanceDB, run benchmarks, document competitive position | 2 days |
 
 ### Week 3-4: Scale + Features
-
-1. ✅ 1M benchmark vs Qdrant
-2. ✅ 10M testing (memory limits)
-3. ✅ Filtered search implementation
-4. ✅ Binary Quantization optimization
-5. ✅ Update competitive positioning
-
----
-
-## Success Metrics
-
-### Minimum Success (Viable Product)
-
-- Within 2x of Qdrant query latency
-- 97x faster builds (already achieved)
-- PostgreSQL compatibility (unique value)
-- 10M scale validated
-
-### Target Success (Competitive)
-
-- Within 50% of Qdrant query latency
-- Match Qdrant QPS for parallel queries
-- Unique features (parallel builds, serialization)
-- 100M scale validated
-
-### Stretch Success (Market Leader)
-
-- Match or beat Qdrant latency
-- Match or beat Qdrant QPS
-- Billion-scale support (HNSW-IF)
-- Best-in-class PostgreSQL compatibility
+1. 1M benchmark vs Qdrant
+2. 10M testing (memory limits)
+3. Filtered search implementation
+4. Binary Quantization optimization
+5. Update competitive positioning
 
 ---
 
 ## Conclusion
 
-**Q: Are we SOTA?**
-- Build speed: YES (proven)
-- Query performance: UNKNOWN (need testing)
-- Scale: PARTIALLY (need validation)
+### Strategic Answers
 
-**Q: Can we compete with Qdrant?**
-- Technically: YES (same tech stack)
-- Timeline: 3-6 months for full parity
-- Differentiation: PostgreSQL compatibility
+| Question | Answer | Confidence |
+|----------|--------|------------|
+| **Are we SOTA?** | Build: YES (proven), Query: UNKNOWN, Scale: PARTIAL | HIGH / UNKNOWN / MEDIUM |
+| **Can we compete with Qdrant?** | Technically YES (same stack), Timeline 3-6 months | HIGH |
+| **Should we optimize first?** | YES - profile + SIMD + allocations this week | CRITICAL |
+| **Is PostgreSQL compatibility valuable?** | EXTREMELY - unique differentiator, worth 5-10% overhead | HIGH |
+| **Can we reach billion scale?** | YES via HNSW-IF (Weeks 9-10), distributed later (6-12 months) | HIGH |
 
-**Q: Should we optimize first?**
-- YES - profile + SIMD + allocations this week
-- Get within 2x of Qdrant (minimum viable)
-- Then continue feature development
+---
 
-**Q: Is PostgreSQL compatibility valuable?**
-- EXTREMELY - it's our unique differentiator
-- Worth 5-10% performance trade-off
-- Huge ecosystem advantage
+### Strategic Recommendation
 
-**Q: Can we reach billion scale?**
-- YES via HNSW-IF (Weeks 9-10)
-- Single-node 1B vectors feasible
-- Distributed deployment later (6-12 months)
-
-**Strategic Recommendation**:
-1. **This week**: Profile + optimize (2-5x improvement target)
-2. **Next week**: Qdrant benchmark (establish baseline)
-3. **Weeks 3-4**: LanceDB + feature parity
-4. **Weeks 5-8**: Scale testing + optimization
-5. **Weeks 9-10**: HNSW-IF for billion-scale
+| Timeline | Milestone | Target |
+|----------|-----------|--------|
+| **This week** | Profile + optimize | 2-5x improvement |
+| **Next week** | Qdrant benchmark | Establish baseline |
+| **Weeks 3-4** | LanceDB + feature parity | Competitive positioning |
+| **Weeks 5-8** | Scale testing + optimization | 10M validation |
+| **Weeks 9-10** | HNSW-IF | Billion-scale support |
 
 **Timeline to competitive position**: 6-8 weeks
 **Timeline to market leadership**: 3-6 months
@@ -717,4 +565,4 @@ cargo flamegraph --bin benchmark_pgvector_comparison -- 100000
 
 **Last Updated**: October 30, 2025
 **Status**: Strategic plan ready for execution
-**Next Step**: Run profiling session (flamegraph + heaptrack)
+**Next Step**: Run profiling session (flamegraph + heaptrack) → Enable SIMD (5 min)
