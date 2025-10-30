@@ -104,8 +104,8 @@
     - **Critical finding**: SIMD available but NOT ENABLED (2-4x free win)
 **Stack**: Rust (HNSW + Binary Quantization + PostgreSQL protocol + RocksDB + MVCC)
 **Phase**: Week 7 (Validation Phase) - 142 tests passing (101 Phase 1 + 41 Phase 2)
-**Priority**: 🔍 Optimize engine → Build custom HNSW for SOTA (10-15 week roadmap)
-**Next**: Enable SIMD (5 min, 2-4x) → Profile → Custom HNSW planning
+**Priority**: 🔍 Build custom HNSW for SOTA (10-15 week roadmap)
+**Next**: Implement custom HNSW foundation (Week 9 Day 2-5)
 
 ## Technical Architecture
 
@@ -166,7 +166,12 @@
 
 **Research Reference**: See `ai/research/SOTA_ALGORITHMS_INVESTIGATION_OCT2025.md` for full analysis of 6 algorithms (MN-RU, SPANN, SPFresh, HNSW-IF, Extended RaBitQ, NGT-QG) and strategic roadmap.
 
-**Strategic Documents** (Week 7 Day 3 - Oct 30, 2025):
+**Strategic Documents** (Week 7-9 - Oct 30, 2025):
+- `docs/architecture/CUSTOM_HNSW_DESIGN.md` (1000+ lines, Week 9 Day 1) - **Custom HNSW architecture design**
+  - Complete implementation roadmap (Weeks 9-19)
+  - Core data structures (cache-line aligned, flattened index)
+  - Performance projections (581 → 1000+ QPS)
+  - SOTA features roadmap (Extended RaBitQ, delta encoding)
 - `ai/research/STRATEGIC_COMPETITIVE_POSITIONING.md` (6400+ words) - Comprehensive competitive analysis
   - 8 competitors analyzed (Qdrant, Milvus, Weaviate, LanceDB, ChromaDB, Pinecone, pgvector, pgvecto.rs)
   - PostgreSQL compatibility value analysis
