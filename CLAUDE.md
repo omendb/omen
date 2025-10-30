@@ -75,6 +75,12 @@
 - Full-text search (BM25, inverted index)
 - Complete "Embedded AI Database"
 
+**After** (Weeks 25-28):
+- Graph Links (lightweight graph capabilities)
+- Store relationships between vectors (edges with properties)
+- Graph RAG support (vector similarity + graph traversal)
+- Market Position: "Vector DB with graph capabilities"
+
 ---
 
 ## Current Status
