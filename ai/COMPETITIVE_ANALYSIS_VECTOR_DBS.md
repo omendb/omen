@@ -1,144 +1,150 @@
 # Competitive Analysis: OmenDB vs Dedicated Vector Databases
 
 **Date**: October 30, 2025
-**Status**: Strategic planning document
-**Purpose**: Assess competitive positioning and identify testing priorities
+**Purpose**: Competitive positioning and testing priorities
 
 ---
 
 ## Executive Summary
 
-**Current Position**: We've validated 97x faster builds vs pgvector, but haven't tested against dedicated vector databases yet.
+**Quick Answers**:
+- Have we tested vs dedicated vector DBs? **NO** (only vs pgvector so far)
+- Who should we benchmark first? **Qdrant** (Rust performance leader, easiest to test)
+- Current vs pgvector? **97x faster builds, 2.2x faster queries**
+- Estimated vs Qdrant? **4-13x slower QPS** (fixable with SIMD + optimization)
+- What's our unique advantage? **PostgreSQL compatibility** (no other embedded vector DB has this)
 
-**Key Finding**: Qdrant (Rust-based) is the performance leader among dedicated vector DBs. We should benchmark against them first.
+**Testing Priority**:
+1. **Week 1**: Qdrant (performance leader, Rust-based)
+2. **Week 2**: LanceDB (embedded competitor)
+3. **Week 3**: Milvus/Weaviate (enterprise scale)
 
-**Recommendation**: Focus on **Qdrant comparison** as our primary competitive benchmark, with LanceDB and Weaviate as secondary targets.
+**Critical Action**: Profile OmenDB → Enable SIMD → Then benchmark Qdrant
 
 ---
 
-## Competitive Landscape (2024-2025 Data)
+## Table of Contents
 
-### Market Leaders
+1. [Competitive Landscape](#competitive-landscape)
+2. [OmenDB Current State](#omendb-current-state)
+3. [Competitive Gaps Analysis](#competitive-gaps-analysis)
+4. [Testing Strategy](#testing-strategy)
+5. [Profiling Plan](#profiling-plan)
+6. [Optimization Roadmap](#optimization-roadmap)
+7. [Competitive Positioning](#competitive-positioning)
 
-| Database | GitHub Stars | Language | Strength | Query Performance |
-|----------|-------------|----------|----------|-------------------|
-| **Milvus** | ~25k | Go/Python | Enterprise scale | Sub-2ms latency, highest QPS |
-| **Qdrant** | ~9k | Rust | Speed + filtering | 2200 QPS max, lowest latency |
-| **Weaviate** | ~8k | Go | GraphQL API | Sub-2ms latency |
-| **ChromaDB** | ~6k | Python | Simplicity | Good for prototypes |
-| **LanceDB** | ~3k | Rust | Embedded/serverless | Rust performance |
-| **pgvector** | ~4k | C | PostgreSQL | 33 vec/sec build (slow) |
+---
 
-### Performance Metrics (HNSW-based systems)
+## Competitive Landscape
 
-**Qdrant** (Performance Leader):
-- QPS: 2200 at peak, 626 QPS @ 99.5% recall (1M vectors)
-- Latency: Lowest across all scenarios
-- Build: Not well documented (focus on query performance)
-- Filtering: <10% latency increase with metadata filters
+### Market Leaders (2024-2025)
 
-**Milvus** (Scale Leader):
+| Database | Stars | Language | Strength | Query Performance | Target Use Case |
+|----------|-------|----------|----------|-------------------|-----------------|
+| **Milvus** | ~25k | Go/Python | Enterprise scale | Sub-2ms, highest QPS | Distributed, billions of vectors |
+| **Qdrant** | ~9k | Rust | Speed + filtering | 2200 QPS max, 626 @ 99.5% | Performance-critical apps |
+| **Weaviate** | ~8k | Go | GraphQL API | Sub-2ms latency | Hybrid search, GraphQL users |
+| **ChromaDB** | ~6k | Python | Simplicity | Good for prototypes | RAG, prototyping |
+| **LanceDB** | ~3k | Rust | Embedded/serverless | Rust performance | Embedded, serverless |
+| **pgvector** | ~4k | C | PostgreSQL | 33 vec/sec build (slow) | PostgreSQL users |
+
+### Performance Leader Detail
+
+**Qdrant** (Rust-based, our primary benchmark target):
+| Metric | Value | Notes |
+|--------|-------|-------|
+| QPS (max) | 2200 | Peak throughput |
+| QPS @ 99.5% recall | 626 | 1M vectors |
+| Latency | Lowest across all scenarios | - |
+| Filtering overhead | <10% | Metadata filtering |
+| Implementation | Custom Rust | Not using library |
+
+**Milvus** (Scale leader):
 - QPS: Highest overall
 - Latency: Sub-2ms
-- Build: Fastest indexing time
-- Scale: Billions of vectors
-
-**Weaviate**:
-- QPS: Close to Milvus
-- Latency: Sub-2ms
-- Features: Strong GraphQL API, hybrid search
-
-**ChromaDB**:
-- Focus: Developer experience over raw performance
-- Best for: RAG applications, prototypes
-
-**LanceDB**:
-- Written in Rust (like us and Qdrant)
-- Embedded architecture (like us)
-- Serverless deployment
+- Scale: Billions of vectors (distributed)
+- Implementation: Custom C++ (Knowhere library)
 
 ---
 
 ## OmenDB Current State
 
-### What We Know (100K vectors, 1536D, M=16, ef_construction=64):
+### What We Know (100K vectors, 1536D, M=16, ef_construction=64)
 
-**Build Performance**:
-- OmenDB: 31.05s (3220 vec/sec)
-- pgvector: 3026.27s (33 vec/sec)
-- **Advantage: 97x faster**
+| Metric | OmenDB | pgvector | Advantage |
+|--------|--------|----------|-----------|
+| Build speed | 31.05s (3220 vec/sec) | 3026.27s (33 vec/sec) | **97x faster** ⭐ |
+| Query p95 | 6.16ms (~162 QPS) | 13.60ms (~73 QPS) | **2.2x faster** |
+| Tests | 142 passing | - | ✅ Validated |
+| ASAN | ZERO issues | - | ✅ Memory safe |
 
-**Query Performance**:
-- OmenDB p95: 6.16ms (~162 QPS at p95 latency)
-- pgvector p95: 13.60ms (~73 QPS)
-- **Advantage: 2.2x faster**
+---
 
-### What We DON'T Know:
+### What We DON'T Know (Critical Gaps)
 
-1. ❌ **Build speed vs Qdrant/Milvus**: Are we competitive at indexing?
-2. ❌ **QPS under load**: What's our max throughput with parallel queries?
-3. ❌ **Latency at scale**: How do we perform at 1M, 10M, 100M vectors?
-4. ❌ **Filtered search**: Metadata filtering performance
-5. ❌ **Memory efficiency**: RAM usage vs competitors
-6. ❌ **Profiling data**: Where are our bottlenecks?
+| Unknown | Why It Matters | Priority |
+|---------|----------------|----------|
+| Build speed vs Qdrant/Milvus | Are we competitive at indexing? | HIGH |
+| QPS under load | Max throughput with parallel queries? | ⚠️ CRITICAL |
+| Latency at scale (1M, 10M, 100M) | Do we degrade? | HIGH |
+| Filtered search | Metadata filtering performance | MEDIUM |
+| Memory efficiency | RAM usage vs competitors | MEDIUM |
+| Profiling data | Where are bottlenecks? | ⚠️ CRITICAL |
 
 ---
 
 ## Competitive Gaps Analysis
 
-### Where We're Likely Strong:
+### Where We're Strong ✅
 
-1. ✅ **Build speed**: 3220 vec/sec (97x faster than pgvector)
-2. ✅ **PostgreSQL compatibility**: Unique differentiator vs pure vector DBs
-3. ✅ **Embedded deployment**: No separate infrastructure needed
-4. ✅ **Rust implementation**: Memory safety + performance (like Qdrant, LanceDB)
-
-### Where We Need Validation:
-
-1. ⚠️ **Query throughput (QPS)**:
-   - Qdrant: 2200 QPS max, 626 QPS @ 99.5% recall
-   - OmenDB: Unknown (single query p95: 6.16ms suggests ~162 QPS ceiling)
-   - **Gap: Potentially 3-13x slower than Qdrant**
-
-2. ⚠️ **Parallel query handling**:
-   - Haven't tested concurrent queries
-   - No benchmarks with 10, 100, 1000 parallel clients
-
-3. ⚠️ **Filtered search**:
-   - No metadata filtering benchmarks
-   - Qdrant: <10% overhead, others: 30-50% slowdown
-
-4. ⚠️ **Scale validation**:
-   - Tested: 100K, 1M on Mac
-   - Need: 10M, 100M, 1B benchmarks
-
-### Where We're Likely Behind:
-
-1. ❌ **Distributed deployment**: Qdrant/Milvus support clustering, we don't
-2. ❌ **Cloud-native features**: No multi-tenancy, sharding, replication yet
-3. ❌ **Ecosystem**: No client libraries, limited integrations
-4. ❌ **Maturity**: Competitors have years of production testing
+| Strength | Status | Competitor Comparison |
+|----------|--------|-----------------------|
+| Build speed | 3220 vec/sec (97x vs pgvector) | Likely competitive with Qdrant |
+| PostgreSQL compatibility | ✅ Unique | No other embedded vector DB has this |
+| Embedded deployment | ✅ No infrastructure | Like LanceDB, unlike Qdrant/Milvus |
+| Rust implementation | ✅ Memory safe + fast | Like Qdrant, LanceDB |
+| Parallel building | 16x speedup | UNIQUE (undocumented by competitors) |
+| Graph serialization | 4175x speedup | UNIQUE (undocumented by competitors) |
 
 ---
 
-## Testing Strategy & Priorities
+### Where We Need Validation ⚠️
 
-### Phase 1: Quick Validation (1-2 days)
+| Area | Current | Qdrant | Estimated Gap | Fixable? |
+|------|---------|--------|---------------|----------|
+| **Query QPS** | ~162 (from p95 latency) | 2200 max, 626 @ 99.5% | **4-13x slower** | ✅ YES (SIMD + optimization) |
+| Parallel queries | Not tested | Validated | Unknown | ✅ YES (Rayon) |
+| Filtered search | Not implemented | <10% overhead | Unknown | ✅ YES (implementation needed) |
+| Scale (10M+) | 1M tested only | 1B+ supported | Unknown | ✅ YES (HNSW-IF) |
 
-**Target: Qdrant** (easiest to test, performance leader)
+---
+
+### Where We're Behind ❌
+
+| Gap | Impact | Timeline to Fix |
+|-----|--------|----------------|
+| Distributed deployment | Can't scale horizontally | 6+ months (Phase 4+) |
+| Cloud-native features | No multi-tenancy, sharding | 3-6 months |
+| Ecosystem | No client libraries | 3-6 months |
+| Maturity | Years vs our weeks | Ongoing |
+
+**Strategy**: Accept these gaps, focus on embedded + PostgreSQL compatibility differentiators
+
+---
+
+## Testing Strategy
+
+### Phase 1: Qdrant (Week 1) ⚠️ PRIORITY
 
 **Why Qdrant First**:
-1. Rust-based (direct comparison)
-2. Performance leader (hardest benchmark)
-3. Easiest to deploy (Docker single-node)
-4. Good documentation
+| Reason | Benefit |
+|--------|---------|
+| Rust-based | Direct language comparison |
+| Performance leader | Hardest benchmark (if we match Qdrant, we beat others) |
+| Easy deployment | `docker run -p 6333:6333 qdrant/qdrant` |
+| Good documentation | Clear benchmarking methodology |
 
-**Test Setup**:
-```bash
-docker run -p 6333:6333 qdrant/qdrant
-```
-
-**Benchmarks** (100K vectors, 1536D):
+**Test Setup** (100K vectors, 1536D):
 - [x] Build time
 - [ ] Single query latency (p50, p95, p99)
 - [ ] QPS under load (1, 10, 100 parallel clients)
@@ -146,233 +152,146 @@ docker run -p 6333:6333 qdrant/qdrant
 - [ ] Disk usage
 
 **Expected Outcome**:
-- Build: Qdrant likely faster (focus on queries)
-- Query latency: We're competitive (6.16ms vs Qdrant's optimized Rust)
-- QPS: Qdrant likely ahead (2200 vs our unknown)
-
-### Phase 2: Embedded Comparison (2-3 days)
-
-**Target: LanceDB** (direct embedded competitor)
-
-**Why LanceDB**:
-1. Rust-based embedded architecture (direct comparison)
-2. Similar use case (embedded vector DB)
-3. Growing adoption
-
-**Benchmarks**: Same as Qdrant
-
-### Phase 3: Enterprise Comparison (3-5 days)
-
-**Targets: Milvus, Weaviate**
-
-**Why Later**:
-- More complex setup (distributed systems)
-- Different use case (enterprise scale vs embedded)
-- Less relevant for our initial positioning
-
-### Phase 4: Pinecone (Cloud-Only)
-
-**Why Last**:
-- Proprietary cloud service (not self-hosted)
-- Hard to benchmark fairly (network latency)
-- Different target customer
+- Build: Qdrant likely faster (or we're competitive)
+- Query latency: Competitive (6.16ms vs Qdrant's optimized Rust)
+- QPS: Qdrant ahead (2200 vs ~162) - this is what we need to fix
 
 ---
 
-## What We Need to Do to Be Competitive
+### Phase 2: LanceDB (Week 2)
 
-### Immediate (This Week):
+**Why LanceDB Second**:
+| Reason | Benefit |
+|--------|---------|
+| Rust embedded architecture | Direct embedded comparison |
+| Similar use case | Both targeting embedded deployments |
+| Growing adoption | Relevant competitor |
 
-1. **Profile OmenDB** ✅ CRITICAL
-   - Use `cargo flamegraph` for CPU profiling
-   - Identify hot paths in query execution
-   - Measure memory allocations
-   - Find serialization bottlenecks
+**Benchmarks**: Same as Qdrant
 
-2. **Benchmark Qdrant** ✅ HIGH PRIORITY
-   - Run same 100K benchmark
-   - Document methodology
-   - Compare build + query performance
+---
 
-3. **Parallel Query Testing** ✅ HIGH PRIORITY
-   - Test with 10, 100, 1000 concurrent clients
-   - Measure QPS and latency distribution
-   - Identify concurrency bottlenecks
+### Phase 3: Milvus/Weaviate (Week 3)
 
-### Short-Term (Next 2 Weeks):
+**Why Later**:
+- More complex setup (distributed systems)
+- Different use case (enterprise vs embedded)
+- Less relevant for initial positioning
 
-4. **Optimize Query Path**
-   - Profile shows hot spots
-   - Optimize distance calculations (SIMD?)
-   - Reduce allocations
-   - Cache optimization
+---
 
-5. **1M Benchmark vs Qdrant**
-   - Validate scale performance
-   - Compare memory efficiency
-   - Document results
+### Phase 4: Pinecone (Week 4+)
 
-6. **LanceDB Comparison**
-   - Embedded architecture benchmark
-   - Fair comparison (both embedded)
-
-### Medium-Term (Next Month):
-
-7. **Filtered Search**
-   - Implement metadata filtering
-   - Benchmark vs Qdrant (<10% overhead target)
-
-8. **Binary Quantization Benchmarks**
-   - We have BQ, competitors do too
-   - Compare accuracy/memory tradeoffs
-
-9. **10M+ Scale Testing**
-   - Validate billion-scale claims
-   - Memory efficiency crucial here
+**Why Last**:
+- Proprietary cloud (hard to benchmark fairly)
+- Network latency confounds results
+- Different target customer
 
 ---
 
 ## Profiling Plan
 
-### Tools to Use:
+### Tools
 
-1. **CPU Profiling**: `cargo flamegraph`
-   ```bash
-   cargo install flamegraph
-   cargo flamegraph --bin benchmark_pgvector_comparison -- 100000
-   ```
+| Tool | Purpose | Command |
+|------|---------|---------|
+| **flamegraph** | CPU profiling | `cargo flamegraph --bin benchmark -- 100000` |
+| **heaptrack** | Memory profiling | `heaptrack ./target/release/benchmark 100000` |
+| **perf** | Perf analysis | `perf record -g ./target/release/benchmark 100000` |
+| **criterion** | Micro-benchmarks | Distance calculations, HNSW traversal |
 
-2. **Memory Profiling**: `heaptrack` or `valgrind --tool=massif`
-   ```bash
-   heaptrack ./target/release/benchmark_pgvector_comparison 100000
-   ```
+---
 
-3. **Perf Analysis**: `perf record` + `perf report`
-   ```bash
-   perf record -g ./target/release/benchmark_pgvector_comparison 100000
-   perf report
-   ```
+### Expected Bottlenecks
 
-4. **Benchmarking**: `criterion` for micro-benchmarks
-   - Distance calculations
-   - HNSW traversal
-   - Serialization
-
-### Expected Bottlenecks:
-
-1. **Distance calculations** (L2, cosine):
-   - SIMD opportunities (AVX2, AVX-512)
-   - Batch processing
-
-2. **HNSW traversal**:
-   - Cache misses
-   - Branch mispredictions
-
-3. **Memory allocations**:
-   - Vec allocations during search
-   - Temporary buffers
-
-4. **Serialization**:
-   - Already fast (4175x improvement)
-   - Likely not a bottleneck
+| Bottleneck | Likelihood | Fix | Expected Impact |
+|------------|------------|-----|----------------|
+| **Distance calculations** | HIGH | SIMD (AVX2/AVX-512) | 2-4x speedup |
+| HNSW traversal | MEDIUM | Cache optimization, prefetching | 10-20% speedup |
+| Memory allocations | MEDIUM | Object pooling, reuse buffers | 10-20% speedup |
+| Serialization | LOW | Already optimized (4175x) | N/A |
 
 ---
 
 ## Optimization Roadmap
 
-### Quick Wins (1-3 days):
+### Phase 1: Quick Wins (Week 1) ⚠️ CRITICAL
 
-1. **SIMD distance calculations**
-   - Use `simdeez` or `wide` crates
-   - Expected: 2-4x speedup
+| Optimization | Effort | Expected Impact | Priority |
+|--------------|--------|----------------|----------|
+| **Enable SIMD** | 5 minutes | 2-4x query speedup | ⚠️⚠️⚠️ HIGHEST |
+| Enable LTO | 1 minute | 5-15% improvement | HIGH |
+| Enable opt-level=3 | 1 minute | 5-10% improvement | HIGH |
+| Reduce allocations | 1-2 days | 10-20% improvement | MEDIUM |
 
-2. **Reduce allocations**
-   - Reuse buffers
-   - Object pooling for hot paths
-
-3. **Parallel query execution**
-   - Use Rayon for concurrent queries
-   - Benchmark QPS improvement
-
-### Medium Effort (1-2 weeks):
-
-4. **Cache optimization**
-   - Prefetching hints
-   - Better memory layout
-   - HNSW graph hot data
-
-5. **Query batching**
-   - Batch multiple queries
-   - Amortize overheads
-
-6. **Async I/O**
-   - If disk becomes bottleneck
-   - Tokio-based async queries
-
-### Long-Term (1+ months):
-
-7. **GPU acceleration** (optional)
-   - CUDA/ROCm for distance calculations
-   - Massive parallelism
-
-8. **Distributed deployment**
-   - Sharding support
-   - Replication
+**Total Phase 1 Impact**: 2-5x improvement
 
 ---
 
-## Competitive Positioning Strategy
+### Phase 2: Medium Effort (Week 2)
 
-### Our Unique Strengths:
+| Optimization | Effort | Expected Impact |
+|--------------|--------|----------------|
+| Cache optimization | 2-3 days | 10-30% improvement |
+| Query batching | 2-3 days | 20-50% throughput |
+| Async I/O | 3-5 days | If disk bottleneck |
 
-1. **PostgreSQL Compatibility** ⭐⭐⭐
-   - Only embedded vector DB with pgvector compatibility
-   - Huge ecosystem (existing tools, drivers, ORMs)
-   - Drop-in replacement story
+---
 
-2. **97x Faster Builds** ⭐⭐⭐
-   - Parallel HNSW construction (unique)
-   - Rapid iteration for development
-   - Fast reindexing for production
+### Phase 3: Long-Term (Week 3-8)
 
-3. **Embedded + Server Modes** ⭐⭐
-   - Start embedded, scale to server
-   - No infrastructure complexity
-   - Cost-effective
+| Optimization | Effort | Expected Impact |
+|--------------|--------|----------------|
+| GPU acceleration | 2-4 weeks | 10x indexing (Qdrant has this) |
+| Custom HNSW | 10-15 weeks | 2-5x additional (market leadership) |
+| SOTA algorithms | 4-8 weeks | Billion-scale, SOTA quantization |
 
-4. **Source-Available** ⭐⭐
-   - Can verify/audit code
-   - Community contributions
-   - Self-hosting friendly
+---
 
-### Positioning Statement (Post-Benchmarking):
+## Competitive Positioning
 
-**If we're competitive with Qdrant**:
+### Our Unique Strengths
+
+| Strength | Importance | Competitor Status |
+|----------|------------|-------------------|
+| **PostgreSQL compatibility** | ⭐⭐⭐ CRITICAL | NONE (unique to us) |
+| **97x faster builds** | ⭐⭐⭐ HIGH | UNIQUE parallel construction |
+| Embedded + Server modes | ⭐⭐ MEDIUM | LanceDB has embedded only |
+| Source-available (Elastic 2.0) | ⭐⭐ MEDIUM | Some are closed-source |
+
+---
+
+### Positioning Statements
+
+**If competitive with Qdrant (Week 4+)**:
 > "PostgreSQL-compatible vector database. Drop-in pgvector replacement. Qdrant-class performance with PostgreSQL compatibility. 97x faster builds, [Nx faster queries]."
 
-**If we're slower than Qdrant but faster than pgvector**:
+**If faster than pgvector but slower than Qdrant (Current)**:
 > "PostgreSQL-compatible vector database. 97x faster than pgvector. PostgreSQL ecosystem compatibility that pure vector DBs can't match. Perfect for teams already using Postgres."
 
-**Honest positioning**:
-- Don't claim "fastest" unless benchmarks prove it
-- Lead with unique strengths (PostgreSQL compatibility)
+**Honest positioning principle**:
+- Don't claim "fastest" without benchmarks
+- Lead with unique strength (PostgreSQL compatibility)
 - Be honest about tradeoffs (embedded vs distributed)
 
 ---
 
 ## Testing Checklist
 
-### Immediate Tests Needed:
+### Immediate (Week 1) ⚠️ PRIORITY
 
-- [ ] Profile OmenDB with flamegraph (CPU)
-- [ ] Profile OmenDB with heaptrack (memory)
+- [ ] Profile OmenDB (flamegraph CPU)
+- [ ] Profile OmenDB (heaptrack memory)
+- [ ] Enable SIMD (5 minutes, 2-4x win)
 - [ ] Benchmark Qdrant (100K, same params)
 - [ ] Parallel query testing (10/100/1000 clients)
 - [ ] Document bottlenecks
 - [ ] Implement 1-2 quick optimizations
 - [ ] Re-benchmark after optimizations
 
-### Short-Term Tests:
+---
+
+### Short-Term (Week 2-3)
 
 - [ ] LanceDB comparison (embedded)
 - [ ] 1M benchmark vs Qdrant
@@ -380,7 +299,9 @@ docker run -p 6333:6333 qdrant/qdrant
 - [ ] Filtered search (metadata)
 - [ ] Binary Quantization comparison
 
-### Long-Term Tests:
+---
+
+### Long-Term (Week 4+)
 
 - [ ] Milvus (enterprise scale)
 - [ ] Weaviate (hybrid search)
@@ -389,50 +310,62 @@ docker run -p 6333:6333 qdrant/qdrant
 
 ---
 
-## Recommendations
+## Success Criteria
 
-### Priority Order:
-
-1. **Week 1**: Profile OmenDB + Qdrant benchmark (understand where we stand)
-2. **Week 2**: Quick optimizations + parallel query support
-3. **Week 3**: LanceDB benchmark + 1M Qdrant comparison
-4. **Week 4**: Document competitive position + publish benchmarks
-
-### Success Criteria:
-
-**Minimum**:
+### Minimum Success (Acceptable)
 - Within 2x of Qdrant query latency
 - Competitive build speed (already 97x vs pgvector)
 - Clear PostgreSQL compatibility advantage
 
-**Stretch**:
+### Target Success (Ideal)
 - Match or beat Qdrant single-query latency
-- Competitive QPS (within 50% of Qdrant)
-- Unique features (parallel builds, serialization)
+- Within 50% of Qdrant QPS
+- Unique features (parallel builds, serialization, PostgreSQL compat)
 
-### Risk Mitigation:
-
-If we're significantly slower than Qdrant:
-1. Focus on PostgreSQL compatibility as primary differentiator
-2. Target users who need Postgres ecosystem (not pure vector DB users)
-3. Roadmap aggressive optimizations (SIMD, GPU)
-4. Be honest about performance vs pure vector DBs
+### Stretch Success (Market Leader)
+- Beat Qdrant on queries
+- 1000+ QPS (custom HNSW + SIMD)
+- SOTA features (Extended RaBitQ, HNSW-IF)
 
 ---
 
-## Next Steps
+## Risk Mitigation
 
-1. **Run profiling session** (today/tomorrow)
-2. **Set up Qdrant for benchmarking** (1-2 hours)
-3. **Run identical benchmark** (1-2 hours)
-4. **Analyze results** (2-4 hours)
-5. **Document findings** (1 hour)
-6. **Update competitive positioning** (based on results)
+**If significantly slower than Qdrant**:
+1. Focus on PostgreSQL compatibility as primary differentiator
+2. Target users who need Postgres ecosystem (not pure vector DB users)
+3. Roadmap aggressive optimizations (SIMD → custom HNSW → GPU)
+4. Be honest about performance vs pure vector DBs
+5. Emphasize embedded deployment simplicity
 
-**Timeline**: 2-3 days for initial competitive validation
+**Strategy**: PostgreSQL compatibility is defensible moat even if performance lags
+
+---
+
+## Next Steps (Week 1)
+
+### Day 1: Profiling
+- [ ] Run flamegraph (2 hours)
+- [ ] Run heaptrack (2 hours)
+- [ ] Analyze bottlenecks (2 hours)
+- [ ] Document findings (1 hour)
+
+### Day 2: Quick Optimizations
+- [ ] Enable SIMD (5 minutes)
+- [ ] Enable LTO + opt-level (2 minutes)
+- [ ] Rebuild and test (30 minutes)
+- [ ] Re-benchmark (2 hours)
+
+### Day 3: Qdrant Benchmark
+- [ ] Set up Qdrant Docker (1 hour)
+- [ ] Run identical benchmark (2 hours)
+- [ ] Compare results (2 hours)
+- [ ] Update competitive positioning (2 hours)
+
+**Timeline**: 3 days for initial competitive validation
 
 ---
 
 **Last Updated**: October 30, 2025
-**Status**: Ready to execute profiling + Qdrant benchmark
-**Owner**: Development team
+**Status**: Ready to execute - Profile → SIMD → Qdrant benchmark
+**Next Action**: Enable SIMD feature flag (5 minutes, in Cargo.toml)
