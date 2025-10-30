@@ -151,7 +151,10 @@ fn benchmark_pgvector(
 
     // Connect to PostgreSQL
     println!("🔌 Connecting to PostgreSQL...");
-    let mut client = Client::connect("host=localhost user=postgres dbname=benchmark_pgvector", NoTls)?;
+    // Use current system user (works on Mac/Linux) or fallback to postgres (containers)
+    let user = std::env::var("USER").unwrap_or_else(|_| "postgres".to_string());
+    let connection_string = format!("host=localhost user={} dbname=benchmark_pgvector", user);
+    let mut client = Client::connect(&connection_string, NoTls)?;
     println!("✅ Connected\n");
 
     // Drop existing table and recreate
