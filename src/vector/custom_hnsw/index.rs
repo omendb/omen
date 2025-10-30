@@ -145,8 +145,7 @@ impl HNSWIndex {
 
     /// Insert node into graph structure
     ///
-    /// TODO: Full HNSW insertion algorithm (greedy search + neighbor selection)
-    /// For now: simplified version that connects to entry point
+    /// Implements HNSW insertion algorithm (Malkov & Yashunin 2018)
     fn insert_into_graph(
         &mut self,
         node_id: u32,
@@ -154,19 +153,123 @@ impl HNSWIndex {
         level: u8,
     ) -> Result<(), String> {
         let entry_point = self.entry_point.expect("Entry point must exist");
+        let entry_level = self.nodes[entry_point as usize].level;
 
-        // Simplified: just connect to entry point at level 0
-        // Full algorithm will search for nearest neighbors at each level
-        if level >= 0 {
-            self.neighbors.add_bidirectional_link(node_id, entry_point, 0);
+        // Search for nearest neighbors at each level above target level
+        let mut nearest = vec![entry_point];
+        for lc in ((level + 1)..=entry_level).rev() {
+            nearest = self.search_layer(vector, &nearest, 1, lc);
+        }
+
+        // Insert at levels 0..=level
+        for lc in (0..=level).rev() {
+            // Find ef_construction nearest neighbors at this level
+            let candidates = self.search_layer(vector, &nearest, self.params.ef_construction, lc);
+
+            // Select M best neighbors using heuristic
+            let m = if lc == 0 {
+                self.params.m * 2 // Level 0 has more connections
+            } else {
+                self.params.m
+            };
+
+            let neighbors = self.select_neighbors_heuristic(node_id, &candidates, m, lc, vector);
+
+            // Add bidirectional links
+            for &neighbor_id in &neighbors {
+                self.neighbors.add_bidirectional_link(node_id, neighbor_id, lc);
+            }
 
             // Update neighbor counts
-            self.nodes[node_id as usize].set_neighbor_count(0, 1);
-            let entry_neighbors = self.neighbors.get_neighbors(entry_point, 0).len();
-            self.nodes[entry_point as usize].set_neighbor_count(0, entry_neighbors);
+            self.nodes[node_id as usize].set_neighbor_count(lc, neighbors.len());
+
+            // Prune neighbors' connections if they exceed M
+            for &neighbor_id in &neighbors {
+                let neighbor_neighbors = self.neighbors.get_neighbors(neighbor_id, lc).to_vec();
+                if neighbor_neighbors.len() > m {
+                    let neighbor_vec = self.vectors.get(neighbor_id).expect("Neighbor vector must exist");
+                    let pruned = self.select_neighbors_heuristic(
+                        neighbor_id,
+                        &neighbor_neighbors,
+                        m,
+                        lc,
+                        neighbor_vec,
+                    );
+
+                    // Clear and reset neighbors
+                    self.neighbors.set_neighbors(neighbor_id, lc, pruned.clone());
+                    self.nodes[neighbor_id as usize].set_neighbor_count(lc, pruned.len());
+                }
+            }
+
+            // Update nearest for next level
+            nearest = candidates;
         }
 
         Ok(())
+    }
+
+    /// Select neighbors using heuristic (diverse neighbors, better recall)
+    ///
+    /// Algorithm from Malkov 2018, Section 4
+    fn select_neighbors_heuristic(
+        &self,
+        _node_id: u32,
+        candidates: &[u32],
+        m: usize,
+        _level: u8,
+        query_vector: &[f32],
+    ) -> Vec<u32> {
+        if candidates.len() <= m {
+            return candidates.to_vec();
+        }
+
+        // Sort candidates by distance to query
+        let mut sorted_candidates: Vec<_> = candidates
+            .iter()
+            .map(|&id| {
+                let dist = self.distance_to_query(query_vector, id);
+                (id, dist)
+            })
+            .collect();
+        sorted_candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+        let mut result = Vec::with_capacity(m);
+        let mut remaining = Vec::new();
+
+        // Heuristic: Select diverse neighbors
+        for (candidate_id, candidate_dist) in &sorted_candidates {
+            if result.len() >= m {
+                remaining.push(*candidate_id);
+                continue;
+            }
+
+            // Check if candidate is closer to query than to existing neighbors
+            let mut good = true;
+            for &result_id in &result {
+                let dist_to_result = self.distance(*candidate_id, result_id);
+                if dist_to_result < *candidate_dist {
+                    good = false;
+                    break;
+                }
+            }
+
+            if good {
+                result.push(*candidate_id);
+            } else {
+                remaining.push(*candidate_id);
+            }
+        }
+
+        // Fill remaining slots with closest candidates if needed
+        for candidate_id in remaining {
+            if result.len() >= m {
+                break;
+            }
+            result.push(candidate_id);
+        }
+
+        result
     }
 
     /// Search for k nearest neighbors
@@ -188,27 +291,48 @@ impl HNSWIndex {
         }
 
         let entry_point = self.entry_point.expect("Entry point must exist");
+        let entry_level = self.nodes[entry_point as usize].level;
 
-        // Simplified search: just return entry point
-        // Full algorithm will traverse graph from top level to bottom
-        let distance = self.distance_to_query(query, entry_point);
-        let result = SearchResult::new(entry_point, distance);
+        // Start from entry point, descend to layer 0
+        let mut nearest = vec![entry_point];
 
-        Ok(vec![result])
+        // Greedy search at each layer (find 1 nearest)
+        for level in (1..=entry_level).rev() {
+            nearest = self.search_layer(query, &nearest, 1, level);
+        }
+
+        // Beam search at layer 0 (find ef nearest)
+        let candidates = self.search_layer(query, &nearest, ef.max(k), 0);
+
+        // Convert to SearchResult and return k nearest
+        let mut results: Vec<SearchResult> = candidates
+            .iter()
+            .map(|&id| {
+                let distance = self.distance_to_query(query, id);
+                SearchResult::new(id, distance)
+            })
+            .collect();
+
+        // Sort by distance (closest first)
+        results.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+
+        // Return top k
+        results.truncate(k);
+        Ok(results)
     }
 
     /// Search for nearest neighbors at a specific level
     ///
-    /// Returns candidate set sorted by distance.
+    /// Returns node IDs of up to ef nearest neighbors.
     fn search_layer(
         &self,
         query: &[f32],
         entry_points: &[u32],
         ef: usize,
         level: u8,
-    ) -> Vec<Candidate> {
+    ) -> Vec<u32> {
         let mut visited = HashSet::new();
-        let mut candidates = BinaryHeap::new(); // Min-heap (closest first)
+        let mut candidates = BinaryHeap::new(); // Min-heap (closest first, using Reverse)
         let mut working = BinaryHeap::new(); // Max-heap (farthest first for pruning)
 
         // Initialize with entry points
@@ -222,9 +346,7 @@ impl HNSWIndex {
         }
 
         // Greedy search
-        while let Some(current) = candidates.pop() {
-            let current = current.0; // Unwrap Reverse
-
+        while let Some(Reverse(current)) = candidates.pop() {
             // If current is farther than farthest in working set, stop
             if let Some(&farthest) = working.peek() {
                 if current.distance > farthest.distance {
@@ -243,7 +365,7 @@ impl HNSWIndex {
                 let dist = self.distance_to_query(query, neighbor_id);
                 let neighbor = Candidate::new(neighbor_id, dist);
 
-                // If neighbor is closer than farthest in working set, add it
+                // If neighbor is closer than farthest in working set, or working set not full, add it
                 if let Some(&farthest) = working.peek() {
                     if dist < farthest.distance.0 || working.len() < ef {
                         candidates.push(Reverse(neighbor));
@@ -261,10 +383,10 @@ impl HNSWIndex {
             }
         }
 
-        // Return working set sorted by distance (closest first)
+        // Return node IDs sorted by distance (closest first)
         let mut results: Vec<_> = working.into_iter().collect();
         results.sort_by_key(|c| c.distance);
-        results
+        results.into_iter().map(|c| c.node_id).collect()
     }
 
     /// Get memory usage in bytes (approximate)
@@ -395,5 +517,145 @@ mod tests {
         // - Some neighbor storage
         assert!(memory > 5000); // At least vectors + nodes
         assert!(memory < 50000); // Not excessive
+    }
+
+    #[test]
+    fn test_hnsw_index_search_multiple() {
+        let params = HNSWParams::default();
+        let mut index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Insert 5 vectors
+        let vecs = vec![
+            vec![1.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0],
+            vec![0.0, 0.0, 1.0],
+            vec![0.5, 0.5, 0.0],
+            vec![0.0, 0.5, 0.5],
+        ];
+
+        for vec in vecs {
+            index.insert(vec).unwrap();
+        }
+
+        // Search for k=3 nearest to [1.0, 0.0, 0.0]
+        let query = vec![1.0, 0.0, 0.0];
+        let results = index.search(&query, 3, 10).unwrap();
+
+        // Should return 3 results
+        assert_eq!(results.len(), 3);
+
+        // First result should be closest (id=0, exact match)
+        assert_eq!(results[0].id, 0);
+        assert!(results[0].distance < 0.01);
+
+        // Results should be sorted by distance
+        for i in 0..results.len() - 1 {
+            assert!(results[i].distance <= results[i + 1].distance);
+        }
+    }
+
+    #[test]
+    fn test_hnsw_index_search_with_ef() {
+        let params = HNSWParams::default();
+        let mut index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Insert 10 vectors
+        for i in 0..10 {
+            let vec = vec![i as f32, 0.0, 0.0];
+            index.insert(vec).unwrap();
+        }
+
+        // Search with different ef values
+        let query = vec![5.0, 0.0, 0.0];
+
+        let results_ef_5 = index.search(&query, 3, 5).unwrap();
+        let results_ef_10 = index.search(&query, 3, 10).unwrap();
+
+        // Both should return 3 results (k=3)
+        assert_eq!(results_ef_5.len(), 3);
+        assert_eq!(results_ef_10.len(), 3);
+
+        // Higher ef should explore more candidates (potentially better recall)
+        // Both should find node 5 as closest
+        assert_eq!(results_ef_5[0].id, 5);
+        assert_eq!(results_ef_10[0].id, 5);
+    }
+
+    #[test]
+    fn test_hnsw_levels() {
+        let mut params = HNSWParams::default();
+        params.seed = 12345; // Fixed seed for reproducibility
+
+        let mut index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Insert 100 vectors
+        for i in 0..100 {
+            let vec = vec![i as f32, 0.0, 0.0];
+            index.insert(vec).unwrap();
+        }
+
+        // Count how many nodes have their TOP level at each height
+        // Note: All nodes exist at level 0, but node.level is their TOP level
+        let mut top_level_counts = vec![0; 8];
+        for node in &index.nodes {
+            top_level_counts[node.level as usize] += 1;
+        }
+
+        // Most nodes should have top level = 0 (due to exponential decay)
+        assert!(top_level_counts[0] > 80); // Most nodes only at level 0
+
+        // Some nodes should have higher top levels
+        let higher_level_count: usize = top_level_counts[1..].iter().sum();
+        assert!(higher_level_count > 0); // At least some nodes at higher levels
+
+        // All nodes should exist (sum should be 100)
+        let total: usize = top_level_counts.iter().sum();
+        assert_eq!(total, 100);
+    }
+
+    #[test]
+    fn test_neighbor_count_limits() {
+        let mut params = HNSWParams::default();
+        params.m = 4; // Small M for easier testing
+        params.ef_construction = 10;
+
+        let mut index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Insert 20 vectors (enough to test neighbor pruning)
+        for i in 0..20 {
+            let vec = vec![i as f32, 0.0, 0.0];
+            index.insert(vec).unwrap();
+        }
+
+        // Check that no node has more than M*2 neighbors at level 0
+        for node in &index.nodes {
+            let neighbor_count = index.neighbors.get_neighbors(node.id, 0).len();
+            assert!(neighbor_count <= params.m * 2);
+        }
+    }
+
+    #[test]
+    fn test_search_recall_simple() {
+        let params = HNSWParams::default();
+        let mut index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Insert 10 vectors in a line
+        for i in 0..10 {
+            let vec = vec![i as f32, 0.0, 0.0];
+            index.insert(vec).unwrap();
+        }
+
+        // Query should find exact neighbors
+        let query = vec![5.0, 0.0, 0.0];
+        let results = index.search(&query, 3, 20).unwrap();
+
+        // Should find nodes 5, 4, and 6 (closest to query)
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0].id, 5); // Exact match
+
+        // Second and third should be 4 or 6
+        let ids: Vec<u32> = results.iter().map(|r| r.id).collect();
+        assert!(ids.contains(&4));
+        assert!(ids.contains(&6));
     }
 }
