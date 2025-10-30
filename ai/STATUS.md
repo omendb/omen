@@ -2049,3 +2049,49 @@ opt-level = 3            # Already configured ✅
 4. Target: 600-800 QPS (exceed Qdrant)
 
 ---
+
+## Week 8 Day 1: Profiling Complete ✅ (Oct 30, 2025)
+
+**Goal**: Profile OmenDB to identify optimization opportunities beyond SIMD
+
+### Profiling Results
+
+**Tools Used**:
+- flamegraph (CPU hotspots)
+- heaptrack (memory allocations)
+- perf stat (performance counters)
+
+**Critical Bottlenecks Identified**:
+
+| Bottleneck | Severity | Impact |
+|------------|----------|--------|
+| **Backend Bound** | 54-69% | ⚠️⚠️ CRITICAL - CPU waiting on memory |
+| **LLC Cache Misses** | 23.41% | ⚠️⚠️ CRITICAL - Poor memory locality |
+| **Allocations** | 7.3M (10K benchmark) | ⚠️ HIGH - Excessive alloc/dealloc |
+| **L1 Cache Misses** | 11.22% | ⚠️ MODERATE - Room for improvement |
+| **Branch Misses** | 0.51% | ✅ Low - Not a bottleneck |
+
+### Top 3 Optimizations Identified
+
+| Priority | Optimization | Expected Improvement | Effort |
+|----------|--------------|---------------------|--------|
+| **1** | **Cache optimization** (memory layout, prefetching) | 15-25% | 3-5 days |
+| **2** | **Allocation reduction** (object pooling, arenas) | 10-20% | 2-3 days |
+| **3** | **Memory access patterns** (batching, locality) | 5-10% | 2-3 days |
+
+### Performance Projections
+
+| Stage | QPS | Improvement | vs Qdrant (626 QPS) |
+|-------|-----|-------------|---------------------|
+| Current (SIMD) | 581 | Baseline | 93% of Qdrant |
+| + Cache optimization | 697 | +20% | **111% of Qdrant** ⭐ |
+| + Allocation reduction | 802 | +38% cumulative | **128% of Qdrant** ⭐ |
+| + Memory access | 866 | +49% cumulative | **138% of Qdrant** ⭐ |
+
+**Target**: 581 QPS → 866 QPS (49% improvement, 38% faster than Qdrant)
+
+### Analysis Document
+
+📋 **Details**: `ai/research/PROFILING_ANALYSIS_WEEK8.md`
+
+---
