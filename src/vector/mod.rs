@@ -13,8 +13,7 @@ pub mod store;
 pub mod hnsw_index;
 pub mod pca_alex_index;
 pub mod vector_value;
-pub mod custom_hnsw;
-pub mod custom_hnsw_adapter;
+pub mod custom_hnsw; // Internal implementation
 
 // Re-export main types
 pub use types::Vector;
@@ -22,4 +21,3 @@ pub use store::VectorStore;
 pub use hnsw_index::HNSWIndex;
 pub use pca_alex_index::PCAAlexIndex;
 pub use vector_value::VectorValue;
-pub use custom_hnsw_adapter::CustomHNSWAdapter;

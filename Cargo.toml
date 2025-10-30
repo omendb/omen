@@ -153,9 +153,6 @@ sys-info = "0.9.1"
 # PCA for vector dimensionality reduction (simple custom implementation, no external LAPACK)
 ndarray = "0.16"
 
-# HNSW for vector search (Week 2 implementation)
-hnsw_rs = "0.3"
-
 # Ordered floats for HNSW (custom implementation)
 ordered-float = "4.0"
 
@@ -165,7 +162,6 @@ num_cpus = "1.16"
 [features]
 default = []
 simd = []  # Enable std::simd (requires nightly Rust)
-hnsw-simd = ["hnsw_rs/simdeez_f"]  # Enable SIMD for HNSW (x86_64 only, not compatible with ARM/M3)
 
 [profile.release]
 lto = true
