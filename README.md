@@ -2,15 +2,13 @@
 
 **Embedded PostgreSQL-compatible vector database**
 
-> ⚠️ **Active Development - Week 7**
+> ⚠️ **Active Development**
 >
 > This project is under active development. We're building a vector database from first principles with learned data structures and modern algorithms.
 >
-> **Current Status**: 142 tests passing, HNSW + Binary Quantization working, implementing custom HNSW for performance
+> **Not Production-Ready**: API will change, performance is being optimized, documentation incomplete.
 >
-> **Not Production-Ready**: API will change, performance is being optimized, documentation incomplete
->
-> See [ai/STATUS.md](ai/STATUS.md) for current progress and [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) for future plans.
+> See [ai/STATUS.md](ai/STATUS.md) for current progress.
 >
 > **License**: Elastic License 2.0 (free to use/modify, cannot resell as managed service)
 
@@ -34,13 +32,13 @@
 
 ## Current Implementation
 
-**What Works** (Week 7):
-- ✅ HNSW index with 97-100% recall
-- ✅ Binary Quantization (19.9x memory reduction)
-- ✅ Graph serialization (4175x faster than rebuild at 1M vectors)
-- ✅ Parallel building (16x speedup)
-- ✅ 142 tests passing
-- ✅ ASAN validated (zero memory safety issues)
+**What Works**:
+- ✅ HNSW index implementation
+- ✅ Binary Quantization for memory efficiency
+- ✅ Graph serialization and persistence
+- ✅ Parallel building
+- ✅ Comprehensive test suite
+- ✅ Memory safety validated
 
 **What We're Working On**:
 - 🔨 Custom HNSW implementation (replacing library for better performance)
@@ -50,25 +48,13 @@
 - 🔨 Production hardening
 
 **What's Not Ready**:
-- ❌ No public release yet (Week 7 of development)
-- ❌ Performance claims not finalized (still optimizing)
+- ❌ No public release yet
+- ❌ Performance optimization in progress
 - ❌ API may change
 - ❌ Documentation incomplete
 - ❌ No migration tools yet
 
-## Development Roadmap
-
-**Current Phase (Weeks 7-10)**: Core engine optimization
-- Custom HNSW implementation
-- Performance profiling and optimization
-- Scale testing (1M+ vectors)
-
-**Next Phase (Weeks 11-15)**: Advanced features
-- Extended RaBitQ quantization (SIGMOD 2025 paper)
-- HNSW-IF for billion-scale support
-- Time-series module integration
-
-**Future**: Production release when ready (no ETA yet)
+See [ai/STATUS.md](ai/STATUS.md) for detailed current status and roadmap.
 
 ## Technical Details
 
@@ -86,18 +72,7 @@ omen/
 
 ### Performance Characteristics
 
-**Current** (Week 7, with library HNSW):
-- Build speed: 16x faster with parallel building
-- Query latency: <15ms p95 at 1M vectors
-- Memory: ~7GB for 1M vectors @ 1536D
-- Recall: 97-100% on standard benchmarks
-
-**Goal** (After custom HNSW + optimizations):
-- Significantly faster queries (profiling in progress)
-- Better memory efficiency
-- Billion-scale support
-
-*Note: We're not making specific competitive claims until implementation is complete and properly benchmarked.*
+See [ai/STATUS.md](ai/STATUS.md) for current performance metrics and optimization progress.
 
 ## Research Foundation
 
@@ -115,61 +90,15 @@ This project implements ideas from recent research:
 
 See [ai/research/](ai/research/) for detailed paper summaries and implementation notes.
 
-## Development Philosophy
-
-**Research-Driven**: Build from first principles using proven algorithms from recent papers
-
-**Measured Performance**: Validate all performance claims with rigorous benchmarking
-
-**Production-Quality**: Comprehensive testing (142 tests, ASAN validated, crash recovery)
-
-**Honest Communication**: Share progress openly, don't overpromise
-
-## Installation (When Ready)
-
-Not yet available. Project is in active development.
-
-When released, installation will be:
-```bash
-cargo install omen
-omen server --port 5433
-```
-
-## Contributing
-
-We welcome contributions! Areas that need help:
-- Performance optimization
-- Testing and validation
-- Documentation
-- Research paper implementation
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines (coming soon).
 
 ## License
 
-**Elastic License 2.0** (source-available)
-
-This means:
-- ✅ Free to use, modify, and self-host
-- ✅ Source code publicly available
-- ✅ Community can contribute
-- ❌ Cannot resell as a managed cloud service
-
-Full text: [LICENSE](LICENSE)
+Elastic License 2.0 - Free to use, modify, and self-host. Cannot resell as managed service. See [LICENSE](LICENSE).
 
 ## Related Projects
 
 - **[seerdb](https://github.com/omendb/seerdb)** - Research-grade storage engine (foundation for omen)
-- **omen-server** (private) - Future managed service
-- **omen-queue** (private) - Future job queue (paused, will use seerdb)
-
-## Contact
-
-- GitHub Issues: [Report bugs or request features](https://github.com/omendb/omen/issues)
-- Development updates: Watch this repo for progress
 
 ---
 
-**Remember**: This is a work in progress. Use at your own risk. API will change. Performance numbers are preliminary.
-
-See [ai/STATUS.md](ai/STATUS.md) for detailed current status and [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) for long-term vision.
+**Note**: This is a work in progress. API will change. See [ai/STATUS.md](ai/STATUS.md) for current status.
