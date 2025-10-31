@@ -238,3 +238,7 @@ path = "src/bin/benchmark_custom_hnsw.rs"
 name = "benchmark_realistic_100k"
 path = "src/bin/benchmark_realistic_100k.rs"
 
+[[bin]]
+name = "validate_persistence_1536d"
+path = "src/bin/validate_persistence_1536d.rs"
+
