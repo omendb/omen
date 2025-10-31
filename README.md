@@ -2,188 +2,174 @@
 
 **Embedded PostgreSQL-compatible vector database**
 
-> ⚠️ **Active Development**: This project is under active development (Week 7).
-> Not production-ready yet. API may change before v1.0.
-> See [ai/STATUS.md](ai/STATUS.md) for current progress.
+> ⚠️ **Active Development - Week 7**
 >
-> **Target**: Production-ready in 3-4 weeks
+> This project is under active development. We're building a vector database from first principles with learned data structures and modern algorithms.
+>
+> **Current Status**: 142 tests passing, HNSW + Binary Quantization working, implementing custom HNSW for performance
+>
+> **Not Production-Ready**: API will change, performance is being optimized, documentation incomplete
+>
+> See [ai/STATUS.md](ai/STATUS.md) for current progress and [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) for future plans.
+>
 > **License**: Elastic License 2.0 (free to use/modify, cannot resell as managed service)
 
-Drop-in replacement for pgvector. 10x faster, 28x more memory efficient. Source-available. Embeddable.
-
 ---
 
-## Quick Start
+## What We're Building
 
-**Coming Soon** - Currently in development (Week 1: Vector prototype)
+**Vision**: PostgreSQL-compatible vector database that's fast, memory-efficient, and embeddable.
 
-```sql
--- Coming soon: PostgreSQL-compatible wire protocol
-CREATE TABLE documents (
-  id SERIAL PRIMARY KEY,
-  content TEXT,
-  embedding vector(1536)
-);
+**Technical Approach**:
+- **HNSW index** for approximate nearest neighbor search
+- **Binary Quantization** for memory efficiency
+- **RocksDB storage** for persistence
+- **PostgreSQL wire protocol** for compatibility
+- **MVCC transactions** for concurrency
 
-CREATE INDEX ON documents USING alex (embedding);
+**Why This Matters**:
+- pgvector doesn't scale beyond ~10M vectors
+- Cloud vector DBs (Pinecone, etc.) are expensive and not self-hostable
+- Most vector DBs have custom APIs (we use PostgreSQL protocol)
 
-SELECT * FROM documents
-ORDER BY embedding <-> '[0.1, 0.2, ...]'
-LIMIT 10;
+## Current Implementation
+
+**What Works** (Week 7):
+- ✅ HNSW index with 97-100% recall
+- ✅ Binary Quantization (19.9x memory reduction)
+- ✅ Graph serialization (4175x faster than rebuild at 1M vectors)
+- ✅ Parallel building (16x speedup)
+- ✅ 142 tests passing
+- ✅ ASAN validated (zero memory safety issues)
+
+**What We're Working On**:
+- 🔨 Custom HNSW implementation (replacing library for better performance)
+- 🔨 SIMD optimizations
+- 🔨 Performance benchmarking vs alternatives
+- 🔨 PostgreSQL protocol integration
+- 🔨 Production hardening
+
+**What's Not Ready**:
+- ❌ No public release yet (Week 7 of development)
+- ❌ Performance claims not finalized (still optimizing)
+- ❌ API may change
+- ❌ Documentation incomplete
+- ❌ No migration tools yet
+
+## Development Roadmap
+
+**Current Phase (Weeks 7-10)**: Core engine optimization
+- Custom HNSW implementation
+- Performance profiling and optimization
+- Scale testing (1M+ vectors)
+
+**Next Phase (Weeks 11-15)**: Advanced features
+- Extended RaBitQ quantization (SIGMOD 2025 paper)
+- HNSW-IF for billion-scale support
+- Time-series module integration
+
+**Future**: Production release when ready (no ETA yet)
+
+## Technical Details
+
+### Architecture
+
+```
+omen/
+├── vector/           # HNSW + Binary Quantization
+├── storage/          # RocksDB persistence
+├── sql_engine/       # SQL query execution
+├── catalog/          # Table management
+├── mvcc/             # MVCC transactions
+└── rocks_storage/    # Storage backend
 ```
 
----
+### Performance Characteristics
 
-## Why omen?
+**Current** (Week 7, with library HNSW):
+- Build speed: 16x faster with parallel building
+- Query latency: <15ms p95 at 1M vectors
+- Memory: ~7GB for 1M vectors @ 1536D
+- Recall: 97-100% on standard benchmarks
 
-### vs pgvector (Current Standard)
-- **10x faster** at 10M+ vectors
-- **28x more memory efficient** (<2GB vs 60GB for 10M vectors)
-- **Drop-in compatible** (PostgreSQL wire protocol)
-- **Embeddable** (no separate server required)
+**Goal** (After custom HNSW + optimizations):
+- Significantly faster queries (profiling in progress)
+- Better memory efficiency
+- Billion-scale support
 
-### vs Pinecone (Popular Cloud)
-- **100% free** (embedded library, no hosting costs)
-- **Self-hostable** (compliance-friendly: HIPAA, SOC2, data sovereignty)
-- **Source-available** (can verify, modify, contribute)
-- **PostgreSQL-compatible** (no new API to learn)
+*Note: We're not making specific competitive claims until implementation is complete and properly benchmarked.*
 
-### vs Weaviate/Qdrant (Vector Specialists)
-- **PostgreSQL compatibility** (use existing tools, drivers, ORMs)
-- **HTAP architecture** (one database for vectors + business data)
-- **Learned indexing** (ALEX - 28x more memory efficient than B-trees)
-- **Embeddable** (runs in your process, no network overhead)
+## Research Foundation
 
----
+This project implements ideas from recent research:
 
-## Technology
+**Vector Indexing**:
+- HNSW (Hierarchical Navigable Small World graphs)
+- Binary Quantization for memory efficiency
+- RaBitQ (SIGMOD 2024) quantization
 
-**ALEX Learned Indexing**:
-- Multi-level hierarchical structure
-- Predicts data location (vs tree traversal)
-- 28x more memory efficient than traditional indexes
-- Validated to 100M+ rows
+**Storage**:
+- LSM trees (RocksDB)
+- Learned data structures (future: seerdb)
+- MVCC snapshot isolation
 
-**PostgreSQL Wire Protocol**:
-- Drop-in replacement for pgvector
-- Works with psql, pgcli, existing ORMs
-- No new API to learn
+See [ai/research/](ai/research/) for detailed paper summaries and implementation notes.
 
-**Production-Ready Stack**:
-- MVCC snapshot isolation (concurrent operations)
-- Crash recovery (100% success rate)
-- Auth + SSL/TLS (enterprise-ready)
-- RocksDB storage (LSM tree, write-optimized)
+## Development Philosophy
 
----
+**Research-Driven**: Build from first principles using proven algorithms from recent papers
 
-## License & Pricing
+**Measured Performance**: Validate all performance claims with rigorous benchmarking
 
-**omen** is source-available under the Elastic License 2.0:
-- ✅ **Free to use** (embedded in your applications)
-- ✅ **Free to modify** (fork, customize, contribute)
-- ✅ **Free to self-host** (deploy on your infrastructure)
-- ❌ **Cannot resell as managed service** (protects future omen-server business)
+**Production-Quality**: Comprehensive testing (142 tests, ASAN validated, crash recovery)
 
-**For hosted/managed service**: **omen-server** is planned for the future - a fully managed cloud service built on omen with multi-tenancy, authentication, and enterprise features.
+**Honest Communication**: Share progress openly, don't overpromise
 
----
+## Installation (When Ready)
 
-## Use Cases
+Not yet available. Project is in active development.
 
-**RAG Applications**:
-- Chatbots with document Q&A
-- Knowledge base search
-- Customer support automation
+When released, installation will be:
+```bash
+cargo install omen
+omen server --port 5433
+```
 
-**Semantic Search**:
-- Code search (find similar functions)
-- Research paper search
-- Documentation search
+## Contributing
 
-**AI Agents**:
-- LangChain / LlamaIndex integrations
-- Multi-step reasoning with memory
-- Tool-augmented agents
+We welcome contributions! Areas that need help:
+- Performance optimization
+- Testing and validation
+- Documentation
+- Research paper implementation
 
-**Enterprise AI**:
-- Healthcare: Patient similarity, medical records
-- Finance: Fraud detection, document analysis
-- Legal: Case law search, contract similarity
-
----
-
-## Development Status
-
-**Week 7** (Current - October 2025):
-- ✅ HNSW index implementation (99.5% recall, <15ms p95)
-- ✅ Binary Quantization (19.9x memory reduction)
-- ✅ Graph serialization (4175x speedup at 1M scale)
-- ✅ Parallel building (16x speedup)
-- ✅ PostgreSQL wire protocol
-- ✅ MVCC snapshot isolation
-- ✅ 142 tests passing (Phase 2 validation 60% complete)
-
-**Next Steps**:
-- Complete Phase 2 validation (edge cases, resource limits)
-- Performance benchmarks vs pgvector
-- Production hardening
-- Documentation and examples
-
----
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines (coming soon).
 
 ## License
 
 **Elastic License 2.0** (source-available)
 
-**What this means**:
+This means:
 - ✅ Free to use, modify, and self-host
 - ✅ Source code publicly available
 - ✅ Community can contribute
-- ✅ Enterprises can deploy on their infrastructure
-- ❌ Cannot resell as managed service
+- ❌ Cannot resell as a managed cloud service
 
-[Read full license](LICENSE)
-
----
-
-## Contributing
-
-**Coming soon** - We'll open contributions once the vector prototype is stable (Month 2-3)
-
-For now:
-- Star the repo to follow development
-- Join discussions (coming soon)
-- Report issues (coming soon)
-
----
-
-## Documentation
-
-- [CONTEXT.md](CONTEXT.md) - Quick overview (start here)
-- [CLAUDE.md](CLAUDE.md) - Full project context
-- [ai/TODO.md](ai/TODO.md) - Current development tasks
-- [ai/STATUS.md](ai/STATUS.md) - Current state
-- [ai/RESEARCH.md](ai/RESEARCH.md) - Vector algorithm research
-
----
-
-## Community & Support
-
-- **Website**: [omendb.io](https://omendb.io) (coming soon)
-- **Email**: nick@omendb.com
-- **GitHub Discussions**: Coming soon
-- **Twitter**: Coming soon
-
----
+Full text: [LICENSE](LICENSE)
 
 ## Related Projects
 
-- **omen-server**: Planned fully managed cloud service built on omen (future)
-- **pg-learned**: PostgreSQL extension demonstrating learned indexes ([omendb/pg-learned](https://github.com/omendb/pg-learned))
+- **[seerdb](https://github.com/omendb/seerdb)** - Research-grade storage engine (foundation for omen)
+- **omen-server** (private) - Future managed service
+- **omen-queue** (private) - Future job queue (paused, will use seerdb)
+
+## Contact
+
+- GitHub Issues: [Report bugs or request features](https://github.com/omendb/omen/issues)
+- Development updates: Watch this repo for progress
 
 ---
 
-**Status**: 🔬 Week 7 - Phase 2 validation (142 tests passing) - Not ready for production use
+**Remember**: This is a work in progress. Use at your own risk. API will change. Performance numbers are preliminary.
 
-**Star this repo to follow development** ⭐
+See [ai/STATUS.md](ai/STATUS.md) for detailed current status and [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) for long-term vision.
