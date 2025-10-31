@@ -264,3 +264,7 @@ path = "src/bin/benchmark_optimization_impact.rs"
 name = "profile_queries_optimized"
 path = "src/bin/profile_queries_optimized.rs"
 
+[[bin]]
+name = "benchmark_simd_128d"
+path = "src/bin/benchmark_simd_128d.rs"
+
