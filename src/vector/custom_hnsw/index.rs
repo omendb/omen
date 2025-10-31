@@ -5,8 +5,10 @@
 // - Separate neighbor storage (fetch only when needed)
 // - Cache-optimized layout (64-byte aligned hot data)
 
+use super::error::{HNSWError, Result};
 use super::storage::{NeighborLists, VectorStorage};
 use super::types::{Candidate, DistanceFunction, HNSWNode, HNSWParams, SearchResult};
+use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashSet};
@@ -49,8 +51,8 @@ impl HNSWIndex {
         params: HNSWParams,
         distance_fn: DistanceFunction,
         use_quantization: bool,
-    ) -> Result<Self, String> {
-        params.validate()?;
+    ) -> Result<Self> {
+        params.validate().map_err(HNSWError::InvalidParams)?;
 
         let vectors = if use_quantization {
             VectorStorage::new_binary_quantized(dimensions, true)
@@ -114,33 +116,37 @@ impl HNSWIndex {
     }
 
     /// Compute distance between two vectors
-    fn distance(&self, id_a: u32, id_b: u32) -> f32 {
-        let vec_a = self.vectors.get(id_a).expect("Vector A not found");
-        let vec_b = self.vectors.get(id_b).expect("Vector B not found");
-        self.distance_fn.distance(vec_a, vec_b)
+    fn distance(&self, id_a: u32, id_b: u32) -> Result<f32> {
+        let vec_a = self.vectors.get(id_a).ok_or(HNSWError::VectorNotFound(id_a))?;
+        let vec_b = self.vectors.get(id_b).ok_or(HNSWError::VectorNotFound(id_b))?;
+        Ok(self.distance_fn.distance(vec_a, vec_b))
     }
 
     /// Compute distance between query and vector
-    fn distance_to_query(&self, query: &[f32], id: u32) -> f32 {
-        let vec = self.vectors.get(id).expect("Vector not found");
-        self.distance_fn.distance(query, vec)
+    fn distance_to_query(&self, query: &[f32], id: u32) -> Result<f32> {
+        let vec = self.vectors.get(id).ok_or(HNSWError::VectorNotFound(id))?;
+        Ok(self.distance_fn.distance(query, vec))
     }
 
     /// Insert a vector into the index
     ///
     /// Returns the node ID assigned to this vector.
-    pub fn insert(&mut self, vector: Vec<f32>) -> Result<u32, String> {
+    pub fn insert(&mut self, vector: Vec<f32>) -> Result<u32> {
         // Validate dimensions
         if vector.len() != self.dimensions() {
-            return Err(format!(
-                "Vector dimension mismatch: expected {}, got {}",
-                self.dimensions(),
-                vector.len()
-            ));
+            return Err(HNSWError::DimensionMismatch {
+                expected: self.dimensions(),
+                actual: vector.len(),
+            });
+        }
+
+        // Check for NaN/Inf in vector
+        if vector.iter().any(|x| !x.is_finite()) {
+            return Err(HNSWError::InvalidVector);
         }
 
         // Store vector and get ID
-        let node_id = self.vectors.insert(vector.clone())?;
+        let node_id = self.vectors.insert(vector.clone()).map_err(HNSWError::Storage)?;
 
         // Assign random level
         let level = self.random_level();
@@ -159,7 +165,7 @@ impl HNSWIndex {
         self.insert_into_graph(node_id, &vector, level)?;
 
         // Update entry point if this node has higher level than current entry point
-        let entry_point_id = self.entry_point.unwrap();
+        let entry_point_id = self.entry_point.ok_or_else(|| HNSWError::internal("Entry point should exist after first insert"))?;
         let entry_level = self.nodes[entry_point_id as usize].level;
         if level > entry_level {
             self.entry_point = Some(node_id);
@@ -176,20 +182,20 @@ impl HNSWIndex {
         node_id: u32,
         vector: &[f32],
         level: u8,
-    ) -> Result<(), String> {
-        let entry_point = self.entry_point.expect("Entry point must exist");
+    ) -> Result<()> {
+        let entry_point = self.entry_point.ok_or(HNSWError::EmptyIndex)?;
         let entry_level = self.nodes[entry_point as usize].level;
 
         // Search for nearest neighbors at each level above target level
         let mut nearest = vec![entry_point];
         for lc in ((level + 1)..=entry_level).rev() {
-            nearest = self.search_layer(vector, &nearest, 1, lc);
+            nearest = self.search_layer(vector, &nearest, 1, lc)?;
         }
 
         // Insert at levels 0..=level (iterate from top to bottom)
         for lc in (0..=level).rev() {
             // Find ef_construction nearest neighbors at this level
-            let candidates = self.search_layer(vector, &nearest, self.params.ef_construction, lc);
+            let candidates = self.search_layer(vector, &nearest, self.params.ef_construction, lc)?;
 
             // Select M best neighbors using heuristic
             let m = if lc == 0 {
@@ -198,7 +204,7 @@ impl HNSWIndex {
                 self.params.m
             };
 
-            let neighbors = self.select_neighbors_heuristic(node_id, &candidates, m, lc, vector);
+            let neighbors = self.select_neighbors_heuristic(node_id, &candidates, m, lc, vector)?;
 
             // Add bidirectional links
             for &neighbor_id in &neighbors {
@@ -212,14 +218,14 @@ impl HNSWIndex {
             for &neighbor_id in &neighbors {
                 let neighbor_neighbors = self.neighbors.get_neighbors(neighbor_id, lc).to_vec();
                 if neighbor_neighbors.len() > m {
-                    let neighbor_vec = self.vectors.get(neighbor_id).expect("Neighbor vector must exist");
+                    let neighbor_vec = self.vectors.get(neighbor_id).ok_or(HNSWError::VectorNotFound(neighbor_id))?;
                     let pruned = self.select_neighbors_heuristic(
                         neighbor_id,
                         &neighbor_neighbors,
                         m,
                         lc,
                         neighbor_vec,
-                    );
+                    )?;
 
                     // Clear and reset neighbors
                     self.neighbors.set_neighbors(neighbor_id, lc, pruned.clone());
@@ -244,20 +250,20 @@ impl HNSWIndex {
         m: usize,
         _level: u8,
         query_vector: &[f32],
-    ) -> Vec<u32> {
+    ) -> Result<Vec<u32>> {
         if candidates.len() <= m {
-            return candidates.to_vec();
+            return Ok(candidates.to_vec());
         }
 
         // Sort candidates by distance to query
         let mut sorted_candidates: Vec<_> = candidates
             .iter()
             .map(|&id| {
-                let dist = self.distance_to_query(query_vector, id);
-                (id, dist)
+                let dist = self.distance_to_query(query_vector, id)?;
+                Ok((id, dist))
             })
-            .collect();
-        sorted_candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+            .collect::<Result<Vec<_>>>()?;
+        sorted_candidates.sort_by_key(|c| OrderedFloat(c.1));
 
         let mut result = Vec::with_capacity(m);
         let mut remaining = Vec::new();
@@ -272,7 +278,7 @@ impl HNSWIndex {
             // Check if candidate is closer to query than to existing neighbors
             let mut good = true;
             for &result_id in &result {
-                let dist_to_result = self.distance(*candidate_id, result_id);
+                let dist_to_result = self.distance(*candidate_id, result_id)?;
                 if dist_to_result < *candidate_dist {
                     good = false;
                     break;
@@ -294,20 +300,34 @@ impl HNSWIndex {
             result.push(candidate_id);
         }
 
-        result
+        Ok(result)
     }
 
     /// Search for k nearest neighbors
     ///
     /// Returns up to k nearest neighbors sorted by distance (closest first).
-    pub fn search(&self, query: &[f32], k: usize, ef: usize) -> Result<Vec<SearchResult>, String> {
+    pub fn search(&self, query: &[f32], k: usize, ef: usize) -> Result<Vec<SearchResult>> {
+        // Validate k > 0
+        if k == 0 {
+            return Err(HNSWError::InvalidSearchParams { k, ef });
+        }
+
+        // Validate ef >= k
+        if ef < k {
+            return Err(HNSWError::InvalidSearchParams { k, ef });
+        }
+
         // Validate dimensions
         if query.len() != self.dimensions() {
-            return Err(format!(
-                "Query dimension mismatch: expected {}, got {}",
-                self.dimensions(),
-                query.len()
-            ));
+            return Err(HNSWError::DimensionMismatch {
+                expected: self.dimensions(),
+                actual: query.len(),
+            });
+        }
+
+        // Check for NaN/Inf in query
+        if query.iter().any(|x| !x.is_finite()) {
+            return Err(HNSWError::InvalidVector);
         }
 
         // Handle empty index
@@ -315,7 +335,7 @@ impl HNSWIndex {
             return Ok(Vec::new());
         }
 
-        let entry_point = self.entry_point.expect("Entry point must exist");
+        let entry_point = self.entry_point.ok_or(HNSWError::EmptyIndex)?;
         let entry_level = self.nodes[entry_point as usize].level;
 
         // Start from entry point, descend to layer 0
@@ -323,23 +343,23 @@ impl HNSWIndex {
 
         // Greedy search at each layer (find 1 nearest)
         for level in (1..=entry_level).rev() {
-            nearest = self.search_layer(query, &nearest, 1, level);
+            nearest = self.search_layer(query, &nearest, 1, level)?;
         }
 
         // Beam search at layer 0 (find ef nearest)
-        let candidates = self.search_layer(query, &nearest, ef.max(k), 0);
+        let candidates = self.search_layer(query, &nearest, ef.max(k), 0)?;
 
         // Convert to SearchResult and return k nearest
         let mut results: Vec<SearchResult> = candidates
             .iter()
             .map(|&id| {
-                let distance = self.distance_to_query(query, id);
-                SearchResult::new(id, distance)
+                let distance = self.distance_to_query(query, id)?;
+                Ok(SearchResult::new(id, distance))
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
         // Sort by distance (closest first)
-        results.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+        results.sort_by_key(|r| OrderedFloat(r.distance));
 
         // Return top k
         results.truncate(k);
@@ -355,14 +375,14 @@ impl HNSWIndex {
         entry_points: &[u32],
         ef: usize,
         level: u8,
-    ) -> Vec<u32> {
+    ) -> Result<Vec<u32>> {
         let mut visited = HashSet::new();
         let mut candidates = BinaryHeap::new(); // Min-heap (closest first, using Reverse)
         let mut working = BinaryHeap::new(); // Max-heap (farthest first for pruning)
 
         // Initialize with entry points
         for &ep in entry_points {
-            let dist = self.distance_to_query(query, ep);
+            let dist = self.distance_to_query(query, ep)?;
             let candidate = Candidate::new(ep, dist);
 
             candidates.push(Reverse(candidate));
@@ -387,7 +407,7 @@ impl HNSWIndex {
                 }
                 visited.insert(neighbor_id);
 
-                let dist = self.distance_to_query(query, neighbor_id);
+                let dist = self.distance_to_query(query, neighbor_id)?;
                 let neighbor = Candidate::new(neighbor_id, dist);
 
                 // If neighbor is closer than farthest in working set, or working set not full, add it
@@ -411,7 +431,7 @@ impl HNSWIndex {
         // Return node IDs sorted by distance (closest first)
         let mut results: Vec<_> = working.into_iter().collect();
         results.sort_by_key(|c| c.distance);
-        results.into_iter().map(|c| c.node_id).collect()
+        Ok(results.into_iter().map(|c| c.node_id).collect())
     }
 
     /// Get memory usage in bytes (approximate)
@@ -437,59 +457,41 @@ impl HNSWIndex {
     /// - Nodes: Vec<HNSWNode> (raw bytes, 64 * num_nodes)
     /// - Neighbors: NeighborLists (bincode)
     /// - Vectors: VectorStorage (bincode)
-    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
-        let file = File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
 
         // Write magic bytes
-        writer
-            .write_all(b"HNSWIDX\0")
-            .map_err(|e| format!("Failed to write magic: {}", e))?;
+        writer.write_all(b"HNSWIDX\0")?;
 
         // Write version
-        writer
-            .write_all(&1u32.to_le_bytes())
-            .map_err(|e| format!("Failed to write version: {}", e))?;
+        writer.write_all(&1u32.to_le_bytes())?;
 
         // Write dimensions
-        writer
-            .write_all(&(self.dimensions() as u32).to_le_bytes())
-            .map_err(|e| format!("Failed to write dimensions: {}", e))?;
+        writer.write_all(&(self.dimensions() as u32).to_le_bytes())?;
 
         // Write num nodes
-        writer
-            .write_all(&(self.nodes.len() as u32).to_le_bytes())
-            .map_err(|e| format!("Failed to write num_nodes: {}", e))?;
+        writer.write_all(&(self.nodes.len() as u32).to_le_bytes())?;
 
         // Write entry point
         match self.entry_point {
             Some(ep) => {
-                writer
-                    .write_all(&[1u8])
-                    .map_err(|e| format!("Failed to write entry_point flag: {}", e))?;
-                writer
-                    .write_all(&ep.to_le_bytes())
-                    .map_err(|e| format!("Failed to write entry_point: {}", e))?;
+                writer.write_all(&[1u8])?;
+                writer.write_all(&ep.to_le_bytes())?;
             }
             None => {
-                writer
-                    .write_all(&[0u8])
-                    .map_err(|e| format!("Failed to write entry_point flag: {}", e))?;
+                writer.write_all(&[0u8])?;
             }
         }
 
         // Write distance function
-        bincode::serialize_into(&mut writer, &self.distance_fn)
-            .map_err(|e| format!("Failed to serialize distance_fn: {}", e))?;
+        bincode::serialize_into(&mut writer, &self.distance_fn)?;
 
         // Write params
-        bincode::serialize_into(&mut writer, &self.params)
-            .map_err(|e| format!("Failed to serialize params: {}", e))?;
+        bincode::serialize_into(&mut writer, &self.params)?;
 
         // Write RNG state
-        writer
-            .write_all(&self.rng_state.to_le_bytes())
-            .map_err(|e| format!("Failed to write rng_state: {}", e))?;
+        writer.write_all(&self.rng_state.to_le_bytes())?;
 
         // Write nodes (raw bytes for fast I/O)
         if !self.nodes.is_empty() {
@@ -499,88 +501,68 @@ impl HNSWIndex {
                     self.nodes.len() * std::mem::size_of::<HNSWNode>(),
                 )
             };
-            writer
-                .write_all(nodes_bytes)
-                .map_err(|e| format!("Failed to write nodes: {}", e))?;
+            writer.write_all(nodes_bytes)?;
         }
 
         // Write neighbor lists
-        bincode::serialize_into(&mut writer, &self.neighbors)
-            .map_err(|e| format!("Failed to serialize neighbors: {}", e))?;
+        bincode::serialize_into(&mut writer, &self.neighbors)?;
 
         // Write vectors
-        bincode::serialize_into(&mut writer, &self.vectors)
-            .map_err(|e| format!("Failed to serialize vectors: {}", e))?;
+        bincode::serialize_into(&mut writer, &self.vectors)?;
 
         Ok(())
     }
 
     /// Load index from disk
-    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let file = File::open(path)?;
         let mut reader = BufReader::new(file);
 
         // Read and verify magic bytes
         let mut magic = [0u8; 8];
-        reader
-            .read_exact(&mut magic)
-            .map_err(|e| format!("Failed to read magic: {}", e))?;
+        reader.read_exact(&mut magic)?;
         if &magic != b"HNSWIDX\0" {
-            return Err(format!("Invalid magic bytes: {:?}", magic));
+            return Err(HNSWError::Storage(format!("Invalid magic bytes: {:?}", magic)));
         }
 
         // Read version
         let mut version_bytes = [0u8; 4];
-        reader
-            .read_exact(&mut version_bytes)
-            .map_err(|e| format!("Failed to read version: {}", e))?;
+        reader.read_exact(&mut version_bytes)?;
         let version = u32::from_le_bytes(version_bytes);
         if version != 1 {
-            return Err(format!("Unsupported version: {}", version));
+            return Err(HNSWError::Storage(format!("Unsupported version: {}", version)));
         }
 
         // Read dimensions
         let mut dimensions_bytes = [0u8; 4];
-        reader
-            .read_exact(&mut dimensions_bytes)
-            .map_err(|e| format!("Failed to read dimensions: {}", e))?;
+        reader.read_exact(&mut dimensions_bytes)?;
         let dimensions = u32::from_le_bytes(dimensions_bytes) as usize;
 
         // Read num nodes
         let mut num_nodes_bytes = [0u8; 4];
-        reader
-            .read_exact(&mut num_nodes_bytes)
-            .map_err(|e| format!("Failed to read num_nodes: {}", e))?;
+        reader.read_exact(&mut num_nodes_bytes)?;
         let num_nodes = u32::from_le_bytes(num_nodes_bytes) as usize;
 
         // Read entry point
         let mut entry_point_flag = [0u8; 1];
-        reader
-            .read_exact(&mut entry_point_flag)
-            .map_err(|e| format!("Failed to read entry_point flag: {}", e))?;
+        reader.read_exact(&mut entry_point_flag)?;
         let entry_point = if entry_point_flag[0] == 1 {
             let mut ep_bytes = [0u8; 4];
-            reader
-                .read_exact(&mut ep_bytes)
-                .map_err(|e| format!("Failed to read entry_point: {}", e))?;
+            reader.read_exact(&mut ep_bytes)?;
             Some(u32::from_le_bytes(ep_bytes))
         } else {
             None
         };
 
         // Read distance function
-        let distance_fn: DistanceFunction = bincode::deserialize_from(&mut reader)
-            .map_err(|e| format!("Failed to deserialize distance_fn: {}", e))?;
+        let distance_fn: DistanceFunction = bincode::deserialize_from(&mut reader)?;
 
         // Read params
-        let params: HNSWParams = bincode::deserialize_from(&mut reader)
-            .map_err(|e| format!("Failed to deserialize params: {}", e))?;
+        let params: HNSWParams = bincode::deserialize_from(&mut reader)?;
 
         // Read RNG state
         let mut rng_state_bytes = [0u8; 8];
-        reader
-            .read_exact(&mut rng_state_bytes)
-            .map_err(|e| format!("Failed to read rng_state: {}", e))?;
+        reader.read_exact(&mut rng_state_bytes)?;
         let rng_state = u64::from_le_bytes(rng_state_bytes);
 
         // Read nodes (raw bytes for fast I/O)
@@ -592,26 +574,21 @@ impl HNSWIndex {
                     nodes.len() * std::mem::size_of::<HNSWNode>(),
                 )
             };
-            reader
-                .read_exact(nodes_bytes)
-                .map_err(|e| format!("Failed to read nodes: {}", e))?;
+            reader.read_exact(nodes_bytes)?;
         }
 
         // Read neighbor lists
-        let neighbors: NeighborLists = bincode::deserialize_from(&mut reader)
-            .map_err(|e| format!("Failed to deserialize neighbors: {}", e))?;
+        let neighbors: NeighborLists = bincode::deserialize_from(&mut reader)?;
 
         // Read vectors
-        let vectors: VectorStorage = bincode::deserialize_from(&mut reader)
-            .map_err(|e| format!("Failed to deserialize vectors: {}", e))?;
+        let vectors: VectorStorage = bincode::deserialize_from(&mut reader)?;
 
         // Verify dimensions match
         if vectors.dimensions() != dimensions {
-            return Err(format!(
-                "Dimension mismatch: header says {}, vectors have {}",
-                dimensions,
-                vectors.dimensions()
-            ));
+            return Err(HNSWError::DimensionMismatch {
+                expected: dimensions,
+                actual: vectors.dimensions(),
+            });
         }
 
         Ok(Self {
@@ -1040,7 +1017,10 @@ mod tests {
 
         let result = HNSWIndex::load(temp_file.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Invalid magic"));
+        match result.unwrap_err() {
+            HNSWError::Storage(msg) => assert!(msg.contains("Invalid magic")),
+            _ => panic!("Expected Storage error"),
+        }
     }
 
     #[test]
@@ -1055,6 +1035,9 @@ mod tests {
 
         let result = HNSWIndex::load(temp_file.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Unsupported version"));
+        match result.unwrap_err() {
+            HNSWError::Storage(msg) => assert!(msg.contains("Unsupported version")),
+            _ => panic!("Expected Storage error"),
+        }
     }
 }

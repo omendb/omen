@@ -5,6 +5,7 @@
 // - Support quantized and full precision vectors
 // - Memory-efficient neighbor list storage
 
+use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 
 /// Storage for neighbor lists
@@ -302,7 +303,7 @@ impl VectorStorage {
                 // Compute median for each dimension
                 for dim in 0..*dimensions {
                     let mut values: Vec<f32> = sample_vectors.iter().map(|v| v[dim]).collect();
-                    values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    values.sort_by_key(|&x| OrderedFloat(x));
 
                     let median = if values.len() % 2 == 0 {
                         let mid = values.len() / 2;
