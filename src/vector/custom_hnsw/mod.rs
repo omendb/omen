@@ -10,6 +10,7 @@ mod types;
 mod storage;
 mod index;
 mod simd_distance;
+mod error;
 
 // Public API exports
 pub use types::{
@@ -22,3 +23,6 @@ pub use simd_distance::{l2_distance, cosine_distance, dot_product};
 pub use storage::{NeighborLists, VectorStorage};
 
 pub use index::HNSWIndex;
+
+// Re-export error types
+pub use error::{HNSWError, Result};
