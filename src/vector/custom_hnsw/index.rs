@@ -6,13 +6,11 @@
 // - Cache-optimized layout (64-byte aligned hot data)
 
 use super::error::{HNSWError, Result};
-use super::prefetch;
 use super::storage::{NeighborLists, VectorStorage};
 use super::types::{Candidate, DistanceFunction, HNSWNode, HNSWParams, SearchResult};
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashSet};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
@@ -317,14 +315,6 @@ impl HNSWIndex {
         if candidates.len() <= m {
             return Ok(candidates.to_vec());
         }
-
-        // Prefetch all candidate vectors before computing distances
-        for &id in candidates {
-            if let Some(vec) = self.vectors.get(id) {
-                prefetch::prefetch_vector(vec);
-            }
-        }
-
         // Sort candidates by distance to query
         let mut sorted_candidates: Vec<_> = candidates
             .iter()
@@ -491,15 +481,6 @@ impl HNSWIndex {
 
             // Explore neighbors
             let neighbors = self.neighbors.get_neighbors(current.node_id, level);
-
-            // Prefetch neighbor vectors to hide memory latency
-            // This addresses the 23.41% LLC cache miss problem from profiling
-            for &neighbor_id in neighbors {
-                if let Some(vec) = self.vectors.get(neighbor_id) {
-                    prefetch::prefetch_vector(vec);
-                }
-            }
-
             for &neighbor_id in neighbors {
                 if visited.contains(&neighbor_id) {
                     continue;

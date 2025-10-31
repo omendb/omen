@@ -11,9 +11,7 @@ mod storage;
 mod index;
 mod simd_distance;
 mod error;
-mod prefetch;
 mod query_buffers;
-mod arena;
 mod cpu_features;
 
 // Public API exports
