@@ -2,6 +2,13 @@
 
 **Embedded PostgreSQL-compatible vector database**
 
+> ⚠️ **Active Development**: This project is under active development (Week 7).
+> Not production-ready yet. API may change before v1.0.
+> See [ai/STATUS.md](ai/STATUS.md) for current progress.
+>
+> **Target**: Production-ready in 3-4 weeks
+> **License**: Elastic License 2.0 (free to use/modify, cannot resell as managed service)
+
 Drop-in replacement for pgvector. 10x faster, 28x more memory efficient. Source-available. Embeddable.
 
 ---
