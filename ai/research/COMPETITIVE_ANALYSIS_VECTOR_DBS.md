@@ -369,3 +369,97 @@
 **Last Updated**: October 30, 2025
 **Status**: Ready to execute - Profile → SIMD → Qdrant benchmark
 **Next Action**: Enable SIMD feature flag (5 minutes, in Cargo.toml)
+
+---
+
+## HelixDB Competitive Analysis
+
+**Date**: October 30, 2025  
+**Source**: https://github.com/HelixDB/helix-db  
+**Backing**: YC + NVIDIA funded
+
+### Overview
+
+**HelixDB**: Open-source graph-vector database built in Rust with LMDB storage.
+
+**Positioning**: "Unified database for AI agents" - combines graph, vector, KV, document, and relational data models.
+
+### Key Features
+
+| Feature | HelixDB | OmenDB | Winner |
+|---------|---------|--------|--------|
+| **Data Models** | Graph + Vector + KV + Doc + Relational | Vector-first (with HTAP) | HelixDB (breadth) |
+| **Query Language** | HelixQL (custom) | SQL/PostgreSQL | **OmenDB** ⭐ |
+| **Storage** | LMDB (memory-mapped B-tree) | Custom HNSW + RocksDB (LSM) | Trade-off |
+| **License** | AGPL (copyleft) | Elastic 2.0 (source-available) | **OmenDB** (business-friendly) |
+| **PostgreSQL Compatible** | ❌ NO | ✅ YES | **OmenDB** ⭐⭐⭐ |
+| **Built-in Embeddings** | ✅ YES | ❌ NO | HelixDB (simpler UX) |
+| **Ecosystem** | None (new HelixQL) | PostgreSQL (massive) | **OmenDB** ⭐⭐⭐ |
+
+### Strategic Assessment
+
+**HelixDB's Strengths**:
+1. Multi-model architecture (graph + vector in one query)
+2. Built-in embeddings (no pre-vectorization needed)
+3. YC + NVIDIA backing (more capital for GTM)
+4. Agent-focused positioning (timely market timing)
+5. MCP integration for AI agents
+
+**HelixDB's Weaknesses**:
+1. **No PostgreSQL compatibility** - requires full migration, new learning curve
+2. **Custom HelixQL** - no ecosystem, tools, or community
+3. **AGPL license** - limits enterprise adoption (copyleft concerns)
+4. **Multi-model complexity** - may sacrifice vector performance
+5. **No performance benchmarks** - suspicious omission in README
+
+**OmenDB's Structural Advantages**:
+1. **PostgreSQL wire protocol** - drop-in replacement for pgvector (HUGE moat)
+   - Zero migration cost vs full rewrite for HelixDB
+   - Massive ecosystem (psql, pgAdmin, all PostgreSQL tools work)
+   - SQL standard (no new language to learn)
+2. **Elastic 2.0 license** - embeddable, enterprise-friendly
+3. **Vector-first focus** - can optimize aggressively for performance
+4. **Clear pain point** - pgvector doesn't scale (validated demand)
+
+**OmenDB's Weaknesses vs HelixDB**:
+1. No graph capabilities yet (but Phase 3 roadmap 2027-2028 has this!)
+2. No built-in embeddings (users must pre-vectorize)
+3. Less funding (slower go-to-market)
+4. Later to market (HelixDB has first-mover advantage)
+
+### Market Positioning
+
+**Different Target Markets**:
+- **HelixDB**: "Agents need unified graph+vector database" (emerging, unproven)
+- **OmenDB**: "pgvector users need performance at scale" (established, validated)
+
+**Why OmenDB's Market is Better**:
+1. Proven pain point (pgvector doesn't scale at 10M+ vectors)
+2. Massive TAM (all PostgreSQL + pgvector users = millions)
+3. Zero migration barrier (drop-in replacement)
+4. Lower customer acquisition cost (can find via GitHub search)
+
+**Why HelixDB Can't Easily Compete with OmenDB**:
+- Adding PostgreSQL compatibility would require major rewrite
+- HelixQL is core to their architecture (can't bolt on SQL easily)
+- Multi-model approach conflicts with PostgreSQL's data model
+- **Structural moat**: HelixDB chose breadth, OmenDB chose depth
+
+### Recommendations
+
+1. ✅ **Continue current path** - PostgreSQL compatibility is OmenDB's moat
+2. ✅ **Emphasize "drop-in replacement" in marketing** - HelixDB can't match this
+3. ✅ **Phase 3 already addresses multi-model** - OmenDB will catch up (graph DB 2027-2028)
+4. ⚠️ **Monitor HelixDB's performance** - no benchmarks published yet (suspicious)
+5. ✅ **Highlight Elastic 2.0 license** - more business-friendly than AGPL
+6. ✅ **Target enterprise** - PostgreSQL compatibility + license = enterprise win
+
+### Bottom Line
+
+**Good News**: HelixDB validates the multi-model database market, but targets a DIFFERENT segment.
+
+**OmenDB's Moat**: PostgreSQL compatibility is nearly impossible for HelixDB to add without complete rewrite. This is a **structural competitive advantage**.
+
+**Action**: Stay the course. OmenDB's PostgreSQL-compatible approach is better positioned for the validated pgvector replacement market.
+
+---

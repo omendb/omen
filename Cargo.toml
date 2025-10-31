@@ -234,3 +234,7 @@ path = "src/bin/benchmark_pgvector_comparison.rs"
 name = "benchmark_custom_hnsw"
 path = "src/bin/benchmark_custom_hnsw.rs"
 
+[[bin]]
+name = "benchmark_realistic_100k"
+path = "src/bin/benchmark_realistic_100k.rs"
+
