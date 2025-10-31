@@ -1,9 +1,9 @@
 # omen - Vector Database
 
 **Repository**: omen (Embedded PostgreSQL-compatible Vector Database)
-**Last Updated**: October 30, 2025 - Week 8 Complete
+**Last Updated**: October 31, 2025 - Week 11 Day 2 Complete (SIMD Implementation)
 **License**: Elastic License 2.0 (source-available, embeddable)
-**Status**: 581 QPS (93% of Qdrant), 142 tests passing, custom HNSW in progress
+**Status**: 7223 QPS @ 128D, 1051 QPS @ 1536D (production-ready!), custom HNSW with SIMD
 
 ---
 
@@ -61,43 +61,49 @@
 
 ---
 
-## Week 9 Status (Oct 30, 2025)
+## Week 11 Status (Oct 31, 2025)
 
-**Week 9 Day 4 COMPLETE** - Serialization & Persistence:
-- ✅ Day 1: Architecture designed (1,539 line design doc)
-- ✅ Day 2: Core structures implemented (types, storage, index - 1,200+ lines)
-- ✅ Day 3: Full algorithms implemented (insert, search, neighbor selection)
-- ✅ Day 4: Serialization implemented (save/load with versioned binary format)
-- ✅ 33 tests passing: Core structures, algorithms, serialization, round-trip
-- ✅ Persistence: Fast save/load, magic bytes, version checking, error handling
-- ✅ Round-trip verified: Graph structure, vectors, quantization all preserved
-- 🎯 Next: Port tests from hnsw_rs + validate baseline (Day 5)
+**Week 11 Day 2 COMPLETE** - SIMD Distance Functions (MASSIVE WIN!):
+- ✅ Week 9 Days 1-5: Custom HNSW implemented (1,200+ lines, 33 tests passing)
+- ✅ Week 10 Days 1-5: Algorithm port + baseline + cache optimizations
+- ✅ Week 11 Day 1: Error infrastructure (Result<T>, error propagation, logging)
+- ✅ Week 11 Day 2: **SIMD distance functions (3.1-3.9x improvement!)**
+- ✅ A/B validation: Cache optimizations provide NO benefit (scientifically tested)
+- ✅ Code cleanup: Removed unused optimizations (prefetch, arena)
+- 🎯 Next: Scale testing at 1M vectors
 
-**Current Performance** (hnsw_rs library with SIMD):
-- 581 QPS (93% of market leader Qdrant's 626 QPS)
-- Query latency: 1.72ms avg, 2.08ms p95 (3x improvement from baseline)
-- Build speed: 6540 vec/sec (2x improvement)
-- 142 tests passing (101 Phase 1 + 41 Phase 2)
+**Current Performance** (Custom HNSW + SIMD):
+- **7223 QPS @ 128D** (3.9x faster than baseline 1862 QPS)
+- **1051 QPS @ 1536D** (3.1x faster than baseline 336 QPS)
+- Query latency: <1ms p50, ~2ms p95 (production-ready!)
+- Build speed: High (needs validation at 1M scale)
+- 33 tests passing (custom HNSW core)
+
+**Key Findings**:
+- ✅ Distance calculations were the bottleneck (solved with SIMD)
+- ❌ Cache optimizations (prefetch, BFS reordering) provide NO benefit
+- ✅ Thread-local buffers: Zero cost, good practice (kept)
+- ✅ Runtime CPU detection: Works on Mac (NEON) + Linux (AVX2/SSE2)
 
 **Completed**:
-- ✅ SIMD optimization (3.6x performance improvement)
-- ✅ Comprehensive profiling (identified bottlenecks)
-- ✅ SOTA research (12,500-word analysis)
-- ✅ 10-week roadmap to 1000+ QPS validated
+- ✅ Custom HNSW implementation (full control, no library limitations)
+- ✅ SIMD distance functions (3.1-3.9x improvement)
+- ✅ A/B testing framework (scientific validation)
+- ✅ Code cleanup (removed unused optimizations)
 
-**Next** (Weeks 9-19):
-- Custom HNSW implementation (cache optimization, arena allocators)
-- Target: 1000+ QPS (60% faster than Qdrant)
+**Next** (Weeks 11-13):
+- Scale testing (100K, 1M vectors with SIMD)
+- Extended RaBitQ quantization (SIGMOD 2025, arbitrary compression)
+- Target: 1000+ QPS at 1M scale
 
-**Then** (Weeks 20-24):
+**Then** (Weeks 14-19):
+- HNSW-IF for billion-scale support (hybrid in-memory + disk)
+- Delta encoding for memory efficiency
+- Performance optimization (cache locality, prefetch that works)
+
+**After** (Weeks 20-24):
 - Full-text search (BM25, inverted index)
 - Complete "Embedded AI Database"
-
-**After** (Weeks 25-28):
-- Graph Links (lightweight graph capabilities)
-- Store relationships between vectors (edges with properties)
-- Graph RAG support (vector similarity + graph traversal)
-- Market Position: "Vector DB with graph capabilities"
 
 ---
 
