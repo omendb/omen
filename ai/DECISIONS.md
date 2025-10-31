@@ -2,7 +2,52 @@
 
 _Architectural decisions with context and rationale_
 
-**Last Updated**: October 31, 2025 - Competitive Research & Strategic Validation
+**Last Updated**: October 31, 2025 Evening - SIMD Implementation & A/B Validation
+
+---
+
+## 2025-10-31 Evening: SIMD Distance Functions (3.1-3.9x Improvement)
+
+**Decision**: Implement runtime SIMD distance calculations with AVX2/SSE2/NEON
+
+**Context**:
+- A/B testing showed cache optimizations provide NO benefit
+- Needed to find real bottleneck through controlled experiments
+- Distance calculations suspected based on profiling
+
+**Implementation**:
+- Runtime CPU detection (`is_x86_feature_detected!()`, `is_aarch64_feature_detected!()`)
+- AVX2 (8 lanes), SSE2 (4 lanes), NEON (4 lanes)
+- FMA on AVX2, optimized horizontal sums
+- Stable Rust (no nightly)
+
+**Results**:
+- 128D: 1862 → 7223 QPS (3.9x!)
+- 1536D: 336 → 1051 QPS (3.1x!)
+- Mac M3 (NEON) 1.3x faster than Fedora i9 (AVX2)
+
+**Status**: ✅ Complete, production-ready
+
+---
+
+## 2025-10-31 Evening: Cache Optimizations Validated as Ineffective
+
+**Decision**: Remove unused cache optimizations, keep thread-local buffers only
+
+**A/B Test Results** (100K vectors):
+- 128D: -0.2% QPS
+- 1536D: +0.2% QPS
+- **Verdict**: NO measurable benefit
+
+**Actions**:
+- ✅ Keep: Thread-local buffers (zero cost)
+- ⚠️ Test at 1M: BFS reordering
+- ❌ Remove: Prefetching (no benefit)
+- ❌ Remove: Arena allocators (unused)
+
+**Lessons**: Always A/B test optimizations, assumptions can be wrong
+
+**Status**: ✅ Validated, cleanup pending
 
 ---
 
