@@ -256,3 +256,11 @@ path = "src/bin/benchmark_prefetch_10k.rs"
 name = "benchmark_1m_stress"
 path = "src/bin/benchmark_1m_stress.rs"
 
+[[bin]]
+name = "benchmark_optimization_impact"
+path = "src/bin/benchmark_optimization_impact.rs"
+
+[[bin]]
+name = "profile_queries_optimized"
+path = "src/bin/profile_queries_optimized.rs"
+

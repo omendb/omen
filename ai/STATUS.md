@@ -1,18 +1,50 @@
 # STATUS
 
-**Last Updated**: October 31, 2025 - Week 11 Day 2 COMPLETE - Cache & Allocation Optimizations
+**Last Updated**: October 31, 2025 - Week 11 Day 2 - A/B Validation Complete
 **Phase**: Week 11 - Production Readiness + Performance Optimization
 **Repository**: omen (embedded vector database) v0.0.1
 **Status**:
   - ✅ **Week 10 COMPLETE**: Custom HNSW validated (3.4x faster, 4523x persistence, SIMD ready)
   - ✅ **Week 11 Day 1 COMPLETE**: Production-ready error handling (zero panics)
-  - ✅ **Week 11 Day 2 COMPLETE**: Cache & allocation optimizations (1862 QPS, 3.1x target!)
+  - ⚠️ **Week 11 Day 2**: Cache optimizations implemented BUT provide NO benefit (A/B tested)
   - ✅ **Oct 31 Research COMPLETE**: Comprehensive competitive analysis (24K words)
   - ✅ **Strategic Validation**: Vector DB plan validated, HTAP pivot rejected
   - ✅ **Market Position**: ONLY DB with all 7 features (PostgreSQL + embedded + transactions + full-text + performance + memory + self-hosting)
-  - ✅ **Performance**: 1862 QPS on 10K @ 128D (3.1x better than 500-600 target)
-  - 🎯 **Next**: Week 11 Day 3 - Stress testing or production deployment
-**Next**: Scale validation or begin production deployment
+  - ✅ **Performance**: 1862 QPS on 10K @ 128D (already excellent!)
+  - ⚠️ **Critical Finding**: Cache isn't the bottleneck - need profiling to find real issue
+  - 🎯 **Next**: Profile to identify real bottleneck (distance calc? graph traversal?)
+**Next**: Profile query performance to find optimization opportunities
+
+---
+
+**A/B Validation Results** (October 31, 2025 - Evening):
+
+**CRITICAL FINDING**: Cache optimizations provide **NO measurable benefit**
+
+Ran controlled A/B test comparing WITH vs WITHOUT cache optimizations:
+
+**128D Results (100K vectors):**
+- QPS: 2545 → 2541 (-0.2% - measurement noise)
+- p50: 0.39ms → 0.39ms (-0.5% - measurement noise)
+- p95: 0.46ms → 0.46ms (+1.7% - measurement noise)
+- **Verdict**: NO benefit
+
+**1536D Results (100K vectors):**
+- QPS: 286 → 287 (+0.2% - measurement noise)
+- p50: 3.44ms → 3.42ms (+0.6% - measurement noise)
+- p95: 3.89ms → 3.89ms (-0.1% - measurement noise)
+- **Verdict**: NO benefit
+
+**What This Means:**
+1. ✅ Optimizations ARE implemented correctly (prefetching, BFS reordering, thread-local buffers, arenas)
+2. ⚠️ Cache misses are NOT the bottleneck
+3. 🔍 Need profiling to find real bottleneck (likely distance calculations or graph traversal logic)
+4. ✅ Baseline performance is already excellent (1862 QPS @ 128D, 286 QPS @ 1536D)
+
+**Next Steps:**
+1. Profile query path to identify real bottleneck
+2. Likely candidates: distance function, neighbor selection, graph traversal
+3. Consider SIMD distance optimizations (already have AVX-512/AVX2 detection)
 
 ---
 
