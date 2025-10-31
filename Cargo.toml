@@ -252,3 +252,7 @@ path = "src/bin/example_observability.rs"
 name = "benchmark_prefetch_10k"
 path = "src/bin/benchmark_prefetch_10k.rs"
 
+[[bin]]
+name = "benchmark_1m_stress"
+path = "src/bin/benchmark_1m_stress.rs"
+
