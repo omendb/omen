@@ -9,7 +9,7 @@
 
 ## Product Overview
 
-**omen**: Embedded PostgreSQL-compatible vector database for AI applications
+**omen**: Embedded vector database with PostgreSQL wire protocol for AI applications
 
 **What It Is**:
 - Vector search (HNSW + Binary Quantization)
@@ -17,7 +17,15 @@
 - Transactions (MVCC snapshot isolation)
 - Full-text search (Week 20-24, in progress)
 
-**Positioning**: "Embedded PostgreSQL-compatible vector database. Drop-in replacement for pgvector. 10x faster, 28x more memory efficient."
+**Positioning**: "Separate vector database for scale, PostgreSQL tools for familiarity. 97x faster builds than pgvector, 28x more memory efficient."
+
+**What "PostgreSQL-compatible" Means**:
+- ✅ **PostgreSQL wire protocol** (port 5433): Use psql, pgcli, any PostgreSQL client library
+- ✅ **SQL syntax**: Familiar query language, no new API to learn
+- ❌ **NOT a PostgreSQL extension** (like pgvector): omen is a SEPARATE database
+- ❌ **NOT in your PostgreSQL database**: Vectors are separate from business data
+
+**Why This Matters**: At 10M+ vectors, pgvector fails → you MUST migrate to a separate vector database. Today's options (Pinecone, LanceDB, Qdrant) have custom APIs. omen has PostgreSQL tools you already know.
 
 **Market**: $10.6B by 2032 (23.54% CAGR)
 

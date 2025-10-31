@@ -2,6 +2,50 @@
 
 _Architectural decisions with context and rationale_
 
+**Last Updated**: October 31, 2025 - Competitive Research & Strategic Validation
+
+---
+
+## 2025-10-31: Reject "Embedded HTAP" Pivot
+
+**Context**: Research discovered no embedded HTAP database exists (SQLite = OLTP, DuckDB = OLAP).
+
+**Decision**: ❌ **REJECT HTAP Pivot**, ✅ **KEEP Vector DB Plan**
+
+**Why HTAP Failed** (Research-Validated):
+- Industry: "HTAP is Dead" (CEO Mooncake Labs, June 2025)
+- Technical: "Underperforms against dedicated systems" (DuckDB)
+- Market: SQLite + DuckDB (both free, DuckDB queries SQLite directly)
+- Zero YC companies, Turso didn't build it
+
+**Why Vector DB Wins**:
+- $10.6B market, Pinecone $130M, LanceDB $30M validates
+- "Biggest embedded DB trend 2024-2025"
+- pgvector fails at 10M+ (97x slower builds)
+- ONLY DB with all 7 features (unique position)
+
+**Impact**: Execute Weeks 9-24 as planned, no pivots
+
+---
+
+## 2025-10-31: Full-Text Search is MANDATORY
+
+**Context**: Hybrid search (vector + BM25) trending industry-wide (2024-2025).
+
+**Decision**: ✅ **Integrate Full-Text Search** (Weeks 20-24)
+
+**Industry Trend**:
+- Milvus 2.5 (Dec 2024): Hybrid search, 30x faster
+- Azure Cosmos DB (Jan 2025): Hybrid search added
+- pg_textsearch (Oct 2025): BM25 for PostgreSQL (2 days ago!)
+
+**Competitive Gap**:
+- Pinecone, Qdrant: NO integrated BM25
+- LanceDB: Via DuckDB (not native)
+- Few competitors have it
+
+**Implementation**: BM25 + Reciprocal Rank Fusion, native integration
+
 ---
 
 ## 2025-10-28: Separate Embedded Library from Server
