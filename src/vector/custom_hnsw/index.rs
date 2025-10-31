@@ -6,6 +6,7 @@
 // - Cache-optimized layout (64-byte aligned hot data)
 
 use super::error::{HNSWError, Result};
+use super::prefetch;
 use super::storage::{NeighborLists, VectorStorage};
 use super::types::{Candidate, DistanceFunction, HNSWNode, HNSWParams, SearchResult};
 use ordered_float::OrderedFloat;
@@ -15,6 +16,44 @@ use std::collections::{BinaryHeap, HashSet};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
+use tracing::{debug, error, info, instrument, warn};
+
+/// Index statistics for monitoring and debugging
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexStats {
+    /// Total number of vectors in index
+    pub num_vectors: usize,
+
+    /// Vector dimensionality
+    pub dimensions: usize,
+
+    /// Entry point node ID
+    pub entry_point: Option<u32>,
+
+    /// Maximum level in the graph
+    pub max_level: u8,
+
+    /// Level distribution (count of nodes at each level as their TOP level)
+    pub level_distribution: Vec<usize>,
+
+    /// Average neighbors per node (level 0)
+    pub avg_neighbors_l0: f32,
+
+    /// Max neighbors per node (level 0)
+    pub max_neighbors_l0: usize,
+
+    /// Memory usage in bytes
+    pub memory_bytes: usize,
+
+    /// HNSW parameters
+    pub params: HNSWParams,
+
+    /// Distance function
+    pub distance_function: DistanceFunction,
+
+    /// Whether quantization is enabled
+    pub quantization_enabled: bool,
+}
 
 /// HNSW Index
 ///
@@ -131,9 +170,15 @@ impl HNSWIndex {
     /// Insert a vector into the index
     ///
     /// Returns the node ID assigned to this vector.
+    #[instrument(skip(self, vector), fields(dimensions = vector.len(), index_size = self.len()))]
     pub fn insert(&mut self, vector: Vec<f32>) -> Result<u32> {
         // Validate dimensions
         if vector.len() != self.dimensions() {
+            error!(
+                expected_dim = self.dimensions(),
+                actual_dim = vector.len(),
+                "Dimension mismatch during insert"
+            );
             return Err(HNSWError::DimensionMismatch {
                 expected: self.dimensions(),
                 actual: vector.len(),
@@ -142,11 +187,15 @@ impl HNSWIndex {
 
         // Check for NaN/Inf in vector
         if vector.iter().any(|x| !x.is_finite()) {
+            error!("Invalid vector: contains NaN or Inf values");
             return Err(HNSWError::InvalidVector);
         }
 
         // Store vector and get ID
-        let node_id = self.vectors.insert(vector.clone()).map_err(HNSWError::Storage)?;
+        let node_id = self.vectors.insert(vector.clone()).map_err(|e| {
+            error!(error = ?e, "Failed to store vector");
+            HNSWError::Storage(format!("{}", e))
+        })?;
 
         // Assign random level
         let level = self.random_level();
@@ -169,7 +218,21 @@ impl HNSWIndex {
         let entry_level = self.nodes[entry_point_id as usize].level;
         if level > entry_level {
             self.entry_point = Some(node_id);
+            debug!(
+                old_entry = entry_point_id,
+                new_entry = node_id,
+                old_level = entry_level,
+                new_level = level,
+                "Updated entry point to higher level node"
+            );
         }
+
+        debug!(
+            node_id = node_id,
+            level = level,
+            index_size = self.len(),
+            "Successfully inserted vector"
+        );
 
         Ok(node_id)
     }
@@ -255,6 +318,13 @@ impl HNSWIndex {
             return Ok(candidates.to_vec());
         }
 
+        // Prefetch all candidate vectors before computing distances
+        for &id in candidates {
+            if let Some(vec) = self.vectors.get(id) {
+                prefetch::prefetch_vector(vec);
+            }
+        }
+
         // Sort candidates by distance to query
         let mut sorted_candidates: Vec<_> = candidates
             .iter()
@@ -306,19 +376,27 @@ impl HNSWIndex {
     /// Search for k nearest neighbors
     ///
     /// Returns up to k nearest neighbors sorted by distance (closest first).
+    #[instrument(skip(self, query), fields(k, ef, dimensions = query.len(), index_size = self.len()))]
     pub fn search(&self, query: &[f32], k: usize, ef: usize) -> Result<Vec<SearchResult>> {
         // Validate k > 0
         if k == 0 {
+            error!(k, ef, "Invalid search parameters: k must be > 0");
             return Err(HNSWError::InvalidSearchParams { k, ef });
         }
 
         // Validate ef >= k
         if ef < k {
+            error!(k, ef, "Invalid search parameters: ef must be >= k");
             return Err(HNSWError::InvalidSearchParams { k, ef });
         }
 
         // Validate dimensions
         if query.len() != self.dimensions() {
+            error!(
+                expected_dim = self.dimensions(),
+                actual_dim = query.len(),
+                "Dimension mismatch during search"
+            );
             return Err(HNSWError::DimensionMismatch {
                 expected: self.dimensions(),
                 actual: query.len(),
@@ -327,11 +405,13 @@ impl HNSWIndex {
 
         // Check for NaN/Inf in query
         if query.iter().any(|x| !x.is_finite()) {
+            error!("Invalid query vector: contains NaN or Inf values");
             return Err(HNSWError::InvalidVector);
         }
 
         // Handle empty index
         if self.is_empty() {
+            debug!("Search on empty index, returning empty results");
             return Ok(Vec::new());
         }
 
@@ -363,6 +443,13 @@ impl HNSWIndex {
 
         // Return top k
         results.truncate(k);
+
+        debug!(
+            num_results = results.len(),
+            closest_distance = results.first().map(|r| r.distance),
+            "Search completed successfully"
+        );
+
         Ok(results)
     }
 
@@ -376,19 +463,22 @@ impl HNSWIndex {
         ef: usize,
         level: u8,
     ) -> Result<Vec<u32>> {
-        let mut visited = HashSet::new();
-        let mut candidates = BinaryHeap::new(); // Min-heap (closest first, using Reverse)
-        let mut working = BinaryHeap::new(); // Max-heap (farthest first for pruning)
+        use super::query_buffers;
 
-        // Initialize with entry points
-        for &ep in entry_points {
-            let dist = self.distance_to_query(query, ep)?;
-            let candidate = Candidate::new(ep, dist);
+        query_buffers::with_buffers(|buffers| {
+            let visited = &mut buffers.visited;
+            let candidates = &mut buffers.candidates;
+            let working = &mut buffers.working;
 
-            candidates.push(Reverse(candidate));
-            working.push(candidate);
-            visited.insert(ep);
-        }
+            // Initialize with entry points
+            for &ep in entry_points {
+                let dist = self.distance_to_query(query, ep)?;
+                let candidate = Candidate::new(ep, dist);
+
+                candidates.push(Reverse(candidate));
+                working.push(candidate);
+                visited.insert(ep);
+            }
 
         // Greedy search
         while let Some(Reverse(current)) = candidates.pop() {
@@ -401,6 +491,15 @@ impl HNSWIndex {
 
             // Explore neighbors
             let neighbors = self.neighbors.get_neighbors(current.node_id, level);
+
+            // Prefetch neighbor vectors to hide memory latency
+            // This addresses the 23.41% LLC cache miss problem from profiling
+            for &neighbor_id in neighbors {
+                if let Some(vec) = self.vectors.get(neighbor_id) {
+                    prefetch::prefetch_vector(vec);
+                }
+            }
+
             for &neighbor_id in neighbors {
                 if visited.contains(&neighbor_id) {
                     continue;
@@ -428,10 +527,11 @@ impl HNSWIndex {
             }
         }
 
-        // Return node IDs sorted by distance (closest first)
-        let mut results: Vec<_> = working.into_iter().collect();
-        results.sort_by_key(|c| c.distance);
-        Ok(results.into_iter().map(|c| c.node_id).collect())
+            // Return node IDs sorted by distance (closest first)
+            let mut results: Vec<_> = working.drain().collect();
+            results.sort_by_key(|c| c.distance);
+            Ok(results.into_iter().map(|c| c.node_id).collect())
+        })
     }
 
     /// Get memory usage in bytes (approximate)
@@ -441,6 +541,123 @@ impl HNSWIndex {
         let vectors_size = self.vectors.memory_usage();
 
         nodes_size + neighbors_size + vectors_size
+    }
+
+    /// Get comprehensive index statistics
+    ///
+    /// Returns detailed statistics about the index state, useful for
+    /// monitoring, debugging, and performance analysis.
+    #[instrument(skip(self), fields(index_size = self.len()))]
+    pub fn stats(&self) -> IndexStats {
+        debug!("Computing index statistics");
+
+        // Level distribution
+        let max_level = self.nodes.iter().map(|n| n.level).max().unwrap_or(0);
+        let mut level_distribution = vec![0; (max_level + 1) as usize];
+        for node in &self.nodes {
+            level_distribution[node.level as usize] += 1;
+        }
+
+        // Neighbor statistics at level 0
+        let mut total_neighbors = 0;
+        let mut max_neighbors = 0;
+        for node in &self.nodes {
+            let neighbor_count = self.neighbors.get_neighbors(node.id, 0).len();
+            total_neighbors += neighbor_count;
+            max_neighbors = max_neighbors.max(neighbor_count);
+        }
+
+        let avg_neighbors_l0 = if self.nodes.is_empty() {
+            0.0
+        } else {
+            total_neighbors as f32 / self.nodes.len() as f32
+        };
+
+        // Check if quantization is enabled
+        let quantization_enabled = matches!(self.vectors, VectorStorage::BinaryQuantized { .. });
+
+        let stats = IndexStats {
+            num_vectors: self.len(),
+            dimensions: self.dimensions(),
+            entry_point: self.entry_point,
+            max_level,
+            level_distribution,
+            avg_neighbors_l0,
+            max_neighbors_l0: max_neighbors,
+            memory_bytes: self.memory_usage(),
+            params: self.params.clone(),
+            distance_function: self.distance_fn,
+            quantization_enabled,
+        };
+
+        debug!(
+            num_vectors = stats.num_vectors,
+            max_level = stats.max_level,
+            avg_neighbors_l0 = stats.avg_neighbors_l0,
+            memory_mb = stats.memory_bytes / (1024 * 1024),
+            "Index statistics computed"
+        );
+
+        stats
+    }
+
+    /// Optimize cache locality by reordering nodes using BFS
+    ///
+    /// This improves query performance by placing frequently-accessed neighbors
+    /// close together in memory. Should be called after index construction
+    /// and before querying for best performance.
+    ///
+    /// Returns the number of nodes reordered.
+    #[instrument(skip(self), fields(num_nodes = self.len()))]
+    pub fn optimize_cache_locality(&mut self) -> Result<usize> {
+        let entry = self.entry_point.ok_or(HNSWError::EmptyIndex)?;
+
+        if self.nodes.is_empty() {
+            info!("Index is empty, skipping cache optimization");
+            return Ok(0);
+        }
+
+        let max_level = self.nodes.iter().map(|n| n.level).max().unwrap_or(0);
+
+        info!(
+            num_nodes = self.nodes.len(),
+            entry_point = entry,
+            max_level = max_level,
+            "Starting BFS graph reordering for cache locality"
+        );
+
+        // Reorder neighbors and get node ID mapping
+        let old_to_new = self.neighbors.reorder_bfs(entry, max_level);
+
+        // Reorder vectors to match
+        self.vectors.reorder(&old_to_new);
+
+        // Reorder nodes metadata
+        let num_nodes = self.nodes.len();
+        let mut new_nodes = Vec::with_capacity(num_nodes);
+
+        // Initialize with dummy nodes
+        for _ in 0..num_nodes {
+            new_nodes.push(HNSWNode::new(0, 0));
+        }
+
+        for (old_id, &new_id) in old_to_new.iter().enumerate() {
+            let mut node = self.nodes[old_id].clone();
+            node.id = new_id;
+            new_nodes[new_id as usize] = node;
+        }
+
+        self.nodes = new_nodes;
+
+        // Update entry point
+        self.entry_point = Some(old_to_new[entry as usize]);
+
+        info!(
+            new_entry_point = self.entry_point,
+            "BFS graph reordering complete"
+        );
+
+        Ok(self.nodes.len())
     }
 
     /// Save index to disk
@@ -457,8 +674,15 @@ impl HNSWIndex {
     /// - Nodes: Vec<HNSWNode> (raw bytes, 64 * num_nodes)
     /// - Neighbors: NeighborLists (bincode)
     /// - Vectors: VectorStorage (bincode)
+    #[instrument(skip(self, path), fields(index_size = self.len(), dimensions = self.dimensions()))]
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let file = File::create(path)?;
+        info!("Starting index save");
+        let start = std::time::Instant::now();
+
+        let file = File::create(path).map_err(|e| {
+            error!(error = ?e, "Failed to create index file");
+            HNSWError::from(e)
+        })?;
         let mut writer = BufWriter::new(file);
 
         // Write magic bytes
@@ -510,11 +734,21 @@ impl HNSWIndex {
         // Write vectors
         bincode::serialize_into(&mut writer, &self.vectors)?;
 
+        let elapsed = start.elapsed();
+        info!(
+            duration_ms = elapsed.as_millis(),
+            memory_bytes = self.memory_usage(),
+            "Index save completed successfully"
+        );
+
         Ok(())
     }
 
     /// Load index from disk
+    #[instrument(skip(path))]
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
+        info!("Starting index load");
+        let start = std::time::Instant::now();
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
 
@@ -522,6 +756,7 @@ impl HNSWIndex {
         let mut magic = [0u8; 8];
         reader.read_exact(&mut magic)?;
         if &magic != b"HNSWIDX\0" {
+            error!(magic = ?magic, "Invalid magic bytes in index file");
             return Err(HNSWError::Storage(format!("Invalid magic bytes: {:?}", magic)));
         }
 
@@ -530,6 +765,7 @@ impl HNSWIndex {
         reader.read_exact(&mut version_bytes)?;
         let version = u32::from_le_bytes(version_bytes);
         if version != 1 {
+            error!(version, "Unsupported index file version");
             return Err(HNSWError::Storage(format!("Unsupported version: {}", version)));
         }
 
@@ -585,13 +821,19 @@ impl HNSWIndex {
 
         // Verify dimensions match
         if vectors.dimensions() != dimensions {
+            error!(
+                expected_dim = dimensions,
+                actual_dim = vectors.dimensions(),
+                "Dimension mismatch in loaded index"
+            );
             return Err(HNSWError::DimensionMismatch {
                 expected: dimensions,
                 actual: vectors.dimensions(),
             });
         }
 
-        Ok(Self {
+        let elapsed = start.elapsed();
+        let index = Self {
             nodes,
             neighbors,
             vectors,
@@ -599,7 +841,17 @@ impl HNSWIndex {
             params,
             distance_fn,
             rng_state,
-        })
+        };
+
+        info!(
+            duration_ms = elapsed.as_millis(),
+            index_size = index.len(),
+            dimensions = index.dimensions(),
+            memory_bytes = index.memory_usage(),
+            "Index load completed successfully"
+        );
+
+        Ok(index)
     }
 }
 
@@ -1039,5 +1291,135 @@ mod tests {
             HNSWError::Storage(msg) => assert!(msg.contains("Unsupported version")),
             _ => panic!("Expected Storage error"),
         }
+    }
+
+    #[test]
+    fn test_index_stats_empty() {
+        let params = HNSWParams::default();
+        let index = HNSWIndex::new(128, params, DistanceFunction::L2, false).unwrap();
+
+        let stats = index.stats();
+
+        assert_eq!(stats.num_vectors, 0);
+        assert_eq!(stats.dimensions, 128);
+        assert_eq!(stats.entry_point, None);
+        assert_eq!(stats.max_level, 0);
+        assert_eq!(stats.avg_neighbors_l0, 0.0);
+        assert_eq!(stats.max_neighbors_l0, 0);
+        assert!(!stats.quantization_enabled);
+        assert!(matches!(stats.distance_function, DistanceFunction::L2));
+    }
+
+    #[test]
+    fn test_index_stats_with_vectors() {
+        let params = HNSWParams::default();
+        let mut index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Insert 50 vectors
+        for i in 0..50 {
+            let vec = vec![i as f32, (i * 2) as f32, (i * 3) as f32];
+            index.insert(vec).unwrap();
+        }
+
+        let stats = index.stats();
+
+        assert_eq!(stats.num_vectors, 50);
+        assert_eq!(stats.dimensions, 3);
+        assert!(stats.entry_point.is_some());
+        assert!(stats.max_level >= 0);
+        assert!(stats.level_distribution.len() > 0);
+        assert!(stats.level_distribution.iter().sum::<usize>() == 50); // All nodes accounted for
+        assert!(stats.avg_neighbors_l0 > 0.0); // Should have some neighbors
+        assert!(stats.max_neighbors_l0 > 0);
+        assert!(stats.memory_bytes > 0);
+        assert!(!stats.quantization_enabled);
+    }
+
+    #[test]
+    fn test_index_stats_with_quantization() {
+        let params = HNSWParams::default();
+        let mut index = HNSWIndex::new(8, params, DistanceFunction::L2, true).unwrap();
+
+        // Insert 10 vectors
+        for i in 0..10 {
+            let vec = vec![i as f32; 8];
+            index.insert(vec).unwrap();
+        }
+
+        let stats = index.stats();
+
+        assert_eq!(stats.num_vectors, 10);
+        assert!(stats.quantization_enabled); // Should be true
+        assert!(stats.memory_bytes > 0);
+    }
+
+    #[test]
+    fn test_index_stats_level_distribution() {
+        let mut params = HNSWParams::default();
+        params.seed = 42; // Fixed seed for reproducibility
+
+        let mut index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Insert 100 vectors
+        for i in 0..100 {
+            let vec = vec![i as f32, 0.0, 0.0];
+            index.insert(vec).unwrap();
+        }
+
+        let stats = index.stats();
+
+        // Level 0 should have most nodes (exponential decay)
+        assert!(stats.level_distribution[0] > 70);
+
+        // Total nodes should equal num_vectors
+        let total: usize = stats.level_distribution.iter().sum();
+        assert_eq!(total, 100);
+
+        // Max level should match the distribution length - 1
+        assert_eq!(stats.max_level as usize, stats.level_distribution.len() - 1);
+    }
+
+    #[test]
+    fn test_index_stats_neighbors() {
+        let mut params = HNSWParams::default();
+        params.m = 8; // Set M for testing
+
+        let mut index = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+
+        // Insert 30 vectors
+        for i in 0..30 {
+            let vec = vec![i as f32, 0.0, 0.0];
+            index.insert(vec).unwrap();
+        }
+
+        let stats = index.stats();
+
+        // Average neighbors should be reasonable (between 0 and M*2)
+        assert!(stats.avg_neighbors_l0 > 0.0);
+        assert!(stats.avg_neighbors_l0 <= (params.m * 2) as f32);
+
+        // Max neighbors should not exceed M*2 at level 0
+        assert!(stats.max_neighbors_l0 <= params.m * 2);
+    }
+
+    #[test]
+    fn test_index_stats_distance_functions() {
+        // Test L2
+        let params = HNSWParams::default();
+        let index_l2 = HNSWIndex::new(3, params, DistanceFunction::L2, false).unwrap();
+        let stats = index_l2.stats();
+        assert!(matches!(stats.distance_function, DistanceFunction::L2));
+
+        // Test Cosine
+        let params = HNSWParams::default();
+        let index_cos = HNSWIndex::new(3, params, DistanceFunction::Cosine, false).unwrap();
+        let stats = index_cos.stats();
+        assert!(matches!(stats.distance_function, DistanceFunction::Cosine));
+
+        // Test NegativeDotProduct
+        let params = HNSWParams::default();
+        let index_dot = HNSWIndex::new(3, params, DistanceFunction::NegativeDotProduct, false).unwrap();
+        let stats = index_dot.stats();
+        assert!(matches!(stats.distance_function, DistanceFunction::NegativeDotProduct));
     }
 }

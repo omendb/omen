@@ -11,6 +11,9 @@ mod storage;
 mod index;
 mod simd_distance;
 mod error;
+mod prefetch;
+mod query_buffers;
+mod arena;
 
 // Public API exports
 pub use types::{
@@ -22,7 +25,7 @@ pub use simd_distance::{l2_distance, cosine_distance, dot_product};
 
 pub use storage::{NeighborLists, VectorStorage};
 
-pub use index::HNSWIndex;
+pub use index::{HNSWIndex, IndexStats};
 
 // Re-export error types
 pub use error::{HNSWError, Result};

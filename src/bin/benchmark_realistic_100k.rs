@@ -64,6 +64,14 @@ fn main() {
     let insert_rate = num_vectors as f64 / insert_duration.as_secs_f64();
     println!("Throughput: {:.0} vec/sec", insert_rate);
 
+    // Optimize cache locality
+    println!("\n--- Cache Optimization ---");
+    println!("Optimizing cache locality (BFS reordering)...");
+    let opt_start = Instant::now();
+    let num_reordered = index.optimize_cache_locality().unwrap();
+    let opt_duration = opt_start.elapsed();
+    println!("Reordered {} nodes in {:.3}s", num_reordered, opt_duration.as_secs_f64());
+
     // Graph statistics
     println!("\n--- Graph Statistics ---");
     let total_neighbors: usize = (0..num_vectors as u32)

@@ -244,3 +244,11 @@ path = "src/bin/benchmark_realistic_100k.rs"
 name = "validate_persistence_1536d"
 path = "src/bin/validate_persistence_1536d.rs"
 
+[[bin]]
+name = "example_observability"
+path = "src/bin/example_observability.rs"
+
+[[bin]]
+name = "benchmark_prefetch_10k"
+path = "src/bin/benchmark_prefetch_10k.rs"
+

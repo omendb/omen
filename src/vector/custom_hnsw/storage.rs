@@ -21,6 +21,10 @@ pub struct NeighborLists {
 
     /// Maximum levels supported
     max_levels: usize,
+
+    /// M_max (max neighbors = M * 2)
+    /// Used for pre-allocating neighbor lists to reduce reallocations
+    m_max: usize,
 }
 
 impl NeighborLists {
@@ -29,15 +33,22 @@ impl NeighborLists {
         Self {
             neighbors: Vec::new(),
             max_levels,
+            m_max: 32, // Default M*2
         }
     }
 
-    /// Create with pre-allocated capacity
-    pub fn with_capacity(num_nodes: usize, max_levels: usize) -> Self {
+    /// Create with pre-allocated capacity and M parameter
+    pub fn with_capacity(num_nodes: usize, max_levels: usize, m: usize) -> Self {
         Self {
             neighbors: Vec::with_capacity(num_nodes),
             max_levels,
+            m_max: m * 2,
         }
+    }
+
+    /// Get M_max (max neighbors)
+    pub fn m_max(&self) -> usize {
+        self.m_max
     }
 
     /// Get neighbors for a node at a specific level
@@ -61,9 +72,13 @@ impl NeighborLists {
         let node_idx = node_id as usize;
         let level_idx = level as usize;
 
-        // Ensure we have enough nodes
+        // Ensure we have enough nodes, pre-allocate with m_max capacity
         while self.neighbors.len() <= node_idx {
-            self.neighbors.push(vec![Vec::new(); self.max_levels]);
+            let mut levels = Vec::with_capacity(self.max_levels);
+            for _ in 0..self.max_levels {
+                levels.push(Vec::with_capacity(self.m_max));
+            }
+            self.neighbors.push(levels);
         }
 
         // Set the neighbors at this level
@@ -76,10 +91,14 @@ impl NeighborLists {
         let node_b_idx = node_b as usize;
         let level_idx = level as usize;
 
-        // Ensure we have enough nodes
+        // Ensure we have enough nodes, pre-allocate with m_max capacity
         let max_idx = node_a_idx.max(node_b_idx);
         while self.neighbors.len() <= max_idx {
-            self.neighbors.push(vec![Vec::new(); self.max_levels]);
+            let mut levels = Vec::with_capacity(self.max_levels);
+            for _ in 0..self.max_levels {
+                levels.push(Vec::with_capacity(self.m_max));
+            }
+            self.neighbors.push(levels);
         }
 
         // Add node_b to node_a's neighbors (if not already present)
@@ -120,6 +139,78 @@ impl NeighborLists {
         }
 
         total
+    }
+
+    /// Reorder nodes using BFS for cache locality
+    ///
+    /// This improves cache performance by placing frequently-accessed neighbors
+    /// close together in memory. Uses BFS from the entry point to determine ordering.
+    ///
+    /// Returns a mapping from old_id -> new_id
+    pub fn reorder_bfs(&mut self, entry_point: u32, start_level: u8) -> Vec<u32> {
+        use std::collections::{HashSet, VecDeque};
+
+        let num_nodes = self.neighbors.len();
+        if num_nodes == 0 {
+            return Vec::new();
+        }
+
+        // BFS to determine new ordering
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        let mut old_to_new = vec![u32::MAX; num_nodes]; // u32::MAX = not visited
+        let mut new_id = 0u32;
+
+        // Start BFS from entry point
+        queue.push_back(entry_point);
+        visited.insert(entry_point);
+
+        while let Some(node_id) = queue.pop_front() {
+            // Assign new ID
+            old_to_new[node_id as usize] = new_id;
+            new_id += 1;
+
+            // Visit neighbors at all levels (starting from highest)
+            for level in (0..=start_level).rev() {
+                let neighbors = self.get_neighbors(node_id, level);
+                for &neighbor_id in neighbors {
+                    if visited.insert(neighbor_id) {
+                        queue.push_back(neighbor_id);
+                    }
+                }
+            }
+        }
+
+        // Handle any unvisited nodes (disconnected components)
+        for old_id in 0..num_nodes {
+            if old_to_new[old_id] == u32::MAX {
+                old_to_new[old_id] = new_id;
+                new_id += 1;
+            }
+        }
+
+        // Create new neighbor lists with remapped IDs
+        let mut new_neighbors = vec![vec![Vec::new(); self.max_levels]; num_nodes];
+
+        for old_id in 0..num_nodes {
+            let new_id = old_to_new[old_id] as usize;
+            for level in 0..self.max_levels {
+                let old_neighbor_list = &self.neighbors[old_id][level];
+                new_neighbors[new_id][level] = old_neighbor_list
+                    .iter()
+                    .map(|&old_neighbor| old_to_new[old_neighbor as usize])
+                    .collect();
+            }
+        }
+
+        self.neighbors = new_neighbors;
+
+        old_to_new
+    }
+
+    /// Get number of nodes
+    pub fn num_nodes(&self) -> usize {
+        self.neighbors.len()
     }
 }
 
@@ -342,6 +433,43 @@ impl VectorStorage {
                     .unwrap_or(0);
                 let thresholds_size = thresholds.len() * std::mem::size_of::<f32>();
                 quantized_size + original_size + thresholds_size
+            }
+        }
+    }
+
+    /// Reorder vectors based on node ID mapping
+    ///
+    /// old_to_new[old_id] = new_id
+    /// This reorders vectors to match the BFS-reordered neighbor lists.
+    pub fn reorder(&mut self, old_to_new: &[u32]) {
+        match self {
+            Self::FullPrecision { vectors, .. } => {
+                let mut new_vectors = vec![Vec::new(); vectors.len()];
+                for (old_id, &new_id) in old_to_new.iter().enumerate() {
+                    new_vectors[new_id as usize] = std::mem::take(&mut vectors[old_id]);
+                }
+                *vectors = new_vectors;
+            }
+            Self::BinaryQuantized {
+                quantized,
+                original,
+                ..
+            } => {
+                // Reorder quantized vectors
+                let mut new_quantized = vec![Vec::new(); quantized.len()];
+                for (old_id, &new_id) in old_to_new.iter().enumerate() {
+                    new_quantized[new_id as usize] = std::mem::take(&mut quantized[old_id]);
+                }
+                *quantized = new_quantized;
+
+                // Reorder original vectors if present
+                if let Some(orig) = original {
+                    let mut new_original = vec![Vec::new(); orig.len()];
+                    for (old_id, &new_id) in old_to_new.iter().enumerate() {
+                        new_original[new_id as usize] = std::mem::take(&mut orig[old_id]);
+                    }
+                    *orig = new_original;
+                }
             }
         }
     }
