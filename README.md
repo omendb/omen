@@ -85,7 +85,6 @@ This project implements ideas from recent research:
 
 **Storage**:
 - LSM trees (RocksDB)
-- Learned data structures (future: seerdb)
 - MVCC snapshot isolation
 
 See [ai/research/](ai/research/) for detailed paper summaries and implementation notes.
@@ -94,10 +93,6 @@ See [ai/research/](ai/research/) for detailed paper summaries and implementation
 ## License
 
 Elastic License 2.0 - Free to use, modify, and self-host. Cannot resell as managed service. See [LICENSE](LICENSE).
-
-## Related Projects
-
-- **[seerdb](https://github.com/omendb/seerdb)** - Research-grade storage engine (foundation for omen)
 
 ---
 
