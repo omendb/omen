@@ -185,6 +185,9 @@ pub enum DistanceFunction {
 
 impl DistanceFunction {
     /// Compute distance between two vectors
+    ///
+    /// Uses SIMD-accelerated implementations when `simd` feature is enabled.
+    /// Falls back to optimized scalar implementations otherwise.
     pub fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
         match self {
             Self::L2 => l2_distance(a, b),
@@ -194,45 +197,8 @@ impl DistanceFunction {
     }
 }
 
-/// L2 distance (Euclidean)
-#[inline]
-pub fn l2_distance(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len());
-
-    // TODO: Use SIMD (AVX2/AVX512) in future optimization phase
-    a.iter()
-        .zip(b.iter())
-        .map(|(x, y)| {
-            let diff = x - y;
-            diff * diff
-        })
-        .sum::<f32>()
-        .sqrt()
-}
-
-/// Cosine distance (1 - cosine similarity)
-#[inline]
-pub fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len());
-
-    let dot = dot_product(a, b);
-    let norm_a = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-
-    if norm_a == 0.0 || norm_b == 0.0 {
-        return 1.0; // Maximum distance for zero vectors
-    }
-
-    1.0 - (dot / (norm_a * norm_b))
-}
-
-/// Dot product (inner product)
-#[inline]
-pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len());
-
-    a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
-}
+// Re-export SIMD distance functions for convenience
+pub use super::simd_distance::{l2_distance, cosine_distance, dot_product};
 
 /// Candidate during search (node ID + distance)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

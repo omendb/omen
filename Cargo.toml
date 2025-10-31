@@ -186,13 +186,15 @@ path = "src/bin/benchmark_pca_alex_vs_hnsw.rs"
 name = "benchmark_quantization"
 path = "src/bin/benchmark_quantization.rs"
 
-[[bin]]
-name = "benchmark_bq_hnsw"
-path = "src/bin/benchmark_bq_hnsw.rs"
+# Temporarily disabled - use old quantized_store with hnsw_rs
+# TODO: Port to custom HNSW in Week 12
+# [[bin]]
+# name = "benchmark_bq_hnsw"
+# path = "src/bin/benchmark_bq_hnsw.rs"
 
-[[bin]]
-name = "benchmark_bq_recall"
-path = "src/bin/benchmark_bq_recall.rs"
+# [[bin]]
+# name = "benchmark_bq_recall"
+# path = "src/bin/benchmark_bq_recall.rs"
 
 [[bin]]
 name = "benchmark_hnsw_persistence"

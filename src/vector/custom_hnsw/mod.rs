@@ -9,12 +9,15 @@
 mod types;
 mod storage;
 mod index;
+mod simd_distance;
 
 // Public API exports
 pub use types::{
     HNSWParams, HNSWNode, DistanceFunction, Candidate, SearchResult,
-    l2_distance, cosine_distance, dot_product,
 };
+
+// Re-export SIMD-enabled distance functions
+pub use simd_distance::{l2_distance, cosine_distance, dot_product};
 
 pub use storage::{NeighborLists, VectorStorage};
 
