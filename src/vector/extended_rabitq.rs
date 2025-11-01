@@ -10,6 +10,7 @@
 //! - Same query speed as scalar quantization
 //! - Better accuracy than binary quantization
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[cfg(target_arch = "x86_64")]
@@ -18,7 +19,7 @@ use std::arch::x86_64::*;
 use std::arch::aarch64::*;
 
 /// Number of bits per dimension for quantization
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QuantizationBits {
     /// 2 bits per dimension (16x compression)
     Bits2,
@@ -70,7 +71,7 @@ impl fmt::Display for QuantizationBits {
 }
 
 /// Configuration for Extended RaBitQ quantization
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtendedRaBitQParams {
     /// Number of bits per dimension
     pub bits_per_dim: QuantizationBits,
@@ -130,7 +131,7 @@ impl ExtendedRaBitQParams {
 /// - data: Packed quantized values (multiple values per byte)
 /// - scale: Optimal rescaling factor for this vector
 /// - bits: Number of bits per dimension
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuantizedVector {
     /// Packed quantized values
     ///
@@ -185,6 +186,7 @@ impl QuantizedVector {
 /// 2. For each scale, quantize to grid and compute error
 /// 3. Select scale with minimum error
 /// 4. Store quantized vector with optimal scale
+#[derive(Debug)]
 pub struct ExtendedRaBitQ {
     params: ExtendedRaBitQParams,
 }

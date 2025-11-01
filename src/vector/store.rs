@@ -2,9 +2,12 @@
 //!
 //! VectorStore manages a collection of vectors and provides k-NN search
 //! using HNSW (Hierarchical Navigable Small World) algorithm.
+//!
+//! Optional Extended RaBitQ quantization for memory-efficient storage.
 
 use super::hnsw_index::HNSWIndex;
 use super::types::Vector;
+use super::extended_rabitq::{ExtendedRaBitQ, ExtendedRaBitQParams, QuantizedVector};
 use anyhow::Result;
 
 /// Vector store with HNSW indexing
@@ -18,15 +21,36 @@ pub struct VectorStore {
 
     /// Vector dimensionality
     dimensions: usize,
+
+    /// Optional quantizer for memory-efficient storage (Extended RaBitQ)
+    quantizer: Option<ExtendedRaBitQ>,
+
+    /// Quantized vectors (parallel to vectors, None if quantizer not enabled)
+    quantized_vectors: Vec<Option<QuantizedVector>>,
 }
 
 impl VectorStore {
-    /// Create new vector store
+    /// Create new vector store without quantization
     pub fn new(dimensions: usize) -> Self {
         Self {
             vectors: Vec::new(),
             hnsw_index: None,
             dimensions,
+            quantizer: None,
+            quantized_vectors: Vec::new(),
+        }
+    }
+
+    /// Create new vector store with Extended RaBitQ quantization
+    pub fn new_with_quantization(dimensions: usize, params: ExtendedRaBitQParams) -> Self {
+        let quantizer = ExtendedRaBitQ::new(params);
+
+        Self {
+            vectors: Vec::new(),
+            hnsw_index: None,
+            dimensions,
+            quantizer: Some(quantizer),
+            quantized_vectors: Vec::new(),
         }
     }
 
@@ -51,6 +75,14 @@ impl VectorStore {
         // Insert into HNSW index
         if let Some(ref mut index) = self.hnsw_index {
             index.insert(&vector.data)?;
+        }
+
+        // Quantize vector if quantizer is enabled
+        if let Some(ref quantizer) = self.quantizer {
+            let quantized = quantizer.quantize(&vector.data);
+            self.quantized_vectors.push(Some(quantized));
+        } else {
+            self.quantized_vectors.push(None);
         }
 
         self.vectors.push(vector);
@@ -124,6 +156,18 @@ impl VectorStore {
             }
         }
 
+        // Quantize vectors if quantizer is enabled
+        if let Some(ref quantizer) = self.quantizer {
+            for vector in &vectors {
+                let quantized = quantizer.quantize(&vector.data);
+                self.quantized_vectors.push(Some(quantized));
+            }
+        } else {
+            for _ in &vectors {
+                self.quantized_vectors.push(None);
+            }
+        }
+
         // Add vectors to storage
         self.vectors.extend(vectors);
 
@@ -136,6 +180,7 @@ impl VectorStore {
     /// This is needed when:
     /// - Vectors are loaded from disk but index wasn't persisted
     /// - Index needs to be rebuilt after batch inserts
+    /// - Quantization is enabled/disabled after loading
     pub fn rebuild_index(&mut self) -> Result<()> {
         if self.vectors.is_empty() {
             return Ok(());
@@ -154,11 +199,25 @@ impl VectorStore {
 
         self.hnsw_index = Some(index);
 
+        // Rebuild quantized vectors if quantizer is enabled
+        if let Some(ref quantizer) = self.quantizer {
+            eprintln!("  Quantizing {} vectors...", self.vectors.len());
+            self.quantized_vectors.clear();
+            for vector in &self.vectors {
+                let quantized = quantizer.quantize(&vector.data);
+                self.quantized_vectors.push(Some(quantized));
+            }
+        }
+
         eprintln!("✅ HNSW index rebuilt in {:.2}s", start.elapsed().as_secs_f64());
         Ok(())
     }
 
     /// K-nearest neighbors search using HNSW
+    ///
+    /// If quantization is enabled, uses two-phase search:
+    /// - Phase 1: Fast filtering with quantized vectors (get k*3 candidates)
+    /// - Phase 2: Rerank candidates with original vectors (get final k)
     pub fn knn_search(&mut self, query: &Vector, k: usize) -> Result<Vec<(usize, f32)>> {
         if query.dim() != self.dimensions {
             anyhow::bail!(
@@ -183,6 +242,11 @@ impl VectorStore {
             self.rebuild_index()?;
         }
 
+        // Two-phase search if quantization is enabled
+        if self.quantizer.is_some() && !self.quantized_vectors.is_empty() {
+            return self.knn_search_with_reranking(query, k);
+        }
+
         // Use HNSW index if available
         if let Some(ref index) = self.hnsw_index {
             return index.search(&query.data, k);
@@ -191,6 +255,49 @@ impl VectorStore {
         // Fallback to brute-force if no index (small datasets only)
         eprintln!("ℹ️  Using brute-force search for {} vectors", self.vectors.len());
         self.knn_search_brute_force(query, k)
+    }
+
+    /// Two-phase search with quantization + reranking
+    ///
+    /// Phase 1: Use quantized vectors for fast filtering (get k*3 candidates)
+    /// Phase 2: Rerank candidates with original vectors (get final k)
+    fn knn_search_with_reranking(&self, query: &Vector, k: usize) -> Result<Vec<(usize, f32)>> {
+        let quantizer = self.quantizer.as_ref().unwrap();
+
+        // Quantize query
+        let quantized_query = quantizer.quantize(&query.data);
+
+        // Phase 1: Fast filtering with quantized vectors (oversample 3x)
+        let oversample = (k * 3).min(self.vectors.len());
+        let mut distances: Vec<(usize, f32)> = self.quantized_vectors
+            .iter()
+            .enumerate()
+            .filter_map(|(id, qv_opt)| {
+                qv_opt.as_ref().map(|qv| {
+                    let dist = quantizer.distance_l2(&quantized_query, qv);
+                    (id, dist)
+                })
+            })
+            .collect();
+
+        // Sort by quantized distance and take top candidates
+        distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        let candidates: Vec<usize> = distances.into_iter().take(oversample).map(|(id, _)| id).collect();
+
+        // Phase 2: Rerank with original vectors
+        let mut reranked: Vec<(usize, f32)> = candidates
+            .into_iter()
+            .filter_map(|id| {
+                self.vectors.get(id).map(|vec| {
+                    let dist = query.l2_distance(vec).unwrap_or(f32::MAX);
+                    (id, dist)
+                })
+            })
+            .collect();
+
+        // Sort by exact distance and return top-k
+        reranked.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        Ok(reranked.into_iter().take(k).collect())
     }
 
     /// Brute-force K-NN search (fallback, mainly for testing)
@@ -269,9 +376,11 @@ impl VectorStore {
     /// Uses hnsw_rs file_dump() to persist both vectors and graph structure.
     /// This enables fast loading (<1s) without rebuilding the index.
     ///
-    /// File format (created by hnsw_rs):
-    /// - `<basename>.hnsw.graph`: Graph topology
-    /// - `<basename>.hnsw.data`: Vector data
+    /// File format:
+    /// - `<basename>.hnsw`: HNSW index
+    /// - `<basename>.vectors.bin`: Vector data
+    /// - `<basename>.quantized.bin`: Quantized vectors (if quantization enabled)
+    /// - `<basename>.quantizer.json`: Quantizer parameters (if quantization enabled)
     pub fn save_to_disk(&self, base_path: &str) -> Result<()> {
         use std::fs;
         use std::path::Path;
@@ -289,16 +398,36 @@ impl VectorStore {
         let encoded = bincode::serialize(&vectors_data)?;
         fs::write(&vectors_path, encoded)?;
 
+        // Save quantized vectors if quantization is enabled
+        if self.quantizer.is_some() && !self.quantized_vectors.is_empty() {
+            let quantized_path = directory.join(format!("{}.quantized.bin", filename));
+            let encoded = bincode::serialize(&self.quantized_vectors)?;
+            fs::write(&quantized_path, encoded)?;
+
+            // Save quantizer parameters
+            let params_path = directory.join(format!("{}.quantizer.json", filename));
+            let quantizer = self.quantizer.as_ref().unwrap();
+            let params_json = serde_json::to_string_pretty(&quantizer.params())?;
+            fs::write(&params_path, params_json)?;
+        }
+
         // Check if HNSW index exists
         if let Some(ref index) = self.hnsw_index {
             // Save HNSW index using our fast binary format
             let hnsw_path = directory.join(format!("{}.hnsw", filename));
             index.save(&hnsw_path)?;
 
+            let quantization_status = if self.quantizer.is_some() {
+                " with Extended RaBitQ quantization"
+            } else {
+                ""
+            };
+
             eprintln!(
-                "💾 Saved {} vectors ({} dims) with HNSW index to {}",
+                "💾 Saved {} vectors ({} dims) with HNSW index{} to {}",
                 self.vectors.len(),
                 self.dimensions,
+                quantization_status,
                 base_path
             );
         } else {
@@ -349,6 +478,27 @@ impl VectorStore {
                 Vec::new()
             };
 
+            // Try to load quantizer parameters and quantized vectors
+            let params_path = directory.join(format!("{}.quantizer.json", filename));
+            let quantized_path = directory.join(format!("{}.quantized.bin", filename));
+
+            let (quantizer, quantized_vectors) = if params_path.exists() && quantized_path.exists() {
+                // Load quantizer parameters
+                let params_json = fs::read_to_string(&params_path)?;
+                let params: ExtendedRaBitQParams = serde_json::from_str(&params_json)?;
+                let quantizer = ExtendedRaBitQ::new(params);
+
+                // Load quantized vectors
+                let quantized_data = fs::read(&quantized_path)?;
+                let quantized_vectors: Vec<Option<QuantizedVector>> = bincode::deserialize(&quantized_data)?;
+
+                eprintln!("  Loaded Extended RaBitQ quantization ({} quantized vectors)", quantized_vectors.len());
+
+                (Some(quantizer), quantized_vectors)
+            } else {
+                (None, Vec::new())
+            };
+
             eprintln!(
                 "✅ Loaded {} vectors ({} dims) with HNSW index (fast load: <1s)",
                 vectors.len(),
@@ -359,6 +509,8 @@ impl VectorStore {
                 vectors,
                 hnsw_index: Some(hnsw_index),
                 dimensions,
+                quantizer,
+                quantized_vectors,
             })
         } else {
             // Fallback: Load vectors and rebuild HNSW
@@ -379,11 +531,34 @@ impl VectorStore {
                 dimensions
             );
 
+            // Try to load quantizer parameters
+            let params_path = directory.join(format!("{}.quantizer.json", filename));
+            let quantized_path = directory.join(format!("{}.quantized.bin", filename));
+
+            let (quantizer, quantized_vectors) = if params_path.exists() && quantized_path.exists() {
+                // Load quantizer parameters
+                let params_json = fs::read_to_string(&params_path)?;
+                let params: ExtendedRaBitQParams = serde_json::from_str(&params_json)?;
+                let quantizer = ExtendedRaBitQ::new(params);
+
+                // Load quantized vectors
+                let quantized_data = fs::read(&quantized_path)?;
+                let quantized_vectors: Vec<Option<QuantizedVector>> = bincode::deserialize(&quantized_data)?;
+
+                eprintln!("  Loaded Extended RaBitQ quantization ({} quantized vectors)", quantized_vectors.len());
+
+                (Some(quantizer), quantized_vectors)
+            } else {
+                (None, Vec::new())
+            };
+
             // Create VectorStore and rebuild HNSW index
             let mut store = Self {
                 vectors,
                 hnsw_index: None,
                 dimensions,
+                quantizer,
+                quantized_vectors,
             };
 
             if !store.vectors.is_empty() {
@@ -564,5 +739,112 @@ mod tests {
         let query = random_vector(128, 50);
         let results = store.knn_search(&query, 10).unwrap();
         assert_eq!(results.len(), 10);
+    }
+
+    #[test]
+    fn test_quantization_insert() {
+        use super::super::extended_rabitq::{ExtendedRaBitQParams};
+
+        // Create store with 4-bit quantization
+        let params = ExtendedRaBitQParams::bits4();
+        let mut store = VectorStore::new_with_quantization(128, params);
+
+        // Insert vectors
+        for i in 0..50 {
+            store.insert(random_vector(128, i)).unwrap();
+        }
+
+        // Verify quantized vectors were created
+        assert_eq!(store.vectors.len(), 50);
+        assert_eq!(store.quantized_vectors.len(), 50);
+        assert!(store.quantized_vectors.iter().all(|qv| qv.is_some()));
+    }
+
+    #[test]
+    fn test_quantization_search_accuracy() {
+        use super::super::extended_rabitq::{ExtendedRaBitQParams};
+
+        // Create store with 4-bit quantization
+        let params = ExtendedRaBitQParams::bits4();
+        let mut store = VectorStore::new_with_quantization(128, params);
+
+        // Insert vectors
+        for i in 0..100 {
+            store.insert(random_vector(128, i)).unwrap();
+        }
+
+        // Search with quantization (uses two-phase search)
+        let query = random_vector(128, 50);
+        let results = store.knn_search(&query, 10).unwrap();
+
+        // Should still get 10 results
+        assert_eq!(results.len(), 10);
+
+        // Results should be sorted by distance
+        for i in 1..results.len() {
+            assert!(results[i].1 >= results[i - 1].1);
+        }
+    }
+
+    #[test]
+    fn test_quantization_persistence() {
+        use std::fs;
+        use super::super::extended_rabitq::{ExtendedRaBitQParams};
+
+        let test_dir = "/tmp/omendb_test_quantization";
+        let test_path = format!("{}/test_store", test_dir);
+
+        // Clean up any existing test data
+        let _ = fs::remove_dir_all(test_dir);
+
+        // Create store with 4-bit quantization
+        let params = ExtendedRaBitQParams::bits4();
+        let mut store = VectorStore::new_with_quantization(128, params);
+
+        // Insert vectors
+        for i in 0..100 {
+            store.insert(random_vector(128, i)).unwrap();
+        }
+
+        // Save to disk
+        store.save_to_disk(&test_path).unwrap();
+
+        // Verify quantization files exist
+        assert!(fs::metadata(format!("{}/test_store.quantized.bin", test_dir)).is_ok());
+        assert!(fs::metadata(format!("{}/test_store.quantizer.json", test_dir)).is_ok());
+
+        // Load from disk
+        let mut loaded_store = VectorStore::load_from_disk(&test_path, 128).unwrap();
+
+        // Verify quantized vectors were loaded
+        assert_eq!(loaded_store.quantized_vectors.len(), 100);
+        assert!(loaded_store.quantizer.is_some());
+
+        // Verify search works with loaded quantization
+        let query = random_vector(128, 50);
+        let results = loaded_store.knn_search(&query, 10).unwrap();
+        assert_eq!(results.len(), 10);
+
+        // Clean up
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_quantization_batch_insert() {
+        use super::super::extended_rabitq::{ExtendedRaBitQParams};
+
+        // Create store with 4-bit quantization
+        let params = ExtendedRaBitQParams::bits4();
+        let mut store = VectorStore::new_with_quantization(128, params);
+
+        // Batch insert vectors
+        let vectors: Vec<Vector> = (0..100).map(|i| random_vector(128, i)).collect();
+        let ids = store.batch_insert(vectors).unwrap();
+
+        // Verify all vectors and quantized vectors were created
+        assert_eq!(ids.len(), 100);
+        assert_eq!(store.vectors.len(), 100);
+        assert_eq!(store.quantized_vectors.len(), 100);
+        assert!(store.quantized_vectors.iter().all(|qv| qv.is_some()));
     }
 }
