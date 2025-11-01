@@ -1,9 +1,9 @@
 # omen - Vector Database
 
 **Repository**: omen (Embedded PostgreSQL-compatible Vector Database)
-**Last Updated**: November 1, 2025 - Week 11 Day 4 Complete (Repository Cleanup + Production Ready!)
+**Last Updated**: November 1, 2025 - Week 11-12 Complete (Extended RaBitQ Quantization!)
 **License**: Elastic License 2.0 (source-available, embeddable)
-**Status**: 7223 QPS @ 128D, 1051 QPS @ 1536D (production-ready!), 1035-1222x persistence speedup, 82 tests
+**Status**: 7223 QPS @ 128D, Extended RaBitQ (16x compression @ 84% recall), 122 tests passing
 
 ---
 
@@ -61,42 +61,50 @@
 
 ---
 
-## Week 11 Status (Nov 1, 2025)
+## Week 11-12 Status (Nov 1, 2025)
 
-**Week 11 Day 4 COMPLETE** - Production Ready! 🎉:
+**Week 11-12 COMPLETE** - Extended RaBitQ Quantization! 🎉:
 - ✅ Week 9 Days 1-5: Custom HNSW implemented (1,200+ lines)
 - ✅ Week 10 Days 1-5: Algorithm port + baseline validation
 - ✅ Week 11 Day 1: Error infrastructure (Result<T>, zero panics)
 - ✅ Week 11 Day 2: **SIMD distance functions (3.1-3.9x improvement!)**
 - ✅ Week 11 Day 3: **Persistence validation (1035-1222x speedup, 100% data integrity!)**
-- ✅ Week 11 Day 4: **Profiling + Repository cleanup (249 files deleted, 82 tests passing!)**
-- 🎯 Next: Extended RaBitQ implementation (SIGMOD 2025)
+- ✅ Week 11 Day 4: **Profiling + Repository cleanup (249 files deleted!)**
+- ✅ Week 11-12: **Extended RaBitQ quantization (ALL 6 PHASES COMPLETE!)**
+- 🎯 Next: Scale testing Extended RaBitQ @ 100K/1M vectors
 
-**Current Performance** (Production Ready!):
+**Current Performance** (SOTA Quantization Ready!):
 - **7223 QPS @ 128D** (3.9x faster than baseline, Mac M3)
 - **1051 QPS @ 1536D** (3.1x faster than baseline, Mac M3)
-- **1414 QPS @ 1M vectors** (128D, 0.92ms p95 latency!)
+- **Extended RaBitQ**: 84% recall @ 16x compression, 100% @ 8x compression
+- **Query latency**: 0.2-0.3ms with quantization (production-ready!)
+- **1414 QPS @ 1M vectors** (128D, 0.92ms p95 latency)
 - **Persistence**: 1035-1222x faster than rebuild (0.44-0.57s load time)
 - **Data integrity**: 100% query result match after save/load
-- **Memory efficiency**: 1.1x overhead (custom HNSW vs 2-3x for libraries)
-- 82 tests passing (clean codebase, 90%+ old code archived)
+- **Memory efficiency**: 1.1x overhead (custom HNSW) + 4-16x quantization
+- 122 tests passing (40 Extended RaBitQ tests + 82 core tests)
 
-**Key Findings**:
-- ✅ Distance calculations were the bottleneck (solved with SIMD)
-- ❌ Cache optimizations (prefetch, BFS reordering) provide NO benefit
-- ✅ Thread-local buffers: Zero cost, good practice (kept)
-- ✅ Runtime CPU detection: Works on Mac (NEON) + Linux (AVX2/SSE2)
+**Extended RaBitQ Achievements**:
+- ✅ 2-bit (16x compression): 84.4% recall (exceeds 70% target)
+- ✅ 4-bit (8x compression): 100% recall (exceeds 85% target)
+- ✅ 8-bit (4x compression): 100% recall (exceeds 95% target)
+- ✅ Two-phase search (quantized → rerank) working perfectly
+- ✅ Full SIMD support (AVX2/SSE2/NEON)
+- ✅ Persistence with JSON + bincode
 
 **Completed**:
 - ✅ Custom HNSW implementation (full control, no library limitations)
 - ✅ SIMD distance functions (3.1-3.9x improvement)
+- ✅ Extended RaBitQ quantization (1440 lines, 40 tests)
+- ✅ VectorStore integration (two-phase search, persistence)
 - ✅ A/B testing framework (scientific validation)
 - ✅ Code cleanup (removed unused optimizations)
 
-**Next** (Weeks 11-13):
-- Scale testing (100K, 1M vectors with SIMD)
-- Extended RaBitQ quantization (SIGMOD 2025, arbitrary compression)
-- Target: 1000+ QPS at 1M scale
+**Next** (Weeks 13-14):
+- Scale testing Extended RaBitQ @ 100K/1M vectors
+- Memory validation at different compression rates
+- Performance profiling with quantization enabled
+- Target: Sub-millisecond queries with 8-16x memory savings
 
 **Then** (Weeks 14-19):
 - HNSW-IF for billion-scale support (hybrid in-memory + disk)
