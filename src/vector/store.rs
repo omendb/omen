@@ -215,9 +215,8 @@ impl VectorStore {
 
     /// K-nearest neighbors search using HNSW
     ///
-    /// If quantization is enabled, uses two-phase search:
-    /// - Phase 1: Fast filtering with quantized vectors (get k*3 candidates)
-    /// - Phase 2: Rerank candidates with original vectors (get final k)
+    /// Quantization (if enabled) is for storage/memory savings only.
+    /// Search always uses HNSW with original vectors for accuracy and speed.
     pub fn knn_search(&mut self, query: &Vector, k: usize) -> Result<Vec<(usize, f32)>> {
         if query.dim() != self.dimensions {
             anyhow::bail!(
@@ -242,12 +241,8 @@ impl VectorStore {
             self.rebuild_index()?;
         }
 
-        // Two-phase search if quantization is enabled
-        if self.quantizer.is_some() && !self.quantized_vectors.is_empty() {
-            return self.knn_search_with_reranking(query, k);
-        }
-
         // Use HNSW index if available
+        // NOTE: Quantization (if enabled) is for storage only, not search
         if let Some(ref index) = self.hnsw_index {
             return index.search(&query.data, k);
         }
