@@ -47,7 +47,7 @@ fn main() {
     // PHASE 1: Build index
     // =========================================================================
     println!("=== PHASE 1: Building Index ===\n");
-    let mut index = HNSWIndex::new(dimensions, params.clone(), DistanceFunction::L2, false).unwrap();
+    let mut index = HNSWIndex::new(dimensions, params, DistanceFunction::L2, false).unwrap();
 
     let build_start = Instant::now();
     for i in 0..num_vectors {
@@ -116,14 +116,14 @@ fn main() {
     fs::create_dir_all("/tmp/omendb_persistence_validation").ok();
 
     let save_start = Instant::now();
-    index.save(&save_path).unwrap();
+    index.save(save_path).unwrap();
     let save_duration = save_start.elapsed();
 
     println!("--- Save Performance ---");
     println!("Save time: {:.3}s", save_duration.as_secs_f64());
 
     // Check file size
-    let file_size = fs::metadata(&save_path).unwrap().len();
+    let file_size = fs::metadata(save_path).unwrap().len();
     let file_mb = file_size as f64 / (1024.0 * 1024.0);
     println!("File size: {:.2} MB", file_mb);
     println!("Bytes per vector: {:.0}", file_size as f64 / num_vectors as f64);
@@ -134,7 +134,7 @@ fn main() {
     println!("\n=== PHASE 4: Load from Disk ===\n");
 
     let load_start = Instant::now();
-    let loaded_index = HNSWIndex::load(&save_path).unwrap();
+    let loaded_index = HNSWIndex::load(save_path).unwrap();
     let load_duration = load_start.elapsed();
 
     println!("--- Load Performance ---");
@@ -292,7 +292,7 @@ fn main() {
     println!("\n4. Query Performance:");
     println!("   - Before: p95 = {:.2}ms", p95_before);
     println!("   - After:  p95 = {:.2}ms", p95_after);
-    let latency_diff = ((p95_after - p95_before).abs() / p95_before * 100.0);
+    let latency_diff = (p95_after - p95_before).abs() / p95_before * 100.0;
     println!("   - Difference: {:.1}%", latency_diff);
     if latency_diff < 10.0 {
         println!("   ✅ PASS: Latency change < 10%");

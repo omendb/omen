@@ -91,7 +91,7 @@ impl VectorStore {
             self.hnsw_index = Some(HNSWIndex::new(capacity, self.dimensions));
         }
 
-        let start_id = self.vectors.len();
+        let _start_id = self.vectors.len();
         let mut all_ids = Vec::with_capacity(vectors.len());
 
         // Chunk size for parallel insertion (recommended: 1000 × num_threads)

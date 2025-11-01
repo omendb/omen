@@ -9,7 +9,7 @@
 //! - LIDER paper (VLDB 2023): Learned indexes for high-dimensional vectors
 
 use anyhow::{Context, Result};
-use ndarray::{s, Array1, Array2, Axis};
+use ndarray::{Array1, Array2, Axis};
 use serde::{Deserialize, Serialize};
 
 /// PCA model for vector dimensionality reduction

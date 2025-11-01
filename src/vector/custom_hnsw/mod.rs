@@ -12,7 +12,6 @@ mod index;
 mod simd_distance;
 mod error;
 mod query_buffers;
-mod cpu_features;
 
 // Public API exports
 pub use types::{

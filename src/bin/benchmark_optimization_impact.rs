@@ -6,7 +6,6 @@
 ///! - Compare QPS, latency, memory
 
 use omen::vector::custom_hnsw::{DistanceFunction, HNSWIndex, HNSWParams};
-use rand::Rng;
 use std::time::Instant;
 
 fn generate_random_vector(dim: usize, seed: u64) -> Vec<f32> {
