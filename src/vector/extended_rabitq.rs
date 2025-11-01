@@ -400,6 +400,85 @@ impl ExtendedRaBitQ {
             })
             .collect()
     }
+
+    /// Compute L2 (Euclidean) distance between two quantized vectors
+    ///
+    /// This reconstructs both vectors and computes standard L2 distance.
+    /// For maximum accuracy, use this with original vectors for reranking.
+    pub fn distance_l2(
+        &self,
+        qv1: &QuantizedVector,
+        qv2: &QuantizedVector,
+    ) -> f32 {
+        let v1 = self.reconstruct(&qv1.data, qv1.scale, qv1.dimensions);
+        let v2 = self.reconstruct(&qv2.data, qv2.scale, qv2.dimensions);
+
+        v1.iter()
+            .zip(v2.iter())
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f32>()
+            .sqrt()
+    }
+
+    /// Compute cosine distance between two quantized vectors
+    ///
+    /// Cosine distance = 1 - cosine similarity
+    pub fn distance_cosine(
+        &self,
+        qv1: &QuantizedVector,
+        qv2: &QuantizedVector,
+    ) -> f32 {
+        let v1 = self.reconstruct(&qv1.data, qv1.scale, qv1.dimensions);
+        let v2 = self.reconstruct(&qv2.data, qv2.scale, qv2.dimensions);
+
+        let dot: f32 = v1.iter().zip(v2.iter()).map(|(a, b)| a * b).sum();
+        let norm1: f32 = v1.iter().map(|a| a * a).sum::<f32>().sqrt();
+        let norm2: f32 = v2.iter().map(|b| b * b).sum::<f32>().sqrt();
+
+        if norm1 < 1e-10 || norm2 < 1e-10 {
+            return 1.0; // Maximum distance for zero vectors
+        }
+
+        let cosine_sim = dot / (norm1 * norm2);
+        1.0 - cosine_sim
+    }
+
+    /// Compute dot product between two quantized vectors
+    pub fn distance_dot(
+        &self,
+        qv1: &QuantizedVector,
+        qv2: &QuantizedVector,
+    ) -> f32 {
+        let v1 = self.reconstruct(&qv1.data, qv1.scale, qv1.dimensions);
+        let v2 = self.reconstruct(&qv2.data, qv2.scale, qv2.dimensions);
+
+        // Return negative dot product (for nearest neighbor search)
+        -v1.iter().zip(v2.iter()).map(|(a, b)| a * b).sum::<f32>()
+    }
+
+    /// Compute approximate distance using quantized values directly (fast path)
+    ///
+    /// This computes distance in the quantized space without full reconstruction.
+    /// Faster but less accurate than distance_l2.
+    pub fn distance_approximate(
+        &self,
+        qv1: &QuantizedVector,
+        qv2: &QuantizedVector,
+    ) -> f32 {
+        // Unpack to quantized values (u8)
+        let v1 = self.unpack_quantized(&qv1.data, qv1.bits, qv1.dimensions);
+        let v2 = self.unpack_quantized(&qv2.data, qv2.bits, qv2.dimensions);
+
+        // Compute L2 distance in quantized space
+        v1.iter()
+            .zip(v2.iter())
+            .map(|(a, b)| {
+                let diff = (*a as i16 - *b as i16) as f32;
+                diff * diff
+            })
+            .sum::<f32>()
+            .sqrt()
+    }
 }
 
 #[cfg(test)]
@@ -691,5 +770,217 @@ mod tests {
         // Verify reconstruction
         let reconstructed = quantizer.reconstruct(&quantized.data, quantized.scale, 128);
         assert_eq!(reconstructed.len(), 128);
+    }
+
+    // Phase 3 Tests: Distance Computation
+
+    #[test]
+    fn test_distance_l2() {
+        let quantizer = ExtendedRaBitQ::new(ExtendedRaBitQParams {
+            bits_per_dim: QuantizationBits::Bits8, // High precision
+            num_rescale_factors: 8,
+            rescale_range: (0.8, 1.2),
+        });
+
+        let v1 = vec![0.0, 0.0, 0.0];
+        let v2 = vec![1.0, 0.0, 0.0];
+
+        let qv1 = quantizer.quantize(&v1);
+        let qv2 = quantizer.quantize(&v2);
+
+        let dist = quantizer.distance_l2(&qv1, &qv2);
+
+        // Distance should be approximately 1.0
+        assert!((dist - 1.0).abs() < 0.2, "Distance: {}", dist);
+    }
+
+    #[test]
+    fn test_distance_l2_identical() {
+        let quantizer = ExtendedRaBitQ::default_4bit();
+
+        let v = vec![0.5, 0.3, 0.8, 0.2];
+        let qv1 = quantizer.quantize(&v);
+        let qv2 = quantizer.quantize(&v);
+
+        let dist = quantizer.distance_l2(&qv1, &qv2);
+
+        // Identical vectors should have near-zero distance
+        assert!(dist < 0.3, "Distance should be near zero, got: {}", dist);
+    }
+
+    #[test]
+    fn test_distance_cosine() {
+        let quantizer = ExtendedRaBitQ::new(ExtendedRaBitQParams {
+            bits_per_dim: QuantizationBits::Bits8,
+            num_rescale_factors: 8,
+            rescale_range: (0.8, 1.2),
+        });
+
+        // Orthogonal vectors
+        let v1 = vec![1.0, 0.0, 0.0];
+        let v2 = vec![0.0, 1.0, 0.0];
+
+        let qv1 = quantizer.quantize(&v1);
+        let qv2 = quantizer.quantize(&v2);
+
+        let dist = quantizer.distance_cosine(&qv1, &qv2);
+
+        // Orthogonal vectors: cosine = 0, distance = 1
+        assert!((dist - 1.0).abs() < 0.3, "Distance: {}", dist);
+    }
+
+    #[test]
+    fn test_distance_cosine_identical() {
+        let quantizer = ExtendedRaBitQ::default_4bit();
+
+        let v = vec![0.5, 0.3, 0.8];
+        let qv1 = quantizer.quantize(&v);
+        let qv2 = quantizer.quantize(&v);
+
+        let dist = quantizer.distance_cosine(&qv1, &qv2);
+
+        // Identical vectors: cosine = 1, distance = 0
+        assert!(dist < 0.2, "Distance should be near zero, got: {}", dist);
+    }
+
+    #[test]
+    fn test_distance_dot() {
+        let quantizer = ExtendedRaBitQ::new(ExtendedRaBitQParams {
+            bits_per_dim: QuantizationBits::Bits8,
+            num_rescale_factors: 8,
+            rescale_range: (0.8, 1.2),
+        });
+
+        let v1 = vec![1.0, 0.0, 0.0];
+        let v2 = vec![1.0, 0.0, 0.0];
+
+        let qv1 = quantizer.quantize(&v1);
+        let qv2 = quantizer.quantize(&v2);
+
+        let dist = quantizer.distance_dot(&qv1, &qv2);
+
+        // Dot product of [1,0,0] with itself = 1, negated = -1
+        assert!((dist + 1.0).abs() < 0.3, "Distance: {}", dist);
+    }
+
+    #[test]
+    fn test_distance_approximate() {
+        let quantizer = ExtendedRaBitQ::default_4bit();
+
+        let v1 = vec![0.0, 0.0, 0.0];
+        let v2 = vec![0.5, 0.5, 0.5];
+
+        let qv1 = quantizer.quantize(&v1);
+        let qv2 = quantizer.quantize(&v2);
+
+        let dist_approx = quantizer.distance_approximate(&qv1, &qv2);
+        let dist_exact = quantizer.distance_l2(&qv1, &qv2);
+
+        // Approximate should be non-negative and finite
+        assert!(dist_approx >= 0.0);
+        assert!(dist_approx.is_finite());
+
+        // Approximate and exact should be correlated (not exact match)
+        // Just verify both increase/decrease together
+        let v3 = vec![1.0, 1.0, 1.0];
+        let qv3 = quantizer.quantize(&v3);
+
+        let dist_approx2 = quantizer.distance_approximate(&qv1, &qv3);
+        let dist_exact2 = quantizer.distance_l2(&qv1, &qv3);
+
+        // If v3 is farther from v1 than v2, both metrics should reflect that
+        if dist_exact2 > dist_exact {
+            assert!(dist_approx2 > dist_approx * 0.5); // Allow some variance
+        }
+    }
+
+    #[test]
+    fn test_distance_correlation() {
+        let quantizer = ExtendedRaBitQ::new(ExtendedRaBitQParams {
+            bits_per_dim: QuantizationBits::Bits8, // High precision for correlation
+            num_rescale_factors: 12,
+            rescale_range: (0.8, 1.2),
+        });
+
+        // Create multiple vectors
+        let vectors = vec![
+            vec![0.1, 0.2, 0.3],
+            vec![0.4, 0.5, 0.6],
+            vec![0.7, 0.8, 0.9],
+        ];
+
+        // Quantize all
+        let quantized: Vec<QuantizedVector> = vectors
+            .iter()
+            .map(|v| quantizer.quantize(v))
+            .collect();
+
+        // Ground truth L2 distances
+        let ground_truth_01 = vectors[0]
+            .iter()
+            .zip(vectors[1].iter())
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f32>()
+            .sqrt();
+
+        let ground_truth_02 = vectors[0]
+            .iter()
+            .zip(vectors[2].iter())
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f32>()
+            .sqrt();
+
+        // Quantized distances
+        let quantized_01 = quantizer.distance_l2(&quantized[0], &quantized[1]);
+        let quantized_02 = quantizer.distance_l2(&quantized[0], &quantized[2]);
+
+        // Check correlation: if ground truth says v2 > v1, quantized should too
+        if ground_truth_02 > ground_truth_01 {
+            assert!(
+                quantized_02 > quantized_01 * 0.8,
+                "Order not preserved: {} vs {}",
+                quantized_01,
+                quantized_02
+            );
+        }
+    }
+
+    #[test]
+    fn test_distance_zero_vectors() {
+        let quantizer = ExtendedRaBitQ::default_4bit();
+
+        let v_zero = vec![0.0, 0.0, 0.0];
+        let qv_zero = quantizer.quantize(&v_zero);
+
+        // Distance to itself should be zero
+        let dist = quantizer.distance_l2(&qv_zero, &qv_zero);
+        assert!(dist < 0.1);
+
+        // Cosine distance with zero vector should handle gracefully
+        let dist_cosine = quantizer.distance_cosine(&qv_zero, &qv_zero);
+        assert!(dist_cosine.is_finite());
+    }
+
+    #[test]
+    fn test_distance_high_dimensional() {
+        let quantizer = ExtendedRaBitQ::default_4bit();
+
+        // 128D vectors
+        let v1: Vec<f32> = (0..128).map(|i| (i as f32) / 128.0).collect();
+        let v2: Vec<f32> = (0..128).map(|i| ((i + 10) as f32) / 128.0).collect();
+
+        let qv1 = quantizer.quantize(&v1);
+        let qv2 = quantizer.quantize(&v2);
+
+        // All distance metrics should work on high-dimensional vectors
+        let dist_l2 = quantizer.distance_l2(&qv1, &qv2);
+        let dist_cosine = quantizer.distance_cosine(&qv1, &qv2);
+        let dist_dot = quantizer.distance_dot(&qv1, &qv2);
+        let dist_approx = quantizer.distance_approximate(&qv1, &qv2);
+
+        assert!(dist_l2 > 0.0 && dist_l2.is_finite());
+        assert!(dist_cosine >= 0.0 && dist_cosine.is_finite());
+        assert!(dist_dot.is_finite());
+        assert!(dist_approx > 0.0 && dist_approx.is_finite());
     }
 }
