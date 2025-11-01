@@ -1,9 +1,9 @@
 # omen - Vector Database
 
 **Repository**: omen (Embedded PostgreSQL-compatible Vector Database)
-**Last Updated**: November 1, 2025 - Week 11-12 Complete (Extended RaBitQ Quantization!)
+**Last Updated**: November 1, 2025 - Week 11-12 Complete (1M Scale Validated!)
 **License**: Elastic License 2.0 (source-available, embeddable)
-**Status**: 7223 QPS @ 128D, Extended RaBitQ (16x compression @ 84% recall), 122 tests passing
+**Status**: 1821 QPS @ 1M vectors, Extended RaBitQ (8x compression, 427 MB saved), 122 tests
 
 ---
 
@@ -71,17 +71,17 @@
 - ✅ Week 11 Day 3: **Persistence validation (1035-1222x speedup, 100% data integrity!)**
 - ✅ Week 11 Day 4: **Profiling + Repository cleanup (249 files deleted!)**
 - ✅ Week 11-12: **Extended RaBitQ quantization (ALL 6 PHASES COMPLETE!)**
-- 🎯 Next: Scale testing Extended RaBitQ @ 100K/1M vectors
+- ✅ **1M Scale Validated**: Extended RaBitQ @ 1M vectors (427 MB saved!)
+- 🎯 Next: HNSW-IF for billion-scale (Weeks 14-15) or other major features
 
-**Current Performance** (SOTA Quantization Ready!):
+**Current Performance** (1M Scale Validated!):
 - **7223 QPS @ 128D** (3.9x faster than baseline, Mac M3)
-- **1051 QPS @ 1536D** (3.1x faster than baseline, Mac M3)
-- **Extended RaBitQ**: 84% recall @ 16x compression, 100% @ 8x compression
-- **Query latency**: 0.2-0.3ms with quantization (production-ready!)
-- **1414 QPS @ 1M vectors** (128D, 0.92ms p95 latency)
-- **Persistence**: 1035-1222x faster than rebuild (0.44-0.57s load time)
+- **1821 QPS @ 1M vectors** (128D, 0.675ms p95 latency, production-ready!)
+- **Extended RaBitQ @ 1M**: 8x compression (488 MB → 61 MB, 427 MB saved!)
+- **Query latency**: 0.675ms p95 at 1M scale (well under 10ms target)
+- **Persistence**: 401x speedup with quantization (1.55s load vs 620s rebuild)
+- **Memory efficiency**: 1.1x overhead (custom HNSW) + 8x quantization
 - **Data integrity**: 100% query result match after save/load
-- **Memory efficiency**: 1.1x overhead (custom HNSW) + 4-16x quantization
 - 122 tests passing (40 Extended RaBitQ tests + 82 core tests)
 
 **Extended RaBitQ Achievements**:
