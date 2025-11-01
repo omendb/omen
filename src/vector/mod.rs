@@ -13,9 +13,11 @@ pub mod store;
 pub mod hnsw_index;
 pub mod vector_value;
 pub mod custom_hnsw; // Internal implementation
+pub mod extended_rabitq; // Extended RaBitQ quantization (SIGMOD 2025)
 
 // Re-export main types
 pub use types::Vector;
 pub use store::VectorStore;
 pub use hnsw_index::HNSWIndex;
 pub use vector_value::VectorValue;
+pub use extended_rabitq::{ExtendedRaBitQ, ExtendedRaBitQParams, QuantizationBits, QuantizedVector};
