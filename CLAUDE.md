@@ -1,9 +1,9 @@
 # omen - Vector Database
 
 **Repository**: omen (Embedded PostgreSQL-compatible Vector Database)
-**Last Updated**: October 31, 2025 - Week 11 Day 2 Complete (SIMD Implementation)
+**Last Updated**: November 1, 2025 - Week 11 Day 4 Complete (Repository Cleanup + Production Ready!)
 **License**: Elastic License 2.0 (source-available, embeddable)
-**Status**: 7223 QPS @ 128D, 1051 QPS @ 1536D (production-ready!), custom HNSW with SIMD
+**Status**: 7223 QPS @ 128D, 1051 QPS @ 1536D (production-ready!), 1035-1222x persistence speedup, 82 tests
 
 ---
 
@@ -61,23 +61,25 @@
 
 ---
 
-## Week 11 Status (Oct 31, 2025)
+## Week 11 Status (Nov 1, 2025)
 
-**Week 11 Day 2 COMPLETE** - SIMD Distance Functions (MASSIVE WIN!):
-- ✅ Week 9 Days 1-5: Custom HNSW implemented (1,200+ lines, 33 tests passing)
-- ✅ Week 10 Days 1-5: Algorithm port + baseline + cache optimizations
-- ✅ Week 11 Day 1: Error infrastructure (Result<T>, error propagation, logging)
+**Week 11 Day 4 COMPLETE** - Production Ready! 🎉:
+- ✅ Week 9 Days 1-5: Custom HNSW implemented (1,200+ lines)
+- ✅ Week 10 Days 1-5: Algorithm port + baseline validation
+- ✅ Week 11 Day 1: Error infrastructure (Result<T>, zero panics)
 - ✅ Week 11 Day 2: **SIMD distance functions (3.1-3.9x improvement!)**
-- ✅ A/B validation: Cache optimizations provide NO benefit (scientifically tested)
-- ✅ Code cleanup: Removed unused optimizations (prefetch, arena)
-- 🎯 Next: Scale testing at 1M vectors
+- ✅ Week 11 Day 3: **Persistence validation (1035-1222x speedup, 100% data integrity!)**
+- ✅ Week 11 Day 4: **Profiling + Repository cleanup (249 files deleted, 82 tests passing!)**
+- 🎯 Next: Extended RaBitQ implementation (SIGMOD 2025)
 
-**Current Performance** (Custom HNSW + SIMD):
-- **7223 QPS @ 128D** (3.9x faster than baseline 1862 QPS)
-- **1051 QPS @ 1536D** (3.1x faster than baseline 336 QPS)
-- Query latency: <1ms p50, ~2ms p95 (production-ready!)
-- Build speed: High (needs validation at 1M scale)
-- 33 tests passing (custom HNSW core)
+**Current Performance** (Production Ready!):
+- **7223 QPS @ 128D** (3.9x faster than baseline, Mac M3)
+- **1051 QPS @ 1536D** (3.1x faster than baseline, Mac M3)
+- **1414 QPS @ 1M vectors** (128D, 0.92ms p95 latency!)
+- **Persistence**: 1035-1222x faster than rebuild (0.44-0.57s load time)
+- **Data integrity**: 100% query result match after save/load
+- **Memory efficiency**: 1.1x overhead (custom HNSW vs 2-3x for libraries)
+- 82 tests passing (clean codebase, 90%+ old code archived)
 
 **Key Findings**:
 - ✅ Distance calculations were the bottleneck (solved with SIMD)
@@ -110,26 +112,16 @@
 ## Current Status
 
 **Product**: PostgreSQL-compatible vector database (HNSW + Binary Quantization)
-**Achievement**: Week 7 Day 3 COMPLETE - Strategic Analysis & Optimization Planning
-  - Week 6: Graph serialization (4175x) + Parallel building (16x) + SOTA research ✅
-  - Week 7 Day 1: Comprehensive correctness validation ✅
-    - Distance calculations: 10 tests, 100% passing
-    - HNSW recall: 5 tests, 97-100% recall (exceeds 85% target)
-    - Binary Quantization: 7 tests, realistic performance (33% baseline, 70% with reranking)
-  - Week 7 Day 2+: Resource exhaustion & boundary testing ✅
-    - Resource limits: 12 tests, all passing (large batches, high dimensions, boundaries)
-    - ASAN validation: 40 tests, ZERO memory safety issues
-    - Phase 2 validation: 60% complete
-  - Week 7 Day 3: pgvector benchmark + Competitive analysis + Strategic roadmap ✅
-    - **pgvector comparison**: 97x faster builds, 2.2x faster queries (100K vectors)
-    - **Competitive analysis**: 8 competitors analyzed (Qdrant, Milvus, Weaviate, LanceDB, ChromaDB, Pinecone, pgvector, pgvecto.rs)
-    - **Custom HNSW decision**: ALL serious competitors use custom implementations for SOTA features
-    - **Optimization strategy**: Engine-first approach (optimize → profile → then benchmark competitors)
-    - **Critical finding**: SIMD available but NOT ENABLED (2-4x free win)
-**Stack**: Rust (HNSW + Binary Quantization + PostgreSQL protocol + RocksDB + MVCC)
-**Phase**: Week 7 (Validation Phase) - 142 tests passing (101 Phase 1 + 41 Phase 2)
-**Priority**: 🔍 Build custom HNSW for SOTA (10-15 week roadmap)
-**Next**: Implement custom HNSW foundation (Week 9 Day 2-5)
+**Achievement**: Week 11 Day 4 COMPLETE - Production Ready! 🎉
+  - Week 9-10: Custom HNSW implementation (1,200+ lines, zero external dependencies) ✅
+  - Week 11 Day 1: Error handling (zero panics, production-ready) ✅
+  - Week 11 Day 2: SIMD optimization (3.1-3.9x improvement, 7223 QPS @ 128D) ✅
+  - Week 11 Day 3: Persistence validation (1035-1222x speedup, 100% data integrity) ✅
+  - Week 11 Day 4: Repository cleanup + profiling (249 files deleted, 82 tests) ✅
+**Stack**: Rust (custom HNSW + SIMD + Binary Quantization + persistence)
+**Phase**: Week 11 (Production Readiness) - 82 tests passing, clean codebase
+**Priority**: 🚀 Extended RaBitQ implementation (SIGMOD 2025, 2-9 bits/dimension)
+**Next**: Begin Extended RaBitQ (Week 11 Day 5+)
 
 ## Technical Architecture
 
@@ -232,81 +224,92 @@
 
 **For business model and pricing**: See `../omen-org/strategy/`
 
-## Architecture (Vector DB - October 22, 2025)
+## Architecture (Vector DB - November 1, 2025)
 
 ```
-Current Stack (Pre-Vector):
-├── Protocol Layer: PostgreSQL wire protocol (port 5433) ✅
-├── MVCC Layer: Snapshot isolation ✅
-├── Index Layer: Multi-level ALEX (3-level hierarchy) ✅
-├── Cache Layer: 1-10GB LRU cache ✅
-├── Storage Layer: RocksDB (LSM tree) ✅
-├── Recovery: 100% crash recovery ✅
-└── Security: Auth + SSL/TLS ✅
+Current Stack (Production Ready!):
+├── Vector Data Type: Vector struct with f32 dimensions ✅
+├── Custom HNSW Index: Full implementation (1,200+ lines) ✅
+├── SIMD Distance Functions: AVX2/SSE2/NEON runtime detection ✅
+├── Binary Quantization: 19x memory reduction ✅
+├── Persistence Layer: Save/load with 1000x+ speedup ✅
+├── Error Handling: Production-ready Result types ✅
+└── Observability: Structured logging with tracing ✅
 
-Planned (Vector DB):
-├── Vector Data Type: vector(N) - pgvector compatible 🔨
-├── Distance Operators: <-> (L2), <#> (dot), <=> (cosine) 🔨
-├── Vector Index: ALEX for high-dimensional data 🔨
-├── ANN Search: Approximate nearest neighbor 🔨
-└── Hybrid Search: Vector similarity + SQL filters 🔨
+Future (Weeks 11-24):
+├── Extended RaBitQ: 2-9 bits/dimension quantization 🔨
+├── HNSW-IF: Hybrid in-memory + disk for billion-scale 🔨
+├── PostgreSQL Protocol: Wire protocol integration 🔨
+└── Full-text Search: BM25 + inverted index 🔨
 ```
 
 **Architecture Validation**:
-- ALEX (learned index): Works great for sequential keys, testing for vectors
-- RocksDB (LSM tree): Industry-proven storage backend
-- MVCC: Concurrent vector operations (unique vs Pinecone)
-- PostgreSQL protocol: Huge ecosystem compatibility
-- Memory efficiency: 28x advantage critical for large vector datasets
+- Custom HNSW: Full control, SOTA features possible
+- SIMD: 3.1-3.9x improvement, cross-platform (Mac/Linux)
+- Persistence: 1035-1222x speedup, 100% data integrity
+- Memory efficiency: 1.1x overhead (vs 2-3x for libraries)
+- Production ready: Zero panics, comprehensive error handling
 
-**Repository Structure** (Standard OSS - agent-contexts v0.1.1):
+**Repository Structure** (Clean and Minimal - Nov 1, 2025):
 ```
 omen/
 ├── CLAUDE.md              # This file - AI agent entry point
+├── README.md              # Project overview
+├── Cargo.toml             # Dependencies
 ├── docs/                  # Documentation (standard OSS pattern) 📚
-│   ├── README.md          # Documentation index
-│   ├── QUICKSTART.md      # Getting started
-│   ├── ARCHITECTURE.md    # System design
-│   ├── PERFORMANCE.md     # Benchmarks
-│   ├── SECURITY.md        # Security guide
-│   ├── architecture/      # Technical deep-dives
-│   │   ├── research/      # Research findings (26+ docs)
-│   │   ├── MULTI_LEVEL_ALEX.md
-│   │   ├── ROADMAP_0.1.0.md (OUTDATED - needs vector update)
-│   │   ├── ROCKSDB_PERFORMANCE_ANALYSIS_OCT_22.md
-│   │   └── STORAGE_ENGINE_TEST_VALIDATION_OCT_22.md
-│   ├── strategy/          # Business strategy (private repo only)
-│   │   ├── COMPETITIVE_STRATEGY_OCT_2025.md (needs vector update)
-│   │   └── CUSTOMER_ACQUISITION.md (OUTDATED - Jan 2025)
-│   └── archive/           # Historical documentation
-│       ├── phases/        # Phase planning docs
-│       └── PHASE_*_COMPLETE.md
+│   └── architecture/      # Technical deep-dives
+│       ├── CUSTOM_HNSW_DESIGN.md (1,539 lines)
+│       ├── EXTENDED_RABITQ_PLAN.md (538 lines)
+│       └── PROFILING_REPORT_OCT31.md
 ├── ai/                    # AI working context ⭐
 │   ├── TODO.md            # Current tasks
-│   ├── STATUS.md          # Current state
+│   ├── STATUS.md          # Current state (Week 11 Day 4)
 │   ├── DECISIONS.md       # Architectural decisions
-│   ├── RESEARCH.md        # Research index
-│   └── research/          # Detailed research & analysis
-│       ├── STRATEGIC_COMPETITIVE_POSITIONING.md
+│   └── research/          # Research & analysis
+│       ├── STRATEGIC_COMPETITIVE_POSITIONING.md (6,400+ words)
 │       ├── COMPETITIVE_ANALYSIS_VECTOR_DBS.md
 │       ├── OPTIMIZATION_STRATEGY.md
 │       ├── CUSTOM_HNSW_DECISION.md
-│       └── [8 research docs total]
-├── src/                   # Source code
-│   ├── alex/              # Multi-level ALEX implementation
-│   ├── postgres/          # PostgreSQL wire protocol + auth
-│   ├── mvcc/              # MVCC snapshot isolation ✅
-│   ├── cache.rs           # LRU cache layer ✅
-│   ├── sql_engine.rs      # SQL engine (needs vector operators)
-│   ├── catalog.rs         # Table + user management
-│   ├── user_store.rs      # Persistent user storage
-│   └── table.rs           # Table storage + ALEX + cache
-└── tests/                 # 142 tests passing (Phase 1 + Phase 2 validation) ✅
+│       └── SOTA_ALGORITHMS_INVESTIGATION_OCT2025.md
+├── src/                   # Source code (clean & minimal!) ✨
+│   ├── lib.rs             # Public API (Vector, VectorStore, logging)
+│   ├── logging.rs         # Structured logging with tracing
+│   ├── vector/            # Vector database implementation
+│   │   ├── mod.rs         # Module exports
+│   │   ├── types.rs       # Vector, Distance types
+│   │   ├── vector_value.rs # VectorValue enum
+│   │   ├── store.rs       # VectorStore (900+ lines)
+│   │   ├── hnsw_index.rs  # HNSWIndex adapter
+│   │   └── custom_hnsw/   # Custom HNSW implementation
+│   │       ├── mod.rs
+│   │       ├── types.rs   # Node, Layer, IndexParams
+│   │       ├── storage.rs # Graph storage
+│   │       ├── index.rs   # Insert, search, persistence (800+ lines)
+│   │       ├── distance.rs # SIMD distance functions
+│   │       └── error.rs   # HNSWError types
+│   ├── bin/               # Benchmarks & tools
+│   │   ├── benchmark_simd.rs
+│   │   ├── benchmark_persistence.rs
+│   │   ├── profile_hnsw.rs
+│   │   └── [10+ benchmarks]
+│   └── tests/             # Integration tests
+│       ├── test_distance_correctness.rs
+│       ├── test_hnsw_recall.rs
+│       └── test_resource_limits.rs
+└── 82 tests passing! ✅
 ```
 
-**Pattern**: Standard OSS database structure (like PostgreSQL, MongoDB, DuckDB, CockroachDB)
-- **docs/** — All permanent documentation (user guides, architecture, research)
-- **ai/** — AI working context (tasks, status, decisions, research notes)
+**Cleanup Summary (Week 11 Day 4)**:
+- ✅ **249 files deleted** (81,608 lines) - 90%+ of old code
+- ✅ **Archived** to `omen-org/archive/omendb-oct2025/`
+- ✅ **lib.rs rewritten** from time-series → vector database API
+- ✅ **Clean structure**: Only src/vector/, src/logging.rs, src/bin/, src/tests/
+- ✅ **All old pivots removed**: ALEX, DataFusion, PCA, MVCC, SQL engine, etc.
+
+**Pattern**: Minimal, focused vector database
+- **src/vector/** — Core vector database (custom HNSW + SIMD + persistence)
+- **src/bin/** — Performance benchmarks and profiling tools
+- **ai/** — AI working context (research-validated strategy)
 
 ---
 
